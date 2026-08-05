@@ -1,0 +1,15 @@
+{
+	"folders": [
+		{
+			"path": ".",
+			// "name": "STB",
+		}
+	],
+	"settings": {
+		"files.exclude": {
+			".gitignore": true,
+			"out/": true,
+			// "darken_STB.code-workspace": true,
+		}
+	}
+}

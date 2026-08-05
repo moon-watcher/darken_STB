@@ -1,20 +1,11 @@
 #include <genesis.h>
 #include "darken.h"
-// #include "darken.h"
-
-/* ============================================================
- * Definición del componente (payload)
- * ============================================================ */
 
 struct MyComponent
 {
     int x, y;
     uint8_t health;
 };
-
-/* ============================================================
- * Funciones de estado (update)
- * ============================================================ */
 
 void *update_walk(struct MyComponent *data)
 {
@@ -37,11 +28,12 @@ void *destructor(struct MyComponent *data)
 }
 
 de_manager g_manager;
+de_manager g_manager2;
 
 int main(void)
 {
-    struct DE_MANAGER_STORAGE(10, sizeof(struct MyComponent)) storage;
-    de_manager_init(&g_manager, DE_MANAGER_DEFINITION(storage));
+    de_manager_create(&g_manager,  10, sizeof(struct MyComponent));
+    de_manager_create(&g_manager2, 20, sizeof(struct MyComponent)+323);
 
     // 3. Crear algunas entidades
     de_entity *e1 = de_manager_new(&g_manager);
