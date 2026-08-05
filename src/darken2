@@ -1,0 +1,389 @@
+/*
+ * darken.h — single-header entity/manager library (STB-style)
+ *
+ * USAGE
+ *   In ONE .c file (to compile uclist implementation):
+ *       #define STB_UCLIST_IMPLEMENTATION
+ *       #include "darken.h"
+ *
+ *   In all other files:
+ *       #include "darken.h"
+ *
+ * DEPENDS ON
+ *   uclist  (uclist_init_alloc, uclist_alloc, uclist_end)
+ *
+ * LICENSE
+ *   Public domain / project-specific — no warranty.
+ */
+
+
+// TODO. Eliminar el VLA
+// TODO. No inicializar completamente entidades
+// TODO. Bug en reset. 
+//     Cambiar a --> 
+//      #define de_manager_reset(M)  \
+//         de_manager_applyAll(M, 1, de_entity_delete) ???
+//      o 
+//       de_manager_iterateAll(M, {
+//            if (ENTITY->destructor) ENTITY->destructor(ENTITY->data);
+//       });
+//       (M)->pause_index = 0;
+//       (M)->list.size   = 0;
+//     ??
+//
+// TODO... 
+// TODO... 
+// TODO... 
+// TODO... 
+// TODO... 
+// TODO... 
+// TODO...
+
+
+#ifndef DARKEN_H
+#define DARKEN_H
+
+#include <stdint.h>
+
+#include "uclist.h"
+
+/* ============================================================
+ * STATE
+ * ============================================================ */
+
+typedef void *(*de_state)(void *);   /* state function — returns next state */
+
+#define de_state_delete  ((de_state)0)
+#define de_state_loop    ((de_state)1)
+#define de_state_pause   ((de_state)2)
+
+#define de_state_is_deleted(S) ((S) == de_state_delete)
+#define de_state_is_loop(S)    ((S) == de_state_loop)
+#define de_state_is_paused(S)  ((S) == de_state_pause)
+#define de_state_is_active(S)  ((S) > de_state_pause)
+
+/* ============================================================
+ * ENTITY
+ * ============================================================ */
+
+typedef struct de_manager de_manager;
+
+typedef struct de_entity
+{
+    de_state    state;
+    de_state    destructor;
+    de_manager *manager;
+    uint16_t    index;
+
+    //
+    uint16_t    entity_id;  /* user-defined type identifier — fills alignment padding */
+
+    //
+    // O esta alternativa.
+    // Y ojo los cambios de Apply y/o Iterate
+    union
+    {
+        struct
+        {
+            uint8_t type;
+            uint8_t id;
+        } class; // find a better name
+
+        uint16_t tag;
+    };
+    //
+    //
+
+    uint8_t     data[];
+} de_entity;
+
+/* Status predicates */
+#define de_entity_is_paused(E)  ((E)->index <  (E)->manager->pause_index)
+#define de_entity_is_active(E)  ((E)->index >= (E)->manager->pause_index && \
+                                 (E)->index <  (E)->manager->list.size)
+#define de_entity_is_deleted(E) ((E)->index >= (E)->manager->list.size)
+
+/* State helpers */
+#define de_entity_state(E, S)      ((E)->state = (S))
+#define de_entity_exec(E, S)       ((S)((E)->data))
+#define de_entity_destructor(E, S) ((E)->destructor = (S))
+#define de_entity_update(E, S) \
+    (!de_state_is_loop((S) = de_entity_exec((E), (S))) && ((E)->state = (S)))
+
+/* ============================================================
+ * ENTITY — OPERATION MACROS
+ * ============================================================ */
+
+/*
+ * _de_swapIndex($, SWAP)
+ *   Swaps entity $ with position SWAP in the manager's list.
+ *   Updates ->index on both entities. No-op if already at SWAP.
+ *   @note Internal — do not use directly.
+ */
+#define _de_swapIndex($, SWAP)                              \
+    do                                                      \
+    {                                                       \
+        uint16_t    _idx = ($)->index;                      \
+        uint16_t    _sw  = (SWAP);                          \
+        if (_idx != _sw)                                    \
+        {                                                   \
+            de_entity **_ents = ($)->manager->list.items;   \
+            _ents[_idx]        = _ents[_sw];                \
+            _ents[_idx]->index = _idx;                      \
+            _ents[_sw]         = ($);                       \
+            ($)->index         = _sw;                       \
+        }                                                   \
+    } while (0)
+
+/*
+ * de_entity_pause($)
+ *   Moves $ from active zone to paused zone.
+ *   No-op if already paused or deleted.
+ */
+#define de_entity_pause($)                                  \
+    do                                                      \
+    {                                                       \
+        if (de_entity_is_active($))                         \
+            _de_swapIndex($, ($)->manager->pause_index++);  \
+    } while (0)
+
+/*
+ * de_entity_resume($)
+ *   Moves $ from paused zone back to active zone.
+ *   No-op if already active or deleted.
+ */
+#define de_entity_resume($)                                 \
+    do                                                      \
+    {                                                       \
+        if (de_entity_is_paused($))                         \
+            _de_swapIndex($, --($)->manager->pause_index);  \
+    } while (0)
+
+/*
+ * de_entity_delete($)
+ *   Calls destructor if set, then removes $ from the manager.
+ *   No-op if already deleted.
+ */
+#define de_entity_delete($)                                         \
+    do                                                              \
+    {                                                               \
+        if (!de_entity_is_deleted($))                               \
+        {                                                           \
+            ($)->state = de_state_delete;                           \
+            if (($)->destructor)                                     \
+                ($)->state = ($)->destructor(($)->data);             \
+            if (de_state_is_deleted(($)->state))                    \
+            {                                                       \
+                de_entity_resume($);                                \
+                _de_swapIndex($, --($)->manager->list.size);        \
+            }                                                       \
+        }                                                           \
+    } while (0)
+
+/* ============================================================
+ * MANAGER
+ * ============================================================ */
+
+struct de_manager
+{
+    uclist   list;
+    uint16_t pause_index;
+    char    *name;          /* optional debug label */
+};
+
+/*
+ * de_manager_init($, bytes, capacity)
+ *   bytes    — sizeof the entity's data[] payload
+ *   capacity — max number of entities (0 = dynamic)
+ */
+#define de_manager_init($, BYTES, CAPACITY)                                         \
+    do                                                                              \
+    {                                                                               \
+        uclist_init_alloc(&($)->list, (uint16_t)(sizeof(de_entity) + (BYTES)), (CAPACITY)); \
+        ($)->pause_index = 0;                                                       \
+    } while (0)
+
+/*
+ * de_manager_new($, ID)
+ *   Allocates a new entity from the manager's pool and sets entity_id.
+ *   Returns de_entity* or NULL if full.
+ */
+#define de_manager_new($, ID)                               \
+    ({                                                      \
+        de_entity *_e = uclist_alloc(&($)->list);           \
+        if (_e)                                             \
+        {                                                   \
+            _e->manager   = ($);                            \
+            _e->index     = (uint16_t)(($)->list.size - 1); \
+            _e->entity_id = (ID);                           \
+        }                                                   \
+        _e;                                                 \
+    })
+
+/*
+ * de_manager_find($, ID)
+ *   Returns the first entity matching entity_id, or NULL.
+ *   Searches all entities (active + paused).
+ *   Use when only one entity of that ID is expected.
+ */
+#define de_manager_find($, ID)                              \
+    ({                                                      \
+        de_entity *_found = 0;                              \
+        de_manager_iterateAll($, {                          \
+            if (ENTITY->entity_id == (ID))                  \
+            {                                               \
+                _found = ENTITY;                            \
+                break;                                      \
+            }                                               \
+        });                                                 \
+        _found;                                             \
+    })
+
+/*
+ * de_manager_findAll($, ID, CODE)
+ *   Iterates all entities (active + paused) matching entity_id.
+ *   Use for read-only operations or state queries.
+ *
+ * Exposed variables inside CODE:
+ *   ENTITY    de_entity*    current matching entity
+ *   INDEX     uint16_t      current index
+ *   ENTITIES  de_entity**   pointer to the manager's array
+ *
+ * @note Do not call de_entity_delete/pause/resume inside CODE.
+ *       Use de_manager_applyId instead.
+ *
+ * @example
+ *   de_manager_findAll(&mgr, ENTITY_ENEMY, {
+ *       kprintf("enemy at index %d", INDEX);
+ *   });
+ */
+#define de_manager_findAll($, ID, CODE) \
+    de_manager_iterateAll($, { if (ENTITY->entity_id == (ID)) { CODE; } })
+
+/*
+ * de_manager_applyId($, ID, ACTION)
+ *   Collects all entities matching entity_id, then applies ACTION to each.
+ *   Safe to use with de_entity_delete, de_entity_pause, de_entity_resume.
+ *
+ * @param ACTION  Macro or function: void f(de_entity *).
+ *
+ * @example
+ *   de_manager_applyId(&mgr, ENTITY_SPAWNER, de_entity_pause);
+ *   de_manager_applyId(&mgr, ENTITY_BULLET,  de_entity_delete);
+ */
+#define de_manager_applyId($, ID, ACTION) \
+    de_manager_applyAll($, ENTITY->entity_id == (ID), ACTION)
+
+/*
+ * de_manager_update($)
+ *   Iterates active entities and calls their state function.
+ *   Handles pause/delete transitions signaled via state.
+ */
+#define de_manager_update($)                                    \
+    de_manager_iterate($, {                                     \
+        ENTITY->index      = INDEX;                             \
+        de_state _st       = ENTITY->state;                     \
+        if      (de_state_is_active (_st)) de_entity_update(ENTITY, _st); \
+        else if (de_state_is_paused (_st)) de_entity_pause (ENTITY);      \
+        else if (de_state_is_deleted(_st)) de_entity_delete(ENTITY);      \
+    })
+
+/* de_manager_pause($)  — moves all active entities to paused zone */
+#define de_manager_pause($)  (($)->pause_index = ($)->list.size)
+
+/* de_manager_resume($) — moves all paused entities back to active zone */
+#define de_manager_resume($) (($)->pause_index = 0)
+
+/* de_manager_reset($)  — deletes all entities and clears the manager */
+#define de_manager_reset($)                                 \
+    do                                                      \
+    {                                                       \
+        ($)->pause_index = 0;                               \
+        de_manager_iterateAll($, de_entity_delete(ENTITY)); \
+    } while (0)
+
+/* de_manager_end($) — frees all memory owned by the manager */
+#define de_manager_end($) uclist_end(&($)->list)
+
+/* ============================================================
+ * ITERATION MACROS
+ * ============================================================
+ *
+ * de_manager_iterate(MANAGER, CODE)
+ *   Iterates active entities only (pause_index..size), reverse order.
+ *
+ * de_manager_iterateAll(MANAGER, CODE)
+ *   Iterates ALL entities (0..size), reverse order.
+ *
+ * Exposed variables inside CODE:
+ *   ENTITY    de_entity*    current entity
+ *   INDEX     uint16_t      current index
+ *   ENTITIES  de_entity**   pointer to the manager's array
+ *
+ * @note Do not call de_entity_delete/pause/resume inside CODE.
+ *       Use de_manager_apply / de_manager_applyAll instead.
+ * @note Do not use _de_manager_iterate directly.
+ */
+#define de_manager_iterate(M, CODE)    _de_manager_iterate(M, (M)->pause_index, CODE)
+#define de_manager_iterateAll(M, CODE) _de_manager_iterate(M, 0,                CODE)
+
+#define _de_manager_iterate(M, LIMIT, CODE)           \
+    do                                                \
+    {                                                 \
+        uint16_t INDEX = (M)->list.size;              \
+        if (INDEX > (LIMIT))                          \
+        {                                             \
+            de_entity **ENTITIES = (M)->list.items;   \
+            while (INDEX-- > (LIMIT))                 \
+            {                                         \
+                de_entity *ENTITY = ENTITIES[INDEX];  \
+                CODE;                                 \
+            }                                         \
+        }                                             \
+    } while (0)
+
+/* ============================================================
+ * APPLY MACROS
+ * ============================================================
+ *
+ * de_manager_apply(MANAGER, FILTER, ACTION)
+ *   Collects active entities matching FILTER, then calls ACTION on each.
+ *
+ * de_manager_applyAll(MANAGER, FILTER, ACTION)
+ *   Same, but includes paused entities.
+ *
+ * Safe to use with de_entity_delete, de_entity_pause, de_entity_resume —
+ * entities are collected before any action is applied, preventing index
+ * corruption caused by swaps inside the list.
+ *
+ * @param FILTER  Boolean expression using ENTITY. Use 1 to match all.
+ * @param ACTION  Macro or function: void f(de_entity *).
+ *
+ * Variables available inside FILTER:
+ *   ENTITY    de_entity*    current entity being evaluated
+ *   INDEX     uint16_t      current index
+ *   ENTITIES  de_entity**   pointer to the manager's array
+ *
+ * @note Do not use _de_manager_apply directly.
+ *
+ * @example
+ *   de_manager_applyAll(&mgr, ENTITY->entity_id == ENTITY_SPAWNER, de_entity_pause);
+ *   de_manager_apply   (&mgr, 1,                                   de_entity_delete);
+ *   de_manager_applyAll(&mgr,
+ *       ENTITY->entity_id == ENTITY_ENEMY && ENTITY->state == s_enemy_walk,
+ *       de_entity_pause);
+ */
+#define de_manager_apply(M, F, A)    _de_manager_apply(de_manager_iterate,    M, F, A)
+#define de_manager_applyAll(M, F, A) _de_manager_apply(de_manager_iterateAll, M, F, A)
+
+#define _de_manager_apply(ITER, M, FILTER, ACTION)               \
+    do                                                           \
+    {                                                            \
+        de_entity *_targets[(M)->list.size + 1];                 \
+        uint16_t   _count = 0;                                   \
+        ITER(M, { (FILTER) && (_targets[_count++] = ENTITY); }); \
+        while (_count--)                                         \
+            (ACTION)(_targets[_count]);                          \
+    } while (0)
+
+#endif /* DARKEN_H */

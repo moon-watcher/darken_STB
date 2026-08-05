@@ -1,0 +1,369 @@
+/*
+ * darken.h — single-header entity/state machine library
+ *
+ * USAGE
+ *   In ONE .c file (to compile uclist implementation):
+ *       #define STB_UCLIST_IMPLEMENTATION
+ *       #include "darken.h"
+ *
+ *   In all other files:
+ *       #include "darken.h"
+ *
+ * DEPENDS ON
+ *   uclist  (uclist_init_alloc, uclist_alloc, uclist_reset, uclist_end)
+ *
+ * LICENSE
+ *   Public domain — no warranty.
+ */
+
+#ifndef DARKEN_H
+#define DARKEN_H
+
+#include <stdint.h>
+#include <stddef.h>
+#include <stdlib.h>
+#include "uclist.h"
+
+/* ============================================================
+ * MACRO HELPERS
+ * ============================================================ */
+
+#define DE_STMT(CODE)   do { CODE } while (0)
+#define DE_EXPR(TYPE, CODE)  ({ TYPE _de_result; CODE _de_result; })
+
+/* ============================================================
+ * STATE
+ * ============================================================ */
+
+typedef void *(*de_state_fn)(void *data);
+
+#define DE_STATE_DELETE  ((de_state_fn)0)
+#define DE_STATE_LOOP    ((de_state_fn)1)
+#define DE_STATE_PAUSE   ((de_state_fn)2)
+
+#define de_state_is_deleted(S)  ((S) == DE_STATE_DELETE)
+#define de_state_is_loop(S)       ((S) == DE_STATE_LOOP)
+#define de_state_is_pause(S)      ((S) == DE_STATE_PAUSE)
+#define de_state_is_active(S)     ((uintptr_t)(S) > (uintptr_t)DE_STATE_PAUSE)
+
+/* ============================================================
+ * ENTITY
+ * ============================================================ */
+
+typedef struct de_manager de_manager;
+
+typedef struct de_entity
+{
+    de_state_fn  state;
+    de_state_fn  on_destroy;
+    de_manager  *manager;
+    uint16_t     slot;
+    uint16_t     tag;
+    uint8_t      data[];
+} de_entity;
+
+/* --- Zone predicates --- */
+#define de_entity_is_paused(E)  ((E)->slot <  (E)->manager->pause_count)
+#define de_entity_is_active(E)  ((E)->slot >= (E)->manager->pause_count && \
+                                 (E)->slot <  (E)->manager->list.size)
+#define de_entity_is_dead(E)    ((E)->slot >= (E)->manager->list.size)
+
+/* --- Type-safe payload access --- */
+#define de_entity_data(E, TYPE)  ((TYPE *)((E)->data))
+
+/* ============================================================
+ * MANAGER
+ * ============================================================ */
+
+struct de_manager
+{
+    uclist   list;
+    uint16_t pause_count;
+    void    *ctx;
+};
+
+/* ============================================================
+ * MANAGER — lifecycle
+ * ============================================================ */
+
+#define de_manager_init(M, PAYLOAD_BYTES, CAPACITY)                     \
+    DE_STMT(                                                            \
+        uclist_init_alloc(&(M)->list,                                   \
+            (uint16_t)(sizeof(de_entity) + (PAYLOAD_BYTES)), (CAPACITY)); \
+        (M)->pause_count = 0;                                           \
+        (M)->ctx         = NULL;                                        \
+    )
+
+#define de_manager_set_ctx(M, PTR)  ((M)->ctx = (PTR))
+
+#define de_manager_end(M)  uclist_end(&(M)->list)
+
+/* ============================================================
+ * ENTITY — creation
+ * ============================================================ */
+
+#define de_manager_spawn(M, TAG)                                        \
+    DE_EXPR(de_entity *,                                                \
+        _de_result = uclist_alloc(&(M)->list);                          \
+        if (_de_result)                                                 \
+        {                                                               \
+            _de_result->manager = (M);                                  \
+            _de_result->slot    = (uint16_t)((M)->list.size - 1);       \
+            _de_result->tag     = (TAG);                                \
+        }                                                               \
+        _de_result;                                                     \
+    )
+
+/* ============================================================
+ * ENTITY — state transitions
+ * ============================================================ */
+
+#define _de_swap_slot(E, DST)                                           \
+    DE_STMT(                                                            \
+        uint16_t _src = (E)->slot;                                      \
+        uint16_t _dst = (DST);                                          \
+        if (_src != _dst)                                               \
+        {                                                               \
+            de_entity **_arr = (E)->manager->list.items;                \
+            _arr[_src]       = _arr[_dst];                              \
+            _arr[_src]->slot = _src;                                    \
+            _arr[_dst]       = (E);                                     \
+            (E)->slot        = _dst;                                    \
+        }                                                               \
+    )
+
+#define de_entity_pause(E)                                              \
+    DE_STMT(                                                            \
+        if (de_entity_is_active(E))                                     \
+            _de_swap_slot(E, (E)->manager->pause_count++);              \
+    )
+
+#define de_entity_resume(E)                                             \
+    DE_STMT(                                                            \
+        if (de_entity_is_paused(E))                                     \
+            _de_swap_slot(E, --(E)->manager->pause_count);              \
+    )
+
+#define de_entity_kill(E)                                               \
+    DE_STMT(                                                            \
+        if (!de_entity_is_dead(E))                                      \
+        {                                                               \
+            (E)->state = DE_STATE_DELETE;                               \
+            if ((E)->on_destroy)                                        \
+                (E)->state = (E)->on_destroy((E)->data);                \
+            if (de_state_is_deleted((E)->state))                        \
+            {                                                           \
+                de_entity_resume(E);                                    \
+                _de_swap_slot(E, --(E)->manager->list.size);             \
+            }                                                           \
+        }                                                               \
+    )
+
+#define de_entity_retag(E, NEW_TAG)  ((E)->tag = (NEW_TAG))
+
+/* ============================================================
+ * MANAGER — reset / kill all
+ * ============================================================ */
+
+#define de_manager_reset(M)                                             \
+    DE_STMT(                                                            \
+        uint16_t _i = (M)->list.size;                                   \
+        while (_i--)                                                    \
+        {                                                               \
+            de_entity *_e = (M)->list.items[_i];                        \
+            if (_e->on_destroy)                                         \
+                _e->on_destroy(_e->data);                               \
+        }                                                               \
+        uclist_reset(&(M)->list);                                       \
+        (M)->pause_count = 0;                                           \
+    )
+
+#define de_manager_kill_all(M)  de_manager_reset(M)
+
+#define de_manager_pause_all(M)   ((M)->pause_count = (M)->list.size)
+#define de_manager_resume_all(M)  ((M)->pause_count = 0)
+
+/* ============================================================
+ * COUNTS
+ * ============================================================ */
+
+#define de_manager_count(M)         ((M)->list.size)
+#define de_manager_count_active(M)  ((M)->list.size - (M)->pause_count)
+#define de_manager_count_paused(M)  ((M)->pause_count)
+
+/* ============================================================
+ * ITERATION
+ * ============================================================
+ *
+ * SAFE PATTERNS:
+ *   de_for_active  + de_entity_kill:    SAFE (reverse)
+ *   de_for_all     + de_entity_kill:    SAFE (reverse)
+ *   de_for_active  + de_entity_pause:   UNSAFE — use de_pause_matching
+ *   de_for_paused  + de_entity_resume:  UNSAFE — use de_resume_matching
+ */
+
+#define de_for_active(M, BODY)                                          \
+    DE_STMT(                                                            \
+        uint16_t N = (M)->list.size;                                    \
+        uint16_t I = N;                                                 \
+        if (I > (M)->pause_count)                                       \
+        {                                                               \
+            de_entity **_arr = (M)->list.items;                         \
+            while (I-- > (M)->pause_count)                              \
+            {                                                           \
+                de_entity *E = _arr[I];                                 \
+                BODY;                                                     \
+            }                                                           \
+        }                                                               \
+    )
+
+#define de_for_paused(M, BODY)                                          \
+    DE_STMT(                                                            \
+        uint16_t N = (M)->list.size;                                    \
+        uint16_t I = (M)->pause_count;                                  \
+        if (I > 0)                                                      \
+        {                                                               \
+            de_entity **_arr = (M)->list.items;                         \
+            while (I--)                                                 \
+            {                                                           \
+                de_entity *E = _arr[I];                                 \
+                BODY;                                                     \
+            }                                                           \
+        }                                                               \
+    )
+
+#define de_for_all(M, BODY)                                             \
+    DE_STMT(                                                            \
+        uint16_t N = (M)->list.size;                                    \
+        uint16_t I = N;                                                 \
+        if (I > 0)                                                      \
+        {                                                               \
+            de_entity **_arr = (M)->list.items;                         \
+            while (I--)                                                 \
+            {                                                           \
+                de_entity *E = _arr[I];                                 \
+                BODY;                                                     \
+            }                                                           \
+        }                                                               \
+    )
+
+/* ============================================================
+ * BULK OPERATIONS — direction-safe, no buffer needed
+ * ============================================================ */
+
+#define de_kill_matching(M, FILTER)                                     \
+    de_for_all(M, { if (FILTER) de_entity_kill(E); })
+
+#define de_kill_active(M, FILTER)                                       \
+    de_for_active(M, { if (FILTER) de_entity_kill(E); })
+
+#define de_pause_matching(M, FILTER)                                  \
+    DE_STMT(                                                            \
+        uint16_t I = (M)->pause_count;                                  \
+        uint16_t N = (M)->list.size;                                    \
+        while (I < N)                                                   \
+        {                                                               \
+            de_entity *E = (M)->list.items[I];                          \
+            if (FILTER) de_entity_pause(E);                             \
+            I++;                                                        \
+        }                                                               \
+    )
+
+#define de_resume_matching(M, FILTER)                                   \
+    DE_STMT(                                                            \
+        uint16_t I = (M)->pause_count;                                  \
+        while (I--)                                                     \
+        {                                                               \
+            de_entity *E = (M)->list.items[I];                           \
+            if (FILTER) de_entity_resume(E);                            \
+        }                                                               \
+    )
+
+/* ============================================================
+ * SORTING — qsort-based, updates slots automatically
+ * ============================================================ */
+
+#define de_sort_all(M, CMP)                                             \
+    DE_STMT(                                                            \
+        if ((M)->list.size > 1)                                         \
+        {                                                               \
+            qsort((M)->list.items, (M)->list.size,                      \
+                  sizeof(de_entity *), (CMP));                           \
+            for (uint16_t _i = 0; _i < (M)->list.size; _i++)            \
+                (M)->list.items[_i]->slot = _i;                         \
+        }                                                               \
+    )
+
+#define de_sort_active(M, CMP)                                          \
+    DE_STMT(                                                            \
+        uint16_t _cnt = (M)->list.size - (M)->pause_count;              \
+        if (_cnt > 1)                                                   \
+        {                                                               \
+            qsort(&(M)->list.items[(M)->pause_count], _cnt,             \
+                  sizeof(de_entity *), (CMP));                           \
+            for (uint16_t _i = (M)->pause_count; _i < (M)->list.size; _i++) \
+                (M)->list.items[_i]->slot = _i;                         \
+        }                                                               \
+    )
+
+#define de_sort_paused(M, CMP)                                          \
+    DE_STMT(                                                            \
+        if ((M)->pause_count > 1)                                       \
+        {                                                               \
+            qsort((M)->list.items, (M)->pause_count,                    \
+                  sizeof(de_entity *), (CMP));                          \
+            for (uint16_t _i = 0; _i < (M)->pause_count; _i++)          \
+                (M)->list.items[_i]->slot = _i;                         \
+        }                                                               \
+    )
+
+/* ============================================================
+ * CONVENIENCE
+ * ============================================================ */
+
+#define de_find_first(M, TAG)                                           \
+    DE_EXPR(de_entity *,                                                \
+        _de_result = NULL;                                              \
+        de_for_all(M, {                                                 \
+            if (E->tag == (TAG)) { _de_result = E; break; }            \
+        });                                                             \
+    )
+
+#define de_find_all(M, TAG, BODY)                                       \
+    de_for_all(M, { if (E->tag == (TAG)) { BODY; } })
+
+#define de_kill_by_tag(M, TAG)                                          \
+    de_kill_active(M, E->tag == (TAG))
+
+#define de_pause_by_tag(M, TAG)                                         \
+    de_pause_matching(M, E->tag == (TAG) && de_entity_is_active(E))
+
+#define de_resume_by_tag(M, TAG)                                        \
+    de_resume_matching(M, E->tag == (TAG))
+
+/* ============================================================
+ * UPDATE LOOP
+ * ============================================================ */
+
+#define de_manager_update(M)                                            \
+    de_for_active(M, {                                                  \
+        E->slot = I;                                                    \
+        de_state_fn _st = E->state;                                     \
+        if (de_state_is_active(_st))                                    \
+        {                                                               \
+            de_state_fn _next = _st(E->data);                           \
+            if (!de_state_is_loop(_next))                               \
+                E->state = _next;                                       \
+        }                                                               \
+        else if (de_state_is_pause(_st))  de_entity_pause(E);           \
+        else if (de_state_is_deleted(_st)) de_entity_kill(E);           \
+    })
+
+/* ============================================================
+ * ENTITY — state helpers
+ * ============================================================ */
+
+#define de_entity_set_state(E, S)    ((E)->state = (S))
+#define de_entity_set_destroy(E, F)  ((E)->on_destroy = (F))
+
+#endif /* DARKEN_H */

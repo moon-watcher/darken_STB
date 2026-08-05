@@ -1,0 +1,204 @@
+/*
+ * darksys.h — single-header component system library (STB-style)
+ *
+ * USAGE
+ *   In ONE .c file (to compile uclist implementation):
+ *       #define STB_UCLIST_IMPLEMENTATION
+ *       #include "darksys.h"
+ *
+ *   In all other files:
+ *       #include "darksys.h"
+ *
+ * DEPENDS ON
+ *   uclist  (uclist_init_add, uclist_add, uclist_reset, uclist_end)
+ *
+ * LICENSE
+ *   Public domain / project-specific — no warranty.
+ */
+
+#ifndef DARKSYS_H
+#define DARKSYS_H
+
+#include <stdint.h>
+#include "uclist.h"
+
+/* ============================================================
+ * STRUCT
+ * ============================================================ */
+
+typedef struct darksys
+{
+    uclist   list;
+    void   (*update)(struct darksys *);
+    uint16_t params;
+} darksys;
+
+/* ============================================================
+ * API MACROS
+ * ============================================================ */
+
+/*
+ * darksys_init($, update, params, capacity)
+ *   update   — callback called by darksys_update (receives darksys*)
+ *   params   — number of pointers per entry (1..5)
+ *   capacity — pre-allocated slots (0 = dynamic)
+ */
+#define darksys_init($, UPDATE, PARAMS, CAPACITY)           \
+    do                                                      \
+    {                                                       \
+        ($)->update = (UPDATE);                             \
+        ($)->params = (PARAMS);                             \
+        uclist_init_add(&($)->list, (CAPACITY) * (PARAMS)); \
+    } while (0)
+
+/*
+ * darksys_add($, data[])
+ *   Adds a group of params pointers. Returns 1 on success, 0 if duplicate.
+ */
+#define darksys_add($, DATA)                                        \
+    ({                                                              \
+        void    **_items  = (void **)($)->list.items;               \
+        uint16_t  _size   = ($)->list.size;                         \
+        uint16_t  _params = ($)->params;                            \
+        uint16_t  _ret    = 1;                                      \
+        for (uint16_t _i = 0; _i < _size && _ret; _i++)            \
+            for (uint16_t _j = 0; _j < _params && _ret; _j++)      \
+                if (_items[_i] == (DATA)[_j]) _ret = 0;            \
+        if (_ret)                                                   \
+            for (uint16_t _i = 0; _i < _params; _i++)              \
+                uclist_add(&($)->list, (DATA)[_i]);                 \
+        _ret;                                                       \
+    })
+
+/*
+ * darksys_delete($, data)
+ *   Removes the group containing data. Returns 1 on success, 0 if not found.
+ */
+#define darksys_delete($, DATA)                                             \
+    ({                                                                      \
+        void    **_items    = (void **)($)->list.items;                     \
+        uint16_t  _size     = ($)->list.size;                               \
+        uint16_t  _params   = ($)->params;                                  \
+        uint16_t  _ret      = 0;                                            \
+        for (uint16_t _i = 0; _i < _size && !_ret; _i++)                   \
+            if (_items[_i] == (DATA))                                       \
+            {                                                               \
+                uint16_t _start    = (uint16_t)((_i / _params) * _params); \
+                uint16_t _new_size = _size - _params;                       \
+                if (_start != _new_size)                                    \
+                {                                                           \
+                    void **_src = &_items[_new_size];                       \
+                    void **_dst = &_items[_start];                          \
+                    for (uint16_t _k = 0; _k < _params; _k++)              \
+                        *_dst++ = *_src++;                                  \
+                }                                                           \
+                ($)->list.size = _new_size;                                 \
+                _ret = 1;                                                   \
+            }                                                               \
+        _ret;                                                               \
+    })
+
+/* darksys_update($) — calls update callback if list is non-empty */
+#define darksys_update($)                   \
+    do                                      \
+    {                                       \
+        if (($)->list.size && ($)->update)  \
+            ($)->update($);                 \
+    } while (0)
+
+/* darksys_reset($) — clears all entries without freeing memory */
+#define darksys_reset($) uclist_reset(&($)->list)
+
+/* darksys_end($)   — frees all memory owned by the system */
+#define darksys_end($)   uclist_end(&($)->list)
+
+/* ============================================================
+ * FOREACH MACROS
+ * ============================================================
+ *
+ * DARKSYS_FOREACH(system [, A [, B [, C [, D [, E]]]]], CODE)
+ *   Iterates all entries in the system, unpacking params into
+ *   the provided variables in order.
+ *
+ * @example — params=1
+ *   DARKSYS_FOREACH(sys, pos, { pos->x += 1; });
+ *
+ * @example — params=2
+ *   DARKSYS_FOREACH(sys, pos, vel, { pos->x += vel->x; });
+ *
+ * @example — no variables (access via items[i] manually)
+ *   DARKSYS_FOREACH(sys, { printf("%p\n", items[i++]); });
+ */
+#define DARKSYS_FOREACH(...) \
+    _SYS_GET_MACRO(__VA_ARGS__, \
+        _SYS_FOREACH_5, _SYS_FOREACH_4, _SYS_FOREACH_3, \
+        _SYS_FOREACH_2, _SYS_FOREACH_1, _SYS_FOREACH_0)(__VA_ARGS__)
+
+/* ============================================================
+ * ITERATOR MACROS
+ * ============================================================
+ *
+ * DARKSYS_ITERATOR(name [, A [, B [, C [, D [, E]]]]], CODE)
+ *   Defines a void name(darksys *system) function that iterates
+ *   all entries, unpacking params into variables.
+ *
+ * @example — params=2
+ *   DARKSYS_ITERATOR(physics_update, pos, vel, {
+ *       pos->x += vel->x;
+ *       pos->y += vel->y;
+ *   });
+ *   // generates: void physics_update(darksys *system) { ... }
+ */
+#define DARKSYS_ITERATOR(...) \
+    _SYS_GET_MACRO(__VA_ARGS__, \
+        _SYS_ITERATOR_5, _SYS_ITERATOR_4, _SYS_ITERATOR_3, \
+        _SYS_ITERATOR_2, _SYS_ITERATOR_1, _SYS_ITERATOR_0)(__VA_ARGS__)
+
+/* ============================================================
+ * INTERNAL MACRO MACHINERY
+ * ============================================================ */
+
+#define _SYS_GET_MACRO(_1,_2,_3,_4,_5,_6,_7,NAME,...) NAME
+
+#define _SYS_FOREACH(SYSTEM, IT)                               \
+    void **items = (SYSTEM)->list.items;                       \
+    for (uint16_t i = 0, size = (SYSTEM)->list.size; i < size;)\
+        IT;
+
+#define _SYS_FOREACH_0(SYSTEM, IT) \
+    _SYS_FOREACH(SYSTEM, { IT; })
+
+#define _SYS_FOREACH_1(SYSTEM, A, IT) \
+    _SYS_FOREACH(SYSTEM, { A = items[i++]; IT; })
+
+#define _SYS_FOREACH_2(SYSTEM, A, B, IT) \
+    _SYS_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; IT; })
+
+#define _SYS_FOREACH_3(SYSTEM, A, B, C, IT) \
+    _SYS_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; IT; })
+
+#define _SYS_FOREACH_4(SYSTEM, A, B, C, D, IT) \
+    _SYS_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; D = items[i++]; IT; })
+
+#define _SYS_FOREACH_5(SYSTEM, A, B, C, D, E, IT) \
+    _SYS_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; D = items[i++]; E = items[i++]; IT; })
+
+#define _SYS_ITERATOR_0(NAME, IT) \
+    void NAME(darksys *system) { _SYS_FOREACH_0(system, IT); }
+
+#define _SYS_ITERATOR_1(NAME, A, IT) \
+    void NAME(darksys *system) { _SYS_FOREACH_1(system, A, IT); }
+
+#define _SYS_ITERATOR_2(NAME, A, B, IT) \
+    void NAME(darksys *system) { _SYS_FOREACH_2(system, A, B, IT); }
+
+#define _SYS_ITERATOR_3(NAME, A, B, C, IT) \
+    void NAME(darksys *system) { _SYS_FOREACH_3(system, A, B, C, IT); }
+
+#define _SYS_ITERATOR_4(NAME, A, B, C, D, IT) \
+    void NAME(darksys *system) { _SYS_FOREACH_4(system, A, B, C, D, IT); }
+
+#define _SYS_ITERATOR_5(NAME, A, B, C, D, E, IT) \
+    void NAME(darksys *system) { _SYS_FOREACH_5(system, A, B, C, D, E, IT); }
+
+#endif /* DARKSYS_H */

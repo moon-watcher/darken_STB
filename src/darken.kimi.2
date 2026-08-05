@@ -1,0 +1,341 @@
+/*
+ * darken.h — single-header entity/state machine library
+ *
+ * USAGE
+ *   In ONE .c file:
+ *       #define STB_DARKEN_IMPLEMENTATION
+ *       #include "darken.h"
+ *
+ *   In all other files:
+ *       #include "darken.h"
+ *
+ * DEPENDS ON
+ *   Nothing.
+ *
+ * MEMORY
+ *   Fixed pool. User provides the entity array and count at init.
+ *   No malloc, no dynamic growth.
+ *
+ * LICENSE
+ *   Public domain — no warranty.
+ */
+
+#ifndef DARKEN_H
+#define DARKEN_H
+
+#include <stdint.h>
+
+/* ============================================================
+ * STATE
+ * ============================================================ */
+
+typedef void *(*de_state)(void *);
+
+#define de_state_delete  ((de_state)0)
+#define de_state_loop    ((de_state)1)
+#define de_state_pause   ((de_state)2)
+
+#define de_state_is_deleted(S)  ((S) == de_state_delete)
+#define de_state_is_loop(S)     ((S) == de_state_loop)
+#define de_state_is_paused(S)   ((S) == de_state_pause)
+#define de_state_is_active(S)   ((S) > de_state_pause)
+
+/* ============================================================
+ * ENTITY
+ * ============================================================ */
+
+typedef struct de_manager de_manager;
+
+typedef struct de_entity
+{
+    de_state    state;
+    de_state    destructor;
+    de_manager *manager;
+    uint16_t    index;
+    uint16_t    tag;
+    uint8_t     data[];
+} de_entity;
+
+/* ---- Zone predicates ---- */
+#define de_entity_is_paused(E)  ((E)->index <  (E)->manager->pause_index)
+#define de_entity_is_active(E)  ((E)->index >= (E)->manager->pause_index && \
+                                 (E)->index <  (E)->manager->count)
+#define de_entity_is_deleted(E) ((E)->index >= (E)->manager->count)
+
+/* ---- Payload access ---- */
+#define de_entity_data(E, TYPE)  ((TYPE *)((E)->data))
+
+/* ============================================================
+ * MANAGER
+ * ============================================================ */
+
+struct de_manager
+{
+    de_entity **items;
+    uint16_t    count;
+    uint16_t    capacity;
+    uint16_t    pause_index;
+    uint16_t    data_size;    /* sizeof(payload) for zero-init */
+};
+
+/* ============================================================
+ * MANAGER — lifecycle (macros)
+ * ============================================================ */
+
+/*
+ * de_manager_init(M, ARRAY, CAPACITY, PAYLOAD_BYTES)
+ *   ARRAY         — de_entity* pool[CAPACITY] provided by user
+ *   CAPACITY      — max entities
+ *   PAYLOAD_BYTES — sizeof(entity payload)
+ *
+ * The user must allocate the pool array and the entity structs.
+ * This macro only wires the manager to them.
+ */
+#define de_manager_init(M, ARRAY, CAPACITY, PAYLOAD_BYTES)              \
+    do {                                                                \
+        (M)->items     = (ARRAY);                                       \
+        (M)->capacity  = (CAPACITY);                                    \
+        (M)->count     = 0;                                             \
+        (M)->pause_index = 0;                                           \
+        (M)->data_size = (PAYLOAD_BYTES);                               \
+    } while (0)
+
+#define de_manager_end(M)                                               \
+    do {                                                                \
+        (M)->items     = NULL;                                          \
+        (M)->capacity  = 0;                                             \
+        (M)->count     = 0;                                             \
+        (M)->pause_index = 0;                                           \
+    } while (0)
+
+/* ============================================================
+ * ENTITY — creation
+ * ============================================================
+ *
+ * User allocates entities. Manager only registers them.
+ */
+
+/*
+ * de_manager_add(M, ENTITY, TAG)
+ *   Registers an existing entity into the manager.
+ *   Returns the entity, or NULL if full.
+ */
+#define de_manager_add(M, ENTITY, TAG)                                  \
+    ({                                                                  \
+        de_entity *_e = (ENTITY);                                       \
+        if ((M)->count < (M)->capacity && _e)                           \
+        {                                                               \
+            _e->manager = (M);                                            \
+            _e->index   = (M)->count++;                                   \
+            _e->tag     = (TAG);                                          \
+            _e->state   = de_state_loop;                                  \
+            _e->destructor = NULL;                                        \
+            (M)->items[_e->index] = _e;                                 \
+        }                                                               \
+        else                                                            \
+            _e = NULL;                                                    \
+        _e;                                                               \
+    })
+
+/* ============================================================
+ * ENTITY — state transitions (inline functions)
+ * ============================================================ */
+
+#ifdef STB_DARKEN_IMPLEMENTATION
+
+static inline void _de_swap_index(de_entity *e, uint16_t dst)
+{
+    uint16_t src = e->index;
+    if (src == dst) return;
+
+    de_entity **items = e->manager->items;
+    items[src]        = items[dst];
+    items[src]->index = src;
+    items[dst]        = e;
+    e->index          = dst;
+}
+
+void de_entity_pause(de_entity *e)
+{
+    if (de_entity_is_active(e))
+        _de_swap_index(e, e->manager->pause_index++);
+}
+
+void de_entity_resume(de_entity *e)
+{
+    if (de_entity_is_paused(e))
+        _de_swap_index(e, --e->manager->pause_index);
+}
+
+void de_entity_delete(de_entity *e)
+{
+    if (de_entity_is_deleted(e))
+        return;
+
+    e->state = de_state_delete;
+
+    if (e->destructor)
+        e->state = e->destructor(e->data);
+
+    if (de_state_is_deleted(e->state))
+    {
+        de_entity_resume(e);
+        _de_swap_index(e, --e->manager->count);
+    }
+}
+
+/* ============================================================
+ * MANAGER — bulk operations
+ * ============================================================ */
+
+void de_manager_pause_all(de_manager *m)
+{
+    m->pause_index = m->count;
+}
+
+void de_manager_resume_all(de_manager *m)
+{
+    m->pause_index = 0;
+}
+
+void de_manager_reset(de_manager *m)
+{
+    uint16_t i = m->count;
+    while (i--)
+    {
+        de_entity *e = m->items[i];
+        if (e->destructor)
+            e->destructor(e->data);
+    }
+    m->count = 0;
+    m->pause_index = 0;
+}
+
+void de_manager_update(de_manager *m)
+{
+    uint16_t i = m->count;
+    if (i <= m->pause_index)
+        return;
+
+    de_entity **items = m->items;
+    while (i-- > m->pause_index)
+    {
+        de_entity *e = items[i];
+        e->index = i;
+        de_state st = e->state;
+
+        if (de_state_is_active(st))
+        {
+            de_state next = st(e->data);
+            if (!de_state_is_loop(next))
+                e->state = next;
+        }
+        else if (de_state_is_paused(st))
+            de_entity_pause(e);
+        else if (de_state_is_deleted(st))
+            de_entity_delete(e);
+    }
+}
+
+#endif /* STB_DARKEN_IMPLEMENTATION */
+
+/* ============================================================
+ * ITERATION MACROS
+ * ============================================================
+ *
+ * Variables exposed inside CODE:
+ *   E     de_entity*    current entity
+ *   I     uint16_t      current index
+ */
+
+#define de_manager_iterate(M, CODE)                                     \
+    do {                                                                \
+        uint16_t I = (M)->count;                                        \
+        if (I > (M)->pause_index)                                       \
+        {                                                               \
+            de_entity **_items = (M)->items;                            \
+            while (I-- > (M)->pause_index)                              \
+            {                                                           \
+                de_entity *E = _items[I];                               \
+                CODE;                                                     \
+            }                                                           \
+        }                                                               \
+    } while (0)
+
+#define de_manager_iterateAll(M, CODE)                                  \
+    do {                                                                \
+        uint16_t I = (M)->count;                                        \
+        if (I > 0)                                                      \
+        {                                                               \
+            de_entity **_items = (M)->items;                            \
+            while (I--)                                                 \
+            {                                                           \
+                de_entity *E = _items[I];                               \
+                CODE;                                                     \
+            }                                                           \
+        }                                                               \
+    } while (0)
+
+/* ============================================================
+ * FIND
+ * ============================================================ */
+
+#define de_manager_findFirst(M, TAG)                                    \
+    ({                                                                  \
+        de_entity *_found = NULL;                                       \
+        de_manager_iterateAll(M, {                                      \
+            if (E->tag == (TAG)) { _found = E; break; }                \
+        });                                                             \
+        _found;                                                           \
+    })
+
+#define de_manager_findAll(M, TAG, CODE)                                \
+    de_manager_iterateAll(M, { if (E->tag == (TAG)) { CODE; } })
+
+/* ============================================================
+ * ENTITY — state helpers
+ * ============================================================ */
+
+#define de_entity_state(E, S)       ((E)->state = (S))
+#define de_entity_destructor(E, S)  ((E)->destructor = (S))
+
+#endif /* DARKEN_H */
+
+
+
+
+
+
+
+
+#define STB_DARKEN_IMPLEMENTATION
+#include "darken.h"
+
+#define MAX_ENEMIES 32
+
+typedef struct { int hp, x, y; } Enemy;
+
+int main(void)
+{
+    /* Pool de entidades: structs reales en memoria */
+    static struct {
+        de_entity base;
+        Enemy     data;
+    } enemy_pool[MAX_ENEMIES];
+
+    static de_entity *enemy_ptrs[MAX_ENEMIES];
+
+    de_manager mgr;
+    de_manager_init(&mgr, enemy_ptrs, MAX_ENEMIES, sizeof(Enemy));
+
+    /* Registrar una entidad existente */
+    de_manager_add(&mgr, &enemy_pool[0].base, TAG_ENEMY);
+    de_entity_state(&enemy_pool[0].base, s_enemy_idle);
+
+    /* Game loop */
+    for (;;)
+        de_manager_update(&mgr);
+
+    de_manager_end(&mgr);
+    return 0;
+}
