@@ -10,6 +10,7 @@
 			".gitignore": true,
 			"out/": true,
 			// "darken_STB.code-workspace": true,
-		}
+		},
+		"git.confirmEmptyCommits": true
 	}
 }
