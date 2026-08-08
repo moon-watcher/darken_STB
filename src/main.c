@@ -33,10 +33,10 @@ de_manager g_manager2;
 int main(void)
 {
     de_manager_create(&g_manager,  10, sizeof(struct MyComponent));
-    de_manager_create(&g_manager2, 20, sizeof(struct MyComponent)+323);
+    de_manager_create(&g_manager2, 20, sizeof(struct MyComponent)+73);
 
     // 3. Crear algunas entidades
-    de_entity *e1 = de_manager_new(&g_manager);
+    de_entity *e1 = de_manager_new(&g_manager2);
     struct MyComponent *data1 = e1->data;
     data1->x = 0;
     data1->y = 0;
@@ -45,7 +45,7 @@ int main(void)
     e1->destructor = destructor;
     e1->tag = 1;
 
-    de_entity *e2 = de_manager_new(&g_manager);
+    de_entity *e2 = de_manager_new(&g_manager2);
     struct MyComponent *data2 = e2->data;
     data2->x = 10;
     data2->y = 20;

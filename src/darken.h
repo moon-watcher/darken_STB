@@ -1,37 +1,8 @@
-/*
- * darken.h — single-header entity/manager library (STB-style)
- *
- * USAGE
- *   #include "darken.h" in every file.
- *   All functions are static inline; no separate implementation.
- *
- *   Declare a manager with its own storage:
- *       DE_MANAGER_DECLARE(name, capacity, payload);
- *   Then inside a function, initialise it:
- *       DE_MANAGER_INIT(name);
- *
- *   Or manually:
- *       de_manager mgr;
- *       de_entity *ptrs[CAPACITY];
- *       uint8_t storage[CAPACITY * (sizeof(de_entity) + sizeof(Payload))];
- *       de_manager_def mem = { .items = ptrs, .storage = storage,
- *                                 .capacity = CAPACITY, .bytes = sizeof(Payload) };
- *       de_manager_init(&mgr, &mem, "mgr");
- *
- * LICENSE
- *   Public domain.
- */
-
 #ifndef DARKEN_H
 #define DARKEN_H
 
-// #include <stdint.h>
-// #include <stddef.h>
 #include <genesis.h>
-
-/* ============================================================
- * STATE
- * ============================================================ */
+// #include <stdint.h>
 
 typedef void *(*de_state)(void *);
 
@@ -44,10 +15,6 @@ typedef void *(*de_state)(void *);
 #define de_state_is_paused(S) ((S) == de_state_pause)
 #define de_state_is_active(S) ((S) > de_state_pause)
 
-/* ============================================================
- * ENTITY
- * ============================================================ */
-
 typedef struct de_manager de_manager;
 
 typedef struct de_entity
@@ -55,40 +22,54 @@ typedef struct de_entity
     de_state state;
     de_state destructor;
     de_manager *manager;
-    uint16_t slot;  /* position in manager->items[] */
-    uint16_t tag;   /* user‑defined identifier */
-    uint8_t data[]; /* flexible payload */
+    uint16_t slot;
+    uint16_t tag;
+    uint8_t data[];
 } de_entity;
-
-/* ============================================================
- * MANAGER
- * ============================================================ */
 
 typedef struct de_manager
 {
-    de_entity **items;    /* array of pointers (size = capacity) */
-    uint16_t size;        /* number of live entities */
-    uint16_t capacity;    /* max entities */
-    uint16_t pause_index; /* split: paused < pause_index <= active */
+    de_entity **items;
+    uint16_t size;
+    uint16_t capacity;
+    uint16_t pause_index;
 } de_manager;
 
-/* ---- Initialisation ---- */
+/* ============================================================
+ * ALIGNMENT (mandatory on m68k, not an optimization)
+ * ============================================================
+ * The 68000 throws an Address Error / Illegal Instruction if a word
+ * (16-bit) or long (32-bit) is accessed at an ODD address. de_entity
+ * starts with function pointers (32-bit), so every entity inside the
+ * storage buffer MUST land on an even address.
+ *
+ * Two separate things are needed for that, and BOTH matter:
+ *   1) The STRIDE between entities must be even -> _DE_ALIGN2 below.
+ *   2) The STORAGE BUFFER ITSELF must start at an even address, since
+ *      a plain uint8_t[] has no alignment guarantee by default ->
+ *      __attribute__((aligned(2))) on the array in de_manager_create.
+ * If either one is missing, entities end up at odd addresses and the
+ * CPU crashes as soon as it touches e->state / e->destructor.
+ */
+#define _DE_ALIGN2(X) (((X) + 1U) & ~1U)
+#define _DE_ENTITY_STRIDE(PAYLOAD) (sizeof(de_entity) + _DE_ALIGN2(PAYLOAD))
 
-// static inline void de_manager_init(de_manager *mgr, const de_manager_def *mem)
-static inline void de_manager_init(de_manager *mgr, de_entity **items, void *storage, uint16_t capacity, uint16_t bytes)
+void de_manager_init(de_manager *mgr, de_entity **items, void *storage, uint16_t capacity, uint16_t bytes)
 {
     mgr->items = items;
     mgr->capacity = capacity;
     mgr->size = 0;
     mgr->pause_index = 0;
 
+    /* Must use the SAME stride formula as de_manager_create's buffer-size
+     * calculation below, or entities would walk past the end of storage. */
+    uint16_t stride = _DE_ENTITY_STRIDE(bytes);
+
     for (uint16_t i = 0; i < mgr->capacity; ++i)
-        mgr->items[i] = (de_entity *)((uint8_t *)storage + i * (sizeof(de_entity) + bytes));
+        mgr->items[i] = (de_entity *)((uint8_t *)storage + i * stride);
 }
 
-/* ---- Entity creation ---- */
-
-static inline de_entity *de_manager_new(de_manager *mgr)
+de_entity *de_manager_new(de_manager *mgr)
 {
     if (mgr->size >= mgr->capacity)
         return 0;
@@ -101,12 +82,11 @@ static inline de_entity *de_manager_new(de_manager *mgr)
     e->tag = 0;
 
     ++mgr->size;
+
     return e;
 }
 
-/* ---- Internal swap helper ---- */
-
-static inline void de_entity_swap(de_entity *a, de_entity *b)
+void de_entity_swap(de_entity *a, de_entity *b)
 {
     de_manager *mgr = a->manager;
     uint16_t i = a->slot;
@@ -118,11 +98,10 @@ static inline void de_entity_swap(de_entity *a, de_entity *b)
     a->slot = j;
 }
 
-/* ---- Pause / Resume / Delete ---- */
-
-static inline void de_entity_pause(de_entity *e)
+void de_entity_pause(de_entity *e)
 {
     de_manager *mgr = e->manager;
+
     if (e->slot >= mgr->pause_index && e->slot < mgr->size)
     {
         de_entity *other = mgr->items[mgr->pause_index];
@@ -131,9 +110,10 @@ static inline void de_entity_pause(de_entity *e)
     }
 }
 
-static inline void de_entity_resume(de_entity *e)
+void de_entity_resume(de_entity *e)
 {
     de_manager *mgr = e->manager;
+
     if (e->slot < mgr->pause_index)
     {
         --mgr->pause_index;
@@ -142,7 +122,7 @@ static inline void de_entity_resume(de_entity *e)
     }
 }
 
-static inline void de_entity_delete(de_entity *e)
+void de_entity_delete(de_entity *e)
 {
     de_manager *mgr = e->manager;
     if (e->slot >= mgr->size)
@@ -169,19 +149,17 @@ static inline void de_entity_delete(de_entity *e)
     }
 }
 
-/* ---- Manager bulk operations ---- */
-
-static inline void de_manager_pause(de_manager *mgr)
+void de_manager_pause(de_manager *mgr)
 {
     mgr->pause_index = mgr->size;
 }
 
-static inline void de_manager_resume(de_manager *mgr)
+void de_manager_resume(de_manager *mgr)
 {
     mgr->pause_index = 0;
 }
 
-static inline void de_manager_reset(de_manager *mgr)
+void de_manager_reset(de_manager *mgr)
 {
     mgr->pause_index = 0;
     while (mgr->size)
@@ -191,9 +169,7 @@ static inline void de_manager_reset(de_manager *mgr)
     }
 }
 
-/* ---- Update ---- */
-
-static inline void de_entity_update(de_entity *e)
+void de_entity_update(de_entity *e)
 {
     de_state s = e->state;
     if (de_state_is_active(s))
@@ -204,13 +180,13 @@ static inline void de_entity_update(de_entity *e)
     }
 }
 
-static inline void de_manager_update(de_manager *mgr)
+void de_manager_update(de_manager *mgr)
 {
     uint16_t i = mgr->size;
     while (i-- > mgr->pause_index)
     {
         de_entity *e = mgr->items[i];
-        e->slot = i;
+        // e->slot = i;
         de_state s = e->state;
 
         if (de_state_is_active(s))
@@ -222,34 +198,22 @@ static inline void de_manager_update(de_manager *mgr)
     }
 }
 
-/* ============================================================
- * ITERATION MACROS
- * ============================================================ */
-
 #define de_manager_iterate(M, CODE) \
     _de_manager_iterate(M, (M)->pause_index, CODE)
 
 #define de_manager_iterateAll(M, CODE) \
     _de_manager_iterate(M, 0, CODE)
 
-#define _de_manager_iterate(M, LIMIT, CODE)          \
-    do                                               \
-    {                                                \
-        uint16_t INDEX = (M)->size;                  \
-        if (INDEX > (LIMIT))                         \
-        {                                            \
-            de_entity **ENTITIES = (M)->items;       \
-            while (INDEX-- > (LIMIT))                \
-            {                                        \
-                de_entity *ENTITY = ENTITIES[INDEX]; \
-                CODE;                                \
-            }                                        \
-        }                                            \
+#define _de_manager_iterate(M, LIMIT, CODE)        \
+    do                                             \
+    {                                              \
+        uint16_t INDEX = (M)->size;                \
+        while (INDEX-- > (LIMIT))                  \
+        {                                          \
+            de_entity *ENTITY = (M)->items[INDEX]; \
+            CODE;                                  \
+        }                                          \
     } while (0)
-
-/* ============================================================
- * APPLY MACROS
- * ============================================================ */
 
 #define de_manager_apply(M, F, A) _de_manager_apply(de_manager_iterate, M, F, A)
 #define de_manager_applyAll(M, F, A) _de_manager_apply(de_manager_iterateAll, M, F, A)
@@ -264,16 +228,13 @@ static inline void de_manager_update(de_manager *mgr)
             (ACTION)(_targets[_count]);            \
     } while (0)
 
-/* ============================================================
- * CONVENIENCE MACROS
- * ============================================================ */
-
 #define _DE_CONCAT(A, B) A##B
 #define _DE_UNIQUE(A, B) _DE_CONCAT(A, B)
 
-#define de_manager_create(MGR, CAPACITY, PAYLOAD)                                           \
-    static de_entity *_DE_UNIQUE(_i_, __LINE__)[(CAPACITY)];                                \
-    static uint8_t _DE_UNIQUE(_s_, __LINE__)[(CAPACITY) * (sizeof(de_entity) + (PAYLOAD))]; \
+/* MGR must be a POINTER (&g_manager). */
+#define de_manager_create(MGR, CAPACITY, PAYLOAD)                                                                                                                    \
+    static de_entity *_DE_UNIQUE(_i_, __LINE__)[(CAPACITY)];                                                                                                         \
+    static uint8_t _DE_UNIQUE(_s_, __LINE__)[(CAPACITY) * _DE_ENTITY_STRIDE(PAYLOAD)] __attribute__((aligned(2))); /* buffer must itself start at an even address */ \
     de_manager_init((MGR), _DE_UNIQUE(_i_, __LINE__), _DE_UNIQUE(_s_, __LINE__), (CAPACITY), (PAYLOAD))
 
 #endif /* DARKEN_H */
