@@ -11,6 +11,8 @@
 			"out/": true,
 			// "darken_STB.code-workspace": true,
 		},
-		"git.confirmEmptyCommits": true
+		"git.confirmEmptyCommits": true,
+		"C_Cpp.default.compilerPath": "c:\\MD\\SGDK\\bin\\gcc.exe",
+		"editor.lineNumbers": "off",
 	}
 }
