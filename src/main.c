@@ -33,8 +33,8 @@ de_manager g_manager2;                                                          
 
 int main(void)
 {
-    de_manager_create(g_manager,  10, sizeof(struct MyComponent));
-    de_manager_create(g_manager2, 20, sizeof(struct MyComponent) + 73);
+    de_manager_create(&g_manager,  10, sizeof(struct MyComponent));
+    de_manager_create(&g_manager2, 20, sizeof(struct MyComponent) + 73);
 
     de_entity *e1 = de_manager_new(&g_manager);
     struct MyComponent *data1 = (struct MyComponent *)e1->data;
