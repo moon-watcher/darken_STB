@@ -195,6 +195,16 @@ static void *my_destructor(void *data)
     return (void *)de_state_delete;
 }
 
+/* Estado "no-op" solo para mantener una entidad activa (no borrada) en
+ * los tests -- de_manager_new deja state = de_state_delete por
+ * defecto, asi que cualquier entidad que NO quiera ser borrada en el
+ * proximo update necesita un estado activo explicito. */
+static void *state_noop(void *data)
+{
+    (void)data;
+    return (void *)de_state_loop;
+}
+
 static void test_delete(void)
 {
     kprintf("-- test_delete --");
@@ -210,7 +220,12 @@ static void test_delete(void)
     b->destructor = (de_state)my_destructor;
     c->destructor = (de_state)my_destructor;
 
-    a->state = de_state_delete; /* se borrara en el proximo update */
+    /* b y c deben quedar ACTIVAS, si no, tambien arrancan en
+     * de_state_delete por defecto y el update las borraria igual. */
+    b->state = (de_state)state_noop;
+    c->state = (de_state)state_noop;
+    a->state = de_state_delete; /* explicito, aunque ya era el valor por defecto */
+
     de_manager_update(&m);
 
     CHECK("delete via estado: size baja a 2", m.size == 2);
@@ -387,12 +402,80 @@ static void bench_apply(void)
     kprintf("create32+applyAll(borrar pares)+reset x%d reps: %ld frames", BENCH_REPS, frames);
 }
 
+/* ---- Escalado: mismo trabajo, mas entidades, para ver como crece el
+ * coste con N. Menos reps cuanto mayor N, para que el tiempo total de
+ * benchmark no se dispare. `n` como parametro hace que de_manager_create
+ * genere un VLA (array de tamano variable) -- soportado por gcc, y ya
+ * se usa este mismo mecanismo dentro de _de_manager_apply. */
+
+static void bench_create_destroy_n(u16 n, u32 reps)
+{
+    de_manager m;
+    de_manager_create(&m, n, sizeof(struct MyComponent));
+
+    u32 t0 = bench_start();
+    for (u32 r = 0; r < reps; ++r)
+    {
+        for (u16 i = 0; i < n; ++i)
+            de_manager_new(&m);
+        de_manager_reset(&m);
+    }
+    u32 frames = bench_frames_elapsed(t0);
+
+    kprintf("create+reset %d entidades x%ld reps: %ld frames", n, reps, frames);
+}
+
+static void bench_update_n(u16 n, u32 reps)
+{
+    de_manager m;
+    de_manager_create(&m, n, sizeof(struct MyComponent));
+
+    for (u16 i = 0; i < n; ++i)
+    {
+        de_entity *e = de_manager_new(&m);
+        e->state = (de_state)bench_state_fn;
+    }
+
+    u32 t0 = bench_start();
+    for (u32 r = 0; r < reps; ++r)
+        de_manager_update(&m);
+    u32 frames = bench_frames_elapsed(t0);
+
+    kprintf("de_manager_update, %d entidades x%ld reps: %ld frames", n, reps, frames);
+}
+
+/* ---- Coste aislado de de_entity_swap, la operacion interna que
+ * pause/resume/delete usan por debajo. Util para saber cuanto de su
+ * coste es "el swap en si" frente a la logica que lo rodea. */
+
+#define BENCH_SWAP_REPS 50000
+
+static void bench_swap(void)
+{
+    de_manager m;
+    de_manager_create(&m, 2, sizeof(struct MyComponent));
+    de_entity *a = de_manager_new(&m);
+    de_entity *b = de_manager_new(&m);
+
+    u32 t0 = bench_start();
+    for (u32 r = 0; r < BENCH_SWAP_REPS; ++r)
+        de_entity_swap(a, b);
+    u32 frames = bench_frames_elapsed(t0);
+
+    kprintf("de_entity_swap x%d: %ld frames", BENCH_SWAP_REPS, frames);
+}
+
 static void run_all_benchmarks(void)
 {
     kprintf("========== BENCHMARKS ==========");
     bench_create_destroy();
     bench_update();
     bench_apply();
+    bench_create_destroy_n(128, 500);
+    bench_create_destroy_n(256, 250);
+    bench_update_n(128, 500);
+    bench_update_n(256, 250);
+    bench_swap();
     kprintf("=================================");
 }
 
@@ -460,13 +543,8 @@ static void run_usage_example(void)
     kprintf("--- Frame 1 ---");
     de_manager_update(&g_manager);
 
-    de_manager_iterateAll(&g_manager, {
-        if (ENTITY->tag == 2)
-        {
-            de_entity_pause(ENTITY);
-            kprintf("Pausada entidad tag %d", ENTITY->tag);
-        }
-    });
+    de_manager_applyAll(&g_manager, ENTITY->tag == 2, de_entity_pause);
+    kprintf("Pausada entidad tag 2");
 
     kprintf("--- Frame 2 ---");
     de_manager_update(&g_manager);

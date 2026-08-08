@@ -123,7 +123,6 @@ void de_manager_update(de_manager *$)
     while (i-- > $->pause_index)
     {
         de_entity *e = $->items[i];
-        e->slot = i;
         de_state s = e->state;
 
         if (de_state_is_active(s))
