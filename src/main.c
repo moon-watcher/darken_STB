@@ -773,6 +773,273 @@ static void test_pipeline_order(void)
     CHECK("pipeline: count 3", pipe.count == 3);
 }
 
+
+
+/* ============================================================
+ * TESTS 26+: SISTEMAS COMO ENTIDADES DE DARKEN
+ *
+ * Cada sistema es una entidad normal de un manager dedicado.
+ * Su payload contiene solamente el pool de punteros que necesita.
+ * Las entidades normales aportan sus campos a esos pools.
+ * ============================================================ */
+
+typedef struct TestSystemEntity
+{
+    int16_t  x, y;
+    int16_t  vx, vy;
+    uint16_t frame;
+} TestSystemEntity;
+
+typedef struct TestBatchSystem
+{
+    void    **items;
+    uint16_t size;
+} TestBatchSystem;
+
+static void *test_system_physics(void *data)
+{
+    TestBatchSystem *system = (TestBatchSystem *)data;
+
+    uint16_t i = 0;
+    while (i < system->size)
+    {
+        int16_t *vy = (int16_t *)system->items[i++];
+        *vy += 1;
+    }
+
+    return (void *)de_state_loop;
+}
+
+static void *test_system_movement(void *data)
+{
+    TestBatchSystem *system = (TestBatchSystem *)data;
+
+    uint16_t i = 0;
+    while (i < system->size)
+    {
+        int16_t *x  = (int16_t *)system->items[i++];
+        int16_t *y  = (int16_t *)system->items[i++];
+        int16_t *vx = (int16_t *)system->items[i++];
+        int16_t *vy = (int16_t *)system->items[i++];
+
+        *x += *vx;
+        *y += *vy;
+    }
+
+    return (void *)de_state_loop;
+}
+
+static void *test_system_frames(void *data)
+{
+    TestBatchSystem *system = (TestBatchSystem *)data;
+
+    uint16_t i = 0;
+    while (i < system->size)
+    {
+        uint16_t *frame = (uint16_t *)system->items[i++];
+        *frame += 1;
+    }
+
+    return (void *)de_state_loop;
+}
+
+static void test_entity_system_basic(void)
+{
+    kprintf("-- test_entity_system_basic --");
+
+    de_manager entities;
+    de_manager systems;
+
+    de_manager_create(&entities, 3, sizeof(TestSystemEntity));
+    de_manager_create(&systems, 3, sizeof(TestBatchSystem));
+
+    /* Pools pertenecientes a las entidades sistema. */
+    void *physics_items[3];
+    void *movement_items[12];
+    void *frame_items[3];
+
+    /* Las tres entidades del manager de sistemas. */
+    /* de_manager_update() recorre de atrás hacia delante.
+       El orden de creación es, por tanto, el inverso del pipeline:
+       physics -> movement -> frames. */
+    de_entity *frames_entity   = de_manager_new(&systems);
+    de_entity *movement_entity = de_manager_new(&systems);
+    de_entity *physics_entity  = de_manager_new(&systems);
+
+    TestBatchSystem *physics_pool  = (TestBatchSystem *)physics_entity->data;
+    TestBatchSystem *movement_pool = (TestBatchSystem *)movement_entity->data;
+    TestBatchSystem *frame_pool    = (TestBatchSystem *)frames_entity->data;
+
+    physics_pool->items  = physics_items;
+    physics_pool->size   = 0;
+    movement_pool->items = movement_items;
+    movement_pool->size  = 0;
+    frame_pool->items    = frame_items;
+    frame_pool->size     = 0;
+
+    physics_entity->state  = (de_state)test_system_physics;
+    movement_entity->state = (de_state)test_system_movement;
+    frames_entity->state   = (de_state)test_system_frames;
+
+    /* Dos entidades normales. */
+    de_entity *p1_entity = de_manager_new(&entities);
+    de_entity *p2_entity = de_manager_new(&entities);
+
+    TestSystemEntity *p1 = (TestSystemEntity *)p1_entity->data;
+    TestSystemEntity *p2 = (TestSystemEntity *)p2_entity->data;
+
+    p1->x = 10; p1->y = 20;
+    p1->vx = 2; p1->vy = 3;
+    p1->frame = 0;
+
+    p2->x = 100; p2->y = 200;
+    p2->vx = -4; p2->vy = 5;
+    p2->frame = 10;
+
+    p1_entity->state = (de_state)state_noop;
+    p2_entity->state = (de_state)state_noop;
+
+    /* Cada entidad aporta solamente los datos que necesita cada sistema. */
+    physics_items[physics_pool->size++] = &p1->vy;
+    physics_items[physics_pool->size++] = &p2->vy;
+
+    movement_items[movement_pool->size++] = &p1->x;
+    movement_items[movement_pool->size++] = &p1->y;
+    movement_items[movement_pool->size++] = &p1->vx;
+    movement_items[movement_pool->size++] = &p1->vy;
+    movement_items[movement_pool->size++] = &p2->x;
+    movement_items[movement_pool->size++] = &p2->y;
+    movement_items[movement_pool->size++] = &p2->vx;
+    movement_items[movement_pool->size++] = &p2->vy;
+
+    frame_items[frame_pool->size++] = &p1->frame;
+    frame_items[frame_pool->size++] = &p2->frame;
+
+    /* Actualizar los tres sistemas como entidades normales. */
+    de_manager_update(&systems);
+
+    CHECK("entity systems: physics modifica vy",
+          p1->vy == 4 && p2->vy == 6);
+
+    CHECK("entity systems: movement procesa ambas entidades",
+          p1->x == 12 && p1->y == 24 &&
+          p2->x == 96 && p2->y == 206);
+
+    CHECK("entity systems: frames procesa ambas entidades",
+          p1->frame == 1 && p2->frame == 11);
+
+    CHECK("entity systems: manager de sistemas tiene 3 entidades",
+          systems.size == 3);
+
+    CHECK("entity systems: entidades normales siguen intactas",
+          entities.size == 2);
+}
+
+static void test_entity_system_shared_data(void)
+{
+    kprintf("-- test_entity_system_shared_data --");
+
+    de_manager entities;
+    de_manager systems;
+
+    de_manager_create(&entities, 2, sizeof(TestSystemEntity));
+    de_manager_create(&systems, 2, sizeof(TestBatchSystem));
+
+    void *movement_items[8];
+    void *frame_items[2];
+
+    de_entity *movement = de_manager_new(&systems);
+    de_entity *frames = de_manager_new(&systems);
+
+    TestBatchSystem *movement_system = (TestBatchSystem *)movement->data;
+    TestBatchSystem *frame_system = (TestBatchSystem *)frames->data;
+
+    movement_system->items = movement_items;
+    movement_system->size = 0;
+    frame_system->items = frame_items;
+    frame_system->size = 0;
+
+    movement->state = (de_state)test_system_movement;
+    frames->state = (de_state)test_system_frames;
+
+    de_entity *e = de_manager_new(&entities);
+    TestSystemEntity *data = (TestSystemEntity *)e->data;
+
+    data->x = 50;
+    data->y = 60;
+    data->vx = 7;
+    data->vy = -2;
+    data->frame = 3;
+    e->state = (de_state)state_noop;
+
+    /* Los dos sistemas apuntan a campos del MISMO payload. */
+    movement_items[movement_system->size++] = &data->x;
+    movement_items[movement_system->size++] = &data->y;
+    movement_items[movement_system->size++] = &data->vx;
+    movement_items[movement_system->size++] = &data->vy;
+    frame_items[frame_system->size++] = &data->frame;
+
+    de_manager_update(&systems);
+
+    CHECK("shared data: movimiento usa x/y/vx/vy",
+          data->x == 57 && data->y == 58);
+    CHECK("shared data: frames usa el mismo payload",
+          data->frame == 4);
+}
+
+static void test_entity_system_paused_entity(void)
+{
+    kprintf("-- test_entity_system_paused_entity --");
+
+    de_manager entities;
+    de_manager systems;
+
+    de_manager_create(&entities, 2, sizeof(TestSystemEntity));
+    de_manager_create(&systems, 1, sizeof(TestBatchSystem));
+
+    void *movement_items[8];
+    de_entity *system_entity = de_manager_new(&systems);
+    TestBatchSystem *system = (TestBatchSystem *)system_entity->data;
+    system->items = movement_items;
+    system->size = 0;
+    system_entity->state = (de_state)test_system_movement;
+
+    de_entity *active_entity = de_manager_new(&entities);
+    de_entity *paused_entity = de_manager_new(&entities);
+
+    TestSystemEntity *active = (TestSystemEntity *)active_entity->data;
+    TestSystemEntity *paused = (TestSystemEntity *)paused_entity->data;
+
+    active->x = 10; active->y = 20;
+    active->vx = 1; active->vy = 2;
+    paused->x = 100; paused->y = 200;
+    paused->vx = 3; paused->vy = 4;
+
+    active_entity->state = (de_state)state_noop;
+    paused_entity->state = (de_state)state_noop;
+
+    movement_items[system->size++] = &active->x;
+    movement_items[system->size++] = &active->y;
+    movement_items[system->size++] = &active->vx;
+    movement_items[system->size++] = &active->vy;
+    movement_items[system->size++] = &paused->x;
+    movement_items[system->size++] = &paused->y;
+    movement_items[system->size++] = &paused->vx;
+    movement_items[system->size++] = &paused->vy;
+
+    de_entity_pause(paused_entity);
+
+    /* La pausa del manager de entidades NO elimina sus punteros del sistema. */
+    de_manager_update(&systems);
+
+    CHECK("paused entity: sigue en el pool del sistema",
+          paused->x == 103 && paused->y == 204);
+    CHECK("paused entity: active tambien se procesa",
+          active->x == 11 && active->y == 22);
+    CHECK("paused entity: sigue pausada en su manager",
+          paused_entity->slot < entities.pause_index);
+}
+
 /* ============================================================
  * ORQUESTADOR DE TESTS
  * ============================================================ */
@@ -808,6 +1075,9 @@ static void run_all_tests(void)
     test_system_all_includes_paused();
     test_system_tag_filter();
     test_pipeline_order();
+    test_entity_system_basic();
+    test_entity_system_shared_data();
+    test_entity_system_paused_entity();
     kprintf("============================");
     kprintf("Resultado: %d/%d tests OK", g_testsPassed, g_testsRun);
 }
