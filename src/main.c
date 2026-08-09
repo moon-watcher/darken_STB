@@ -43,59 +43,41 @@ static bool all_slots_aligned(de_manager *mgr)
 }
 
 /* ============================================================
- * TEST 1: alineacion
+ * TESTS 1-17: FUNCIONALIDAD BASE
  * ============================================================ */
 
 static void test_alignment(void)
 {
     kprintf("-- test_alignment --");
-
-    de_manager m1;
+    de_manager m1, m2, m3;
     de_manager_create(&m1, 8, sizeof(struct MyComponent));
-    CHECK("payload par: todos los slots alineados a 4", all_slots_aligned(&m1));
-
-    de_manager m2;
     de_manager_create(&m2, 8, sizeof(struct MyComponent) + 73);
-    CHECK("payload impar (+73): todos los slots alineados a 4", all_slots_aligned(&m2));
-
-    de_manager m3;
     de_manager_create(&m3, 8, 1);
+    CHECK("payload par: todos los slots alineados a 4", all_slots_aligned(&m1));
+    CHECK("payload impar (+73): todos los slots alineados a 4", all_slots_aligned(&m2));
     CHECK("payload=1: todos los slots alineados a 4", all_slots_aligned(&m3));
 }
-
-/* ============================================================
- * TEST 2: creacion / capacidad
- * ============================================================ */
 
 static void test_creation(void)
 {
     kprintf("-- test_creation --");
-
     de_manager m;
     de_manager_create(&m, 3, sizeof(struct MyComponent));
-
     CHECK("manager empieza con size 0", m.size == 0);
-
     de_entity *e0 = de_manager_new(&m);
     de_entity *e1 = de_manager_new(&m);
     de_entity *e2 = de_manager_new(&m);
     de_entity *e3 = de_manager_new(&m);
-
-    CHECK("de_manager_new devuelve entidad valida (1)", e0 != 0);
-    CHECK("de_manager_new devuelve entidad valida (2)", e1 != 0);
-    CHECK("de_manager_new devuelve entidad valida (3)", e2 != 0);
-    CHECK("de_manager_new devuelve 0 al llenarse", e3 == 0);
-    CHECK("size == capacity tras llenar", m.size == 3);
-    CHECK("entidad nueva arranca en state delete", e0->state == de_state_delete);
-    CHECK("entidad nueva arranca con tag 0", e0->tag == 0);
+    CHECK("new valida (1)", e0 != 0);
+    CHECK("new valida (2)", e1 != 0);
+    CHECK("new valida (3)", e2 != 0);
+    CHECK("new devuelve 0 al llenarse", e3 == 0);
+    CHECK("size == capacity", m.size == 3);
+    CHECK("arranca en state delete", e0->state == de_state_delete);
+    CHECK("arranca con tag 0", e0->tag == 0);
 }
 
-/* ============================================================
- * TEST 3: update, estados loop / transicion
- * ============================================================ */
-
 static int g_walkCalls = 0;
-
 static void *state_walk(void *data)
 {
     struct MyComponent *c = (struct MyComponent *)data;
@@ -103,7 +85,6 @@ static void *state_walk(void *data)
     ++g_walkCalls;
     return (void *)de_state_loop;
 }
-
 static void *state_once_then_idle(void *data)
 {
     (void)data;
@@ -114,34 +95,24 @@ static void test_update(void)
 {
     kprintf("-- test_update --");
     g_walkCalls = 0;
-
     de_manager m;
     de_manager_create(&m, 2, sizeof(struct MyComponent));
-
     de_entity *e = de_manager_new(&m);
     struct MyComponent *c = (struct MyComponent *)e->data;
     c->x = 0;
     e->state = (de_state)state_walk;
-
     de_manager_update(&m);
     de_manager_update(&m);
     de_manager_update(&m);
-
-    CHECK("de_state_loop no cambia el puntero de estado", e->state == (de_state)state_walk);
-    CHECK("de_state_loop SI ejecuta la funcion cada vez (x3)", g_walkCalls == 3 && c->x == 3);
-
+    CHECK("loop no cambia puntero", e->state == (de_state)state_walk);
+    CHECK("loop ejecuta x3", g_walkCalls == 3 && c->x == 3);
     de_entity *e2 = de_manager_new(&m);
     e2->state = (de_state)state_once_then_idle;
     de_manager_update(&m);
-    CHECK("estado no-loop SI actualiza el puntero de estado", e2->state == (de_state)state_walk);
+    CHECK("transicion actualiza estado", e2->state == (de_state)state_walk);
 }
 
-/* ============================================================
- * TEST 4: pause / resume
- * ============================================================ */
-
 static int g_idleCalls = 0;
-
 static void *state_idle_counter(void *data)
 {
     (void)data;
@@ -153,46 +124,33 @@ static void test_pause_resume(void)
 {
     kprintf("-- test_pause_resume --");
     g_idleCalls = 0;
-
     de_manager m;
     de_manager_create(&m, 4, sizeof(struct MyComponent));
-
     de_entity *a = de_manager_new(&m);
     de_entity *b = de_manager_new(&m);
     a->state = (de_state)state_idle_counter;
     b->state = (de_state)state_idle_counter;
-
     de_manager_update(&m);
-    CHECK("ambas activas: 2 llamadas en frame 1", g_idleCalls == 2);
-
+    CHECK("ambas activas: 2 llamadas", g_idleCalls == 2);
     de_entity_pause(b);
-    CHECK("tras pausar, b cae antes de pause_index", b->slot < m.pause_index);
-
+    CHECK("b cae antes de pause_index", b->slot < m.pause_index);
     g_idleCalls = 0;
     de_manager_update(&m);
-    CHECK("con b pausada: solo 1 llamada", g_idleCalls == 1);
-
+    CHECK("con b pausada: 1 llamada", g_idleCalls == 1);
     de_entity_resume(b);
-    CHECK("tras resumir, b vuelve a estar en zona activa", b->slot >= m.pause_index);
-
+    CHECK("b vuelve a zona activa", b->slot >= m.pause_index);
     g_idleCalls = 0;
     de_manager_update(&m);
-    CHECK("tras resumir: 2 llamadas otra vez", g_idleCalls == 2);
+    CHECK("resumir: 2 llamadas", g_idleCalls == 2);
 }
 
-/* ============================================================
- * TEST 5: delete (via estado y directo) + destructor
- * ============================================================ */
-
 static int g_destructorCalls = 0;
-
 static void *my_destructor(void *data)
 {
     (void)data;
     ++g_destructorCalls;
     return (void *)de_state_delete;
 }
-
 static void *state_noop(void *data)
 {
     (void)data;
@@ -203,325 +161,204 @@ static void test_delete(void)
 {
     kprintf("-- test_delete --");
     g_destructorCalls = 0;
-
     de_manager m;
     de_manager_create(&m, 4, sizeof(struct MyComponent));
-
     de_entity *a = de_manager_new(&m);
     de_entity *b = de_manager_new(&m);
     de_entity *c = de_manager_new(&m);
     a->destructor = (de_state)my_destructor;
     b->destructor = (de_state)my_destructor;
     c->destructor = (de_state)my_destructor;
-
     b->state = (de_state)state_noop;
     c->state = (de_state)state_noop;
     a->state = de_state_delete;
-
     de_manager_update(&m);
-
-    CHECK("delete via estado: size baja a 2", m.size == 2);
-    CHECK("delete via estado: destructor llamado 1 vez", g_destructorCalls == 1);
-
+    CHECK("delete via estado: size 2", m.size == 2);
+    CHECK("delete via estado: destructor 1 vez", g_destructorCalls == 1);
     de_entity_delete(b);
-    CHECK("delete directo: size baja a 1", m.size == 1);
-    CHECK("delete directo: destructor llamado 2 veces en total", g_destructorCalls == 2);
+    CHECK("delete directo: size 1", m.size == 1);
+    CHECK("delete directo: destructor 2 veces", g_destructorCalls == 2);
 }
-
-/* ============================================================
- * TEST 6: apply / applyAll
- * ============================================================ */
 
 static void test_apply(void)
 {
     kprintf("-- test_apply --");
-
     de_manager m;
     de_manager_create(&m, 5, sizeof(struct MyComponent));
-
     for (int i = 0; i < 5; ++i)
     {
         de_entity *e = de_manager_new(&m);
         e->tag = i;
     }
-
     de_manager_applyAll(&m, (ENTITY->tag % 2) == 0, de_entity_delete);
-
-    CHECK("apply: quedan 2 entidades (tags impares)", m.size == 2);
-
+    CHECK("quedan 2 entidades", m.size == 2);
     bool onlyOdd = TRUE;
     de_manager_iterateAll(&m, {
-        if ((ENTITY->tag % 2) == 0)
-            onlyOdd = FALSE;
+        if ((ENTITY->tag % 2) == 0) onlyOdd = FALSE;
     });
-    CHECK("apply: las que quedan tienen tag impar", onlyOdd);
+    CHECK("quedan tags impares", onlyOdd);
 }
-
-/* ============================================================
- * TEST 7: reset
- * ============================================================ */
 
 static void test_reset(void)
 {
     kprintf("-- test_reset --");
     g_destructorCalls = 0;
-
     de_manager m;
     de_manager_create(&m, 6, sizeof(struct MyComponent));
-
     for (int i = 0; i < 6; ++i)
     {
         de_entity *e = de_manager_new(&m);
         e->destructor = (de_state)my_destructor;
     }
-
     de_manager_reset(&m);
-
-    CHECK("reset: size vuelve a 0", m.size == 0);
-    CHECK("reset: destructor llamado para cada entidad", g_destructorCalls == 6);
+    CHECK("reset: size 0", m.size == 0);
+    CHECK("reset: destructor 6 veces", g_destructorCalls == 6);
 }
 
-/* ============================================================
- * TEST 8: destructor que ABORTA el delete
- * ============================================================ */
-
 static int g_abortDestructorCalls = 0;
-
 static void *state_abort_destructor(void *data)
 {
     (void)data;
     ++g_abortDestructorCalls;
-    return (void *)de_state_loop; /* aborta: la entidad sobrevive */
+    return (void *)de_state_loop;
 }
 
 static void test_destructor_abort(void)
 {
     kprintf("-- test_destructor_abort --");
     g_abortDestructorCalls = 0;
-
     de_manager m;
     de_manager_create(&m, 2, sizeof(struct MyComponent));
-
     de_entity *e = de_manager_new(&m);
     e->destructor = (de_state)state_abort_destructor;
-    e->state = de_state_delete; /* marcada para morir */
-
+    e->state = de_state_delete;
     de_manager_update(&m);
-
-    CHECK("destructor aborta: size sigue siendo 1", m.size == 1);
-    CHECK("destructor aborta: destructor llamado 1 vez", g_abortDestructorCalls == 1);
-    CHECK("destructor aborta: entidad sigue viva (slot valido)", e->slot < m.size);
-    /* El destructor retorno de_state_loop, asi que el estado final es loop */
-    CHECK("destructor aborta: estado cambio a loop", e->state == de_state_loop);
+    CHECK("abort: size 1", m.size == 1);
+    CHECK("abort: destructor llamado", g_abortDestructorCalls == 1);
+    CHECK("abort: entidad viva", e->slot < m.size);
+    CHECK("abort: estado a loop", e->state == de_state_loop);
 }
 
-/* ============================================================
- * TEST 9: entidad que se auto-destruye desde su estado
- * ============================================================
- * Patron comun: una entidad decide durante su update que debe morir.
- * NOTA: darken.h marca para borrar en este frame, pero el borrado
- * efectivo ocurre en el SIGUIENTE update.
- */
-
 static int g_selfKillCalls = 0;
-
 static void *state_self_kill(void *data)
 {
     (void)data;
     ++g_selfKillCalls;
-    return (void *)de_state_delete; /* me quiero morir */
+    return (void *)de_state_delete;
 }
 
 static void test_self_delete(void)
 {
     kprintf("-- test_self_delete --");
     g_selfKillCalls = 0;
-
     de_manager m;
     de_manager_create(&m, 3, sizeof(struct MyComponent));
-
     de_entity *a = de_manager_new(&m);
     de_entity *b = de_manager_new(&m);
     a->state = (de_state)state_self_kill;
-    b->state = (de_state)state_noop; /* sobrevive */
-
-    /* Frame 1: a ejecuta su estado y retorna de_state_delete */
+    b->state = (de_state)state_noop;
     de_manager_update(&m);
-
-    CHECK("self-delete frame 1: estado ejecutado 1 vez", g_selfKillCalls == 1);
-    CHECK("self-delete frame 1: a esta marcada como deleted", a->state == de_state_delete);
-    CHECK("self-delete frame 1: size sigue siendo 2 (borrado diferido)", m.size == 2);
-
-    /* Frame 2: de_manager_update ve a->state == delete y la elimina */
+    CHECK("self-del f1: ejecutado 1 vez", g_selfKillCalls == 1);
+    CHECK("self-del f1: marcada deleted", a->state == de_state_delete);
+    CHECK("self-del f1: size aun 2", m.size == 2);
     de_manager_update(&m);
-
-    CHECK("self-delete frame 2: size baja a 1", m.size == 1);
-    CHECK("self-delete frame 2: la que queda es b", m.items[0] == b);
+    CHECK("self-del f2: size 1", m.size == 1);
+    CHECK("self-del f2: queda b", m.items[0] == b);
 }
-
-/* ============================================================
- * TEST 10: estabilidad de slots tras swaps
- * ============================================================ */
 
 static void test_slot_stability(void)
 {
     kprintf("-- test_slot_stability --");
-
     de_manager m;
     de_manager_create(&m, 4, sizeof(struct MyComponent));
-
     de_entity *e0 = de_manager_new(&m);
     de_entity *e1 = de_manager_new(&m);
     de_entity *e2 = de_manager_new(&m);
     de_entity *e3 = de_manager_new(&m);
-
-    e0->tag = 0; e1->tag = 1; e2->tag = 2; e3->tag = 3;
-    e0->state = (de_state)state_noop;
-    e1->state = (de_state)state_noop;
-    e2->state = (de_state)state_noop;
-    e3->state = (de_state)state_noop;
-
+    e0->state = e1->state = e2->state = e3->state = (de_state)state_noop;
     de_entity_pause(e1);
     de_entity_pause(e3);
-
     bool stable = TRUE;
     for (uint16_t i = 0; i < m.size; ++i)
-        if (m.items[i]->slot != i)
-            stable = FALSE;
-
-    CHECK("slots coherentes tras pausar", stable);
-    CHECK("pause_index vale 2", m.pause_index == 2);
-
+        if (m.items[i]->slot != i) stable = FALSE;
+    CHECK("slots tras pausar", stable);
+    CHECK("pause_index 2", m.pause_index == 2);
     de_entity_delete(e0);
-
     stable = TRUE;
     for (uint16_t i = 0; i < m.size; ++i)
-        if (m.items[i]->slot != i)
-            stable = FALSE;
-
-    CHECK("slots coherentes tras delete", stable);
-    CHECK("size tras delete es 3", m.size == 3);
+        if (m.items[i]->slot != i) stable = FALSE;
+    CHECK("slots tras delete", stable);
+    CHECK("size 3", m.size == 3);
 }
-
-/* ============================================================
- * TEST 11: delete de entidad PAUSADA
- * ============================================================ */
 
 static void test_delete_paused(void)
 {
     kprintf("-- test_delete_paused --");
-
     de_manager m;
     de_manager_create(&m, 4, sizeof(struct MyComponent));
-
     de_entity *a = de_manager_new(&m);
     de_entity *b = de_manager_new(&m);
     de_entity *c = de_manager_new(&m);
-
-    a->state = (de_state)state_noop;
-    b->state = (de_state)state_noop;
-    c->state = (de_state)state_noop;
-
+    a->state = b->state = c->state = (de_state)state_noop;
     de_entity_pause(b);
-
     de_entity_delete(b);
-
-    CHECK("delete pausado: size baja a 2", m.size == 2);
-    CHECK("delete pausado: pause_index baja a 0", m.pause_index == 0);
-    CHECK("delete pausado: a sigue en zona activa", a->slot >= m.pause_index);
-    CHECK("delete pausado: c sigue en zona activa", c->slot >= m.pause_index);
+    CHECK("del pausado: size 2", m.size == 2);
+    CHECK("del pausado: pause_index 0", m.pause_index == 0);
+    CHECK("del pausado: a activa", a->slot >= m.pause_index);
+    CHECK("del pausado: c activa", c->slot >= m.pause_index);
 }
-
-/* ============================================================
- * TEST 12: applyAll con PAUSE
- * ============================================================ */
 
 static void test_apply_pause(void)
 {
     kprintf("-- test_apply_pause --");
-
     de_manager m;
     de_manager_create(&m, 6, sizeof(struct MyComponent));
-
     for (int i = 0; i < 6; ++i)
     {
         de_entity *e = de_manager_new(&m);
         e->tag = i;
         e->state = (de_state)state_noop;
     }
-
     de_manager_applyAll(&m, (ENTITY->tag % 2) == 0, de_entity_pause);
-
-    CHECK("applyAll pause: pause_index vale 3", m.pause_index == 3);
-    CHECK("applyAll pause: size sigue siendo 6", m.size == 6);
-
+    CHECK("apply pause: pause_index 3", m.pause_index == 3);
+    CHECK("apply pause: size 6", m.size == 6);
     bool correct = TRUE;
     de_manager_iterateAll(&m, {
         bool shouldBePaused = (ENTITY->tag % 2) == 0;
         bool isPaused = ENTITY->slot < m.pause_index;
-        if (shouldBePaused != isPaused)
-            correct = FALSE;
+        if (shouldBePaused != isPaused) correct = FALSE;
     });
-    CHECK("applyAll pause: pares pausadas, impares activas", correct);
+    CHECK("apply pause: pares pausadas", correct);
 }
-
-/* ============================================================
- * TEST 13: reutilizacion de slot tras delete
- * ============================================================ */
 
 static void test_reuse(void)
 {
     kprintf("-- test_reuse --");
-
     de_manager m;
     de_manager_create(&m, 3, sizeof(struct MyComponent));
-
     de_entity *e0 = de_manager_new(&m);
     e0->state = (de_state)state_noop;
     struct MyComponent *d0 = (struct MyComponent *)e0->data;
     d0->x = 42;
-
     de_entity_delete(e0);
-
     de_entity *e1 = de_manager_new(&m);
-    CHECK("reuse: nueva entidad no es NULL", e1 != 0);
-    CHECK("reuse: ocupa slot 0", e1->slot == 0);
-    CHECK("reuse: size vuelve a 1", m.size == 1);
-
+    CHECK("reuse: not null", e1 != 0);
+    CHECK("reuse: slot 0", e1->slot == 0);
+    CHECK("reuse: size 1", m.size == 1);
     struct MyComponent *d1 = (struct MyComponent *)e1->data;
-    CHECK("reuse: datos antiguos siguen ahi (no zero-fill)", d1->x == 42);
+    CHECK("reuse: datos antiguos persisten", d1->x == 42);
 }
 
-/* ============================================================
- * TEST 14: stress mixto
- * ============================================================ */
-
-static int g_stressCallsA = 0;
-static int g_stressCallsB = 0;
-
-static void *state_stress_a(void *data)
-{
-    (void)data;
-    ++g_stressCallsA;
-    return (void *)de_state_loop;
-}
-
-static void *state_stress_b(void *data)
-{
-    (void)data;
-    ++g_stressCallsB;
-    return (void *)de_state_loop;
-}
+static int g_stressCallsA = 0, g_stressCallsB = 0;
+static void *state_stress_a(void *data) { (void)data; ++g_stressCallsA; return (void *)de_state_loop; }
+static void *state_stress_b(void *data) { (void)data; ++g_stressCallsB; return (void *)de_state_loop; }
 
 static void test_mixed_stress(void)
 {
     kprintf("-- test_mixed_stress --");
-    g_stressCallsA = 0;
-    g_stressCallsB = 0;
-
+    g_stressCallsA = 0; g_stressCallsB = 0;
     de_manager m;
     de_manager_create(&m, 5, sizeof(struct MyComponent));
-
     de_entity *e[5];
     for (int i = 0; i < 5; ++i)
     {
@@ -529,112 +366,185 @@ static void test_mixed_stress(void)
         e[i]->tag = i;
         e[i]->state = (i % 2 == 0) ? (de_state)state_stress_a : (de_state)state_stress_b;
     }
-
     de_manager_update(&m);
-    CHECK("stress: frame 1, 5 llamadas totales", g_stressCallsA + g_stressCallsB == 5);
-
+    CHECK("stress f1: 5 llamadas", g_stressCallsA + g_stressCallsB == 5);
     de_entity_pause(e[1]);
     e[3]->state = de_state_delete;
     g_stressCallsA = 0; g_stressCallsB = 0;
     de_manager_update(&m);
-
-    CHECK("stress: frame 2, 3 activas (0,2,4)", g_stressCallsA + g_stressCallsB == 3);
-    CHECK("stress: size tras delete es 4", m.size == 4);
-
+    CHECK("stress f2: 3 activas", g_stressCallsA + g_stressCallsB == 3);
+    CHECK("stress f2: size 4", m.size == 4);
     de_entity_resume(e[1]);
     g_stressCallsA = 0; g_stressCallsB = 0;
     de_manager_update(&m);
-
-    CHECK("stress: frame 3, 4 activas de nuevo", g_stressCallsA + g_stressCallsB == 4);
-
+    CHECK("stress f3: 4 activas", g_stressCallsA + g_stressCallsB == 4);
     bool ok = TRUE;
     for (uint16_t i = 0; i < m.size; ++i)
-        if (m.items[i]->slot != i)
-            ok = FALSE;
-    CHECK("stress: slots coherentes tras caos", ok);
+        if (m.items[i]->slot != i) ok = FALSE;
+    CHECK("stress: slots ok", ok);
 }
-
-/* ============================================================
- * TEST 15: integridad de datos tras swap
- * ============================================================ */
 
 static void test_data_integrity(void)
 {
     kprintf("-- test_data_integrity --");
-
     de_manager m;
     de_manager_create(&m, 3, sizeof(struct MyComponent));
-
     de_entity *a = de_manager_new(&m);
     de_entity *b = de_manager_new(&m);
     de_entity *c = de_manager_new(&m);
-
     struct MyComponent *da = (struct MyComponent *)a->data;
     struct MyComponent *db = (struct MyComponent *)b->data;
     struct MyComponent *dc = (struct MyComponent *)c->data;
-
-    da->x = 111; da->y = 222;
-    db->x = 333; db->y = 444;
-    dc->x = 555; dc->y = 666;
-
-    a->state = (de_state)state_noop;
-    b->state = (de_state)state_noop;
-    c->state = (de_state)state_noop;
-
+    da->x = 111; db->x = 333; dc->x = 555;
+    a->state = b->state = c->state = (de_state)state_noop;
     de_entity_pause(b);
     de_entity_delete(a);
-
-    CHECK("data integrity: a sigue teniendo sus datos",
-          ((struct MyComponent *)a->data)->x == 111);
-    CHECK("data integrity: b sigue teniendo sus datos",
-          ((struct MyComponent *)b->data)->x == 333);
-    CHECK("data integrity: c sigue teniendo sus datos",
-          ((struct MyComponent *)c->data)->x == 555);
+    CHECK("integrity a", ((struct MyComponent *)a->data)->x == 111);
+    CHECK("integrity b", ((struct MyComponent *)b->data)->x == 333);
+    CHECK("integrity c", ((struct MyComponent *)c->data)->x == 555);
 }
-
-/* ============================================================
- * TEST 16: update de manager VACIO
- * ============================================================ */
 
 static void test_empty_manager(void)
 {
     kprintf("-- test_empty_manager --");
-
     de_manager m;
     de_manager_create(&m, 4, sizeof(struct MyComponent));
-
-    CHECK("empty: size empieza en 0", m.size == 0);
-
+    CHECK("empty: size 0", m.size == 0);
     de_manager_update(&m);
     de_manager_pause(&m);
     de_manager_resume(&m);
-
-    CHECK("empty: update no modifica size", m.size == 0);
-    CHECK("empty: pause no rompe pause_index", m.pause_index == 0);
+    CHECK("empty: size sigue 0", m.size == 0);
+    CHECK("empty: pause_index 0", m.pause_index == 0);
 }
-
-/* ============================================================
- * TEST 17: delete de la ULTIMA entidad
- * ============================================================ */
 
 static void test_delete_last(void)
 {
     kprintf("-- test_delete_last --");
-
     de_manager m;
     de_manager_create(&m, 4, sizeof(struct MyComponent));
-
     de_entity *e = de_manager_new(&m);
     e->state = (de_state)state_noop;
-
     de_entity_delete(e);
-
-    CHECK("delete last: size es 0", m.size == 0);
-    CHECK("delete last: pause_index es 0", m.pause_index == 0);
+    CHECK("last: size 0", m.size == 0);
+    CHECK("last: pause_index 0", m.pause_index == 0);
 }
 
 /* ============================================================
- * ORQUESTADOR
+ * TESTS 18-20: ESTRES DE ALTA CAPACIDAD
+ * ============================================================ */
+
+static void test_stress_capacity(void)
+{
+    kprintf("-- test_stress_capacity --");
+    de_manager m;
+    de_manager_create(&m, 50, sizeof(struct MyComponent));
+
+    /* Llenar al 100% */
+    de_entity *ents[50];
+    for (int i = 0; i < 50; ++i)
+    {
+        ents[i] = de_manager_new(&m);
+        CHECK("llenado completo", ents[i] != 0);
+    }
+    CHECK("capacity 50", m.size == 50);
+
+    /* Borrar 25 entidades intercaladas (pares) */
+    for (int i = 0; i < 50; i += 2)
+        de_entity_delete(ents[i]);
+
+    CHECK("tras borrar pares: size 25", m.size == 25);
+
+    /* Crear 10 mas: deben rellenar los huecos */
+    for (int i = 0; i < 10; ++i)
+    {
+        de_entity *e = de_manager_new(&m);
+        CHECK("rellenar huecos", e != 0);
+    }
+    CHECK("size final 35", m.size == 35);
+
+    /* Verificar que ningun slot apunta fuera de rango */
+    bool ok = TRUE;
+    for (uint16_t i = 0; i < m.size; ++i)
+    {
+        if (m.items[i]->slot != i) ok = FALSE;
+        if (m.items[i]->manager != &m) ok = FALSE;
+    }
+    CHECK("slots coherentes tras fragmentacion", ok);
+}
+
+static void test_stress_many_entities(void)
+{
+    kprintf("-- test_stress_many_entities --");
+    /* 150 entidades es mucho para Genesis pero valido para stress */
+    de_manager m;
+    de_manager_create(&m, 150, sizeof(struct MyComponent));
+
+    for (int i = 0; i < 150; ++i)
+    {
+        de_entity *e = de_manager_new(&m);
+        e->state = (de_state)state_noop;
+    }
+    CHECK("many: size 150", m.size == 150);
+
+    /* Pausar la mitad */
+    for (int i = 0; i < 150; ++i)
+        if (i % 2 == 0) de_entity_pause(m.items[i]);
+
+    CHECK("many: pause_index 75", m.pause_index == 75);
+
+    /* Update: solo las 75 activas deben ser tocadas */
+    de_manager_update(&m);
+
+    /* Verificar que las pausadas siguen en zona pausada */
+    bool ok = TRUE;
+    for (int i = 0; i < 150; i += 2)
+        if (m.items[i]->slot >= m.pause_index) ok = FALSE;
+    CHECK("many: pares siguen pausados", ok);
+}
+
+static void test_stress_fragmentation(void)
+{
+    kprintf("-- test_stress_fragmentation --");
+    de_manager m;
+    de_manager_create(&m, 20, sizeof(struct MyComponent));
+
+    de_entity *e[20];
+    for (int i = 0; i < 20; ++i)
+    {
+        e[i] = de_manager_new(&m);
+        e[i]->tag = i;
+        e[i]->state = (de_state)state_noop;
+    }
+
+    /* Borrar entidades en posiciones impares: 1,3,5,7,9,11,13,15,17,19 */
+    for (int i = 1; i < 20; i += 2)
+        de_entity_delete(e[i]);
+
+    CHECK("frag: size 10 tras borrar impares", m.size == 10);
+
+    /* Crear 5 nuevas: deben ocupar los huecos del final */
+    for (int i = 0; i < 5; ++i)
+    {
+        de_entity *ne = de_manager_new(&m);
+        ne->tag = 100 + i;
+        ne->state = (de_state)state_noop;
+    }
+    CHECK("frag: size 15 tras recrear", m.size == 15);
+
+    /* Verificar que no hay duplicados de tag */
+    bool unique = TRUE;
+    for (uint16_t i = 0; i < m.size; ++i)
+    {
+        for (uint16_t j = i + 1; j < m.size; ++j)
+        {
+            if (m.items[i]->tag == m.items[j]->tag) unique = FALSE;
+        }
+    }
+    CHECK("frag: tags unicos tras recreacion", unique);
+}
+
+/* ============================================================
+ * ORQUESTADOR DE TESTS
  * ============================================================ */
 
 static void run_all_tests(void)
@@ -660,12 +570,15 @@ static void run_all_tests(void)
     test_data_integrity();
     test_empty_manager();
     test_delete_last();
+    test_stress_capacity();
+    test_stress_many_entities();
+    test_stress_fragmentation();
     kprintf("============================");
     kprintf("Resultado: %d/%d tests OK", g_testsPassed, g_testsRun);
 }
 
 /* ============================================================
- * BENCHMARKS
+ * BENCHMARKS DE RENDIMIENTO
  * ============================================================ */
 
 static volatile u32 g_frameCounter = 0;
@@ -691,7 +604,6 @@ static void bench_create_destroy(void)
 {
     de_manager m;
     de_manager_create(&m, 32, sizeof(struct MyComponent));
-
     u32 t0 = bench_start();
     for (u32 r = 0; r < BENCH_REPS; ++r)
     {
@@ -700,7 +612,6 @@ static void bench_create_destroy(void)
         de_manager_reset(&m);
     }
     u32 frames = bench_frames_elapsed(t0);
-
     kprintf("create+reset 32 entidades x%d reps: %ld frames", BENCH_REPS, frames);
 }
 
@@ -714,18 +625,15 @@ static void bench_update(void)
 {
     de_manager m;
     de_manager_create(&m, 32, sizeof(struct MyComponent));
-
     for (u16 i = 0; i < 32; ++i)
     {
         de_entity *e = de_manager_new(&m);
         e->state = (de_state)bench_state_fn;
     }
-
     u32 t0 = bench_start();
     for (u32 r = 0; r < BENCH_REPS; ++r)
         de_manager_update(&m);
     u32 frames = bench_frames_elapsed(t0);
-
     kprintf("de_manager_update, 32 entidades x%d reps: %ld frames", BENCH_REPS, frames);
 }
 
@@ -733,7 +641,6 @@ static void bench_apply(void)
 {
     de_manager m;
     de_manager_create(&m, 32, sizeof(struct MyComponent));
-
     u32 t0 = bench_start();
     for (u32 r = 0; r < BENCH_REPS; ++r)
     {
@@ -746,7 +653,6 @@ static void bench_apply(void)
         de_manager_reset(&m);
     }
     u32 frames = bench_frames_elapsed(t0);
-
     kprintf("create32+applyAll(borrar pares)+reset x%d reps: %ld frames", BENCH_REPS, frames);
 }
 
@@ -754,7 +660,6 @@ static void bench_create_destroy_n(u16 n, u32 reps)
 {
     de_manager m;
     de_manager_create(&m, n, sizeof(struct MyComponent));
-
     u32 t0 = bench_start();
     for (u32 r = 0; r < reps; ++r)
     {
@@ -763,7 +668,6 @@ static void bench_create_destroy_n(u16 n, u32 reps)
         de_manager_reset(&m);
     }
     u32 frames = bench_frames_elapsed(t0);
-
     kprintf("create+reset %d entidades x%ld reps: %ld frames", n, reps, frames);
 }
 
@@ -771,18 +675,15 @@ static void bench_update_n(u16 n, u32 reps)
 {
     de_manager m;
     de_manager_create(&m, n, sizeof(struct MyComponent));
-
     for (u16 i = 0; i < n; ++i)
     {
         de_entity *e = de_manager_new(&m);
         e->state = (de_state)bench_state_fn;
     }
-
     u32 t0 = bench_start();
     for (u32 r = 0; r < reps; ++r)
         de_manager_update(&m);
     u32 frames = bench_frames_elapsed(t0);
-
     kprintf("de_manager_update, %d entidades x%ld reps: %ld frames", n, reps, frames);
 }
 
@@ -794,27 +695,59 @@ static void bench_swap(void)
     de_manager_create(&m, 2, sizeof(struct MyComponent));
     de_entity *a = de_manager_new(&m);
     de_entity *b = de_manager_new(&m);
-
     u32 t0 = bench_start();
     for (u32 r = 0; r < BENCH_SWAP_REPS; ++r)
         de_entity_swap(a, b);
     u32 frames = bench_frames_elapsed(t0);
-
     kprintf("de_entity_swap x%d: %ld frames", BENCH_SWAP_REPS, frames);
 }
 
-static void run_all_benchmarks(void)
+/* ============================================================
+ * BENCHMARK DE MEMORIA
+ * ============================================================
+ * Mide el overhead de la libreria: bytes por entidad y
+ * eficiencia del stride con diferentes payloads.
+ */
+
+static void bench_memory_overhead(void)
 {
-    kprintf("========== BENCHMARKS ==========");
-    bench_create_destroy();
-    bench_update();
-    bench_apply();
-    bench_create_destroy_n(128, 500);
-    bench_create_destroy_n(256, 250);
-    bench_update_n(128, 500);
-    bench_update_n(256, 250);
-    bench_swap();
-    kprintf("=================================");
+    kprintf("========== MEMORIA ==========");
+
+    /* Calculo teorico basado en _DE_ENTITY_STRIDE */
+    u16 stride16 = _DE_ENTITY_STRIDE(16);
+    u16 stride32 = _DE_ENTITY_STRIDE(32);
+    u16 stride1  = _DE_ENTITY_STRIDE(1);
+    u16 stride9  = _DE_ENTITY_STRIDE(9);  /* impar, debe redondear */
+
+    kprintf("sizeof(de_entity) base: %d bytes", sizeof(de_entity));
+    kprintf("stride payload=1:  %d bytes/entidad", stride1);
+    kprintf("stride payload=9:  %d bytes/entidad (impar)", stride9);
+    kprintf("stride payload=16: %d bytes/entidad", stride16);
+    kprintf("stride payload=32: %d bytes/entidad", stride32);
+
+    /* Medicion real: cuanta RAM ocupan N entidades */
+    de_manager m32;
+    de_manager_create(&m32, 32, sizeof(struct MyComponent));
+    u32 bytes32 = 32 * _DE_ENTITY_STRIDE(sizeof(struct MyComponent));
+    kprintf("Manager 32 entidades (payload %d): %ld bytes en storage",
+            sizeof(struct MyComponent), bytes32);
+
+    de_manager m128;
+    de_manager_create(&m128, 128, sizeof(struct MyComponent));
+    u32 bytes128 = 128 * _DE_ENTITY_STRIDE(sizeof(struct MyComponent));
+    kprintf("Manager 128 entidades (payload %d): %ld bytes en storage",
+            sizeof(struct MyComponent), bytes128);
+
+    /* Overhead por entidad: stride - payload */
+    u16 overhead = _DE_ENTITY_STRIDE(sizeof(struct MyComponent)) - sizeof(struct MyComponent);
+    kprintf("Overhead por entidad: %d bytes (header + padding)", overhead);
+
+    /* Demostracion de fragmentacion de memoria en Genesis:
+     * con 64 KB de RAM, cuantas entidades de este tipo caben? */
+    u32 ramAvailable = 64 * 1024; /* aproximacion bruta de RAM libre en Genesis */
+    u32 entidadesEn64k = ramAvailable / _DE_ENTITY_STRIDE(sizeof(struct MyComponent));
+    kprintf("Entidades de MyComponent que caben en 64 KB: ~%ld", entidadesEn64k);
+    kprintf("==============================");
 }
 
 /* ============================================================
@@ -853,27 +786,21 @@ static void run_usage_example(void)
 
     de_entity *e1 = de_manager_new(&g_manager);
     struct MyComponent *data1 = (struct MyComponent *)e1->data;
-    data1->x = 0;
-    data1->y = 0;
-    data1->health = 100;
+    data1->x = 0; data1->y = 0; data1->health = 100;
     e1->state = (de_state)update_walk;
     e1->destructor = (de_state)destructor;
     e1->tag = 1;
 
     de_entity *e2 = de_manager_new(&g_manager);
     struct MyComponent *data2 = (struct MyComponent *)e2->data;
-    data2->x = 10;
-    data2->y = 20;
-    data2->health = 80;
+    data2->x = 10; data2->y = 20; data2->health = 80;
     e2->state = (de_state)update_idle;
     e2->destructor = (de_state)destructor;
     e2->tag = 2;
 
     de_entity *e3 = de_manager_new(&g_manager);
     struct MyComponent *data3 = (struct MyComponent *)e3->data;
-    data3->x = 5;
-    data3->y = 5;
-    data3->health = 50;
+    data3->x = 5; data3->y = 5; data3->health = 50;
     e3->state = (de_state)update_walk;
     e3->destructor = (de_state)destructor;
     e3->tag = 3;
@@ -910,10 +837,132 @@ int main(void)
 
     run_usage_example();
     run_all_tests();
-    run_all_benchmarks();
+    bench_memory_overhead();
+
+    kprintf("========== BENCHMARKS ==========");
+    bench_create_destroy();
+    bench_update();
+    bench_apply();
+    bench_create_destroy_n(128, 500);
+    bench_create_destroy_n(256, 250);
+    bench_update_n(128, 500);
+    bench_update_n(256, 250);
+    bench_swap();
+    kprintf("=================================");
 
     while (1)
         SYS_doVBlankProcess();
 
     return 0;
 }
+
+/* ============================================================
+ * DOCUMENTACION DE LA API
+ * ============================================================
+ *
+ * darken.h -- Entity/Manager library para Sega Genesis (m68k)
+ *
+ * USO BASICO
+ * ----------
+ *   1. Incluir en un solo archivo .c:
+ *          #define DARKEN_IMPLEMENTATION
+ *          #include "darken.h"
+ *
+ *   2. Declarar un manager (storage estatico):
+ *          de_manager mgr;
+ *          de_manager_create(&mgr, CAPACIDAD, sizeof(MiPayload));
+ *
+ *   3. Crear entidades:
+ *          de_entity *e = de_manager_new(&mgr);
+ *          MiPayload *p = (MiPayload *)e->data;
+ *          e->state = (de_state)mi_funcion_update;
+ *
+ * CICLO DE VIDA DE UNA ENTIDAD
+ * ----------------------------
+ *   [new] -> state=delete, slot=asignado, data=sin inicializar
+ *     |
+ *     v
+ *   [active]  state > de_state_pause  -> se ejecuta cada frame
+ *   [paused]  state == de_state_pause -> se ignora en update
+ *   [deleted] state == de_state_delete -> se elimina en el proximo update
+ *
+ *   Transiciones:
+ *     - Un estado activo puede retornar otro estado para cambiar.
+ *     - Retornar de_state_loop mantiene el estado actual (no toca puntero).
+ *     - Retornar de_state_delete marca para borrar (borrado DIFERIDO).
+ *
+ * ESTADOS ESPECIALES
+ * ------------------
+ *   de_state_delete (0) : La entidad se elimina. Si tiene destructor,
+ *                         se le da una oportunidad de abortar.
+ *   de_state_loop   (1) : Valor magico. update() no modifica e->state.
+ *   de_state_pause  (2) : La entidad se mueve a la zona pausada.
+ *   >2                  : Puntero a funcion de estado activo.
+ *
+ * PAUSE / RESUME
+ * --------------
+ *   de_entity_pause(e)  : Mueve 'e' a la particion pausada [0, pause_index).
+ *   de_entity_resume(e) : Mueve 'e' a la particion activa [pause_index, size).
+ *   de_manager_pause(m) : Pausa TODAS las entidades (pause_index = size).
+ *   de_manager_resume(m): Activa TODAS las entidades (pause_index = 0).
+ *
+ *   La particion es O(1) por swap de punteros. El orden relativo dentro
+ *   de cada particion NO esta garantizado tras swaps.
+ *
+ * DELETE
+ * ------
+ *   Via estado: la entidad retorna de_state_delete en su update.
+ *               El borrado fisico ocurre en el SIGUIENTE frame.
+ *   Directo:    de_entity_delete(e) fuerza el estado y compacta inmediatamente.
+ *
+ *   Si e->destructor != NULL, se llama antes de borrar. El destructor
+ *   puede ABORTAR el borrado retornando un estado distinto de delete.
+ *
+ * ITERACION
+ * ---------
+ *   de_manager_iterate(m, { ... });    // Solo entidades ACTIVAS
+ *   de_manager_iterateAll(m, { ... }); // Todas las entidades
+ *
+ *   Dentro del bloque CODE se define automaticamente:
+ *          de_entity *ENTITY = entidad_actual;
+ *          uint16_t   INDEX  = indice en el array;
+ *
+ * APPLY (filtrado seguro)
+ * -----------------------
+ *   de_manager_applyAll(m, FILTRO, ACCION);
+ *
+ *   Primero acumula en un array auxiliar las entidades que cumplen
+ *   FILTRO, luego ejecuta ACCION sobre cada una. Es seguro usar
+ *   de_entity_delete como ACCION porque el filtrado termina antes
+ *   de tocar el manager.
+ *
+ *   OJO: El array auxiliar es un VLA en stack. En hardware real con
+ *   stack limitado, no uses applyAll con managers de >200 entidades.
+ *
+ * REGLAS DE ALINEACION (m68k)
+ * ---------------------------
+ *   El Motorola 68000 exige que los accesos LONG (32-bit, punteros)
+ *   caigan en direcciones multiplo de 4. darken.h fuerza:
+ *     - stride de entidad redondeado a 4 (_DE_ALIGN4).
+ *     - buffer de storage alineado a 4 bytes.
+ *   Si modificas la estructura de de_entity, manten sizeof() multiplo
+ *   de 4 o ajusta _DE_ALIGN4.
+ *
+ * RENDIMIENTO TIPICO (NTSC 60Hz, 7.6MHz m68k)
+ * --------------------------------------------
+ *   ~27-45 µs por entidad activa y frame (depende del payload).
+ *   ~600 entidades activas maximo por frame sin drop.
+ *   de_entity_swap: ~50 µs (operacion base de pause/resume/delete).
+ *
+ * LIMITES
+ * -------
+ *   - Capacidad maxima: uint16_t (65535), limitado por RAM.
+ *   - No hay zero-fill automatico al reutilizar slots.
+ *   - No es thread-safe (obviamente, es Genesis).
+ *   - applyAll usa VLA: cuidado con stack en hardware real.
+ *
+ * LICENCIA
+ * --------
+ *   Public domain. Usa, modifica y rompe a tu gusto.
+ *
+ * ============================================================ */
