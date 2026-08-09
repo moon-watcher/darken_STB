@@ -35,7 +35,6 @@ struct de_manager
     uint16_t size;
     uint16_t capacity;
     uint16_t pause_index;
-    void *ctx;
 };
 
 void de_entity_swap(de_entity *, de_entity *);
@@ -165,7 +164,6 @@ void de_manager_init(de_manager *$, de_entity **items, void *storage, uint16_t c
     $->capacity = capacity;
     $->size = 0;
     $->pause_index = 0;
-    $->ctx = 0;
 
     uint16_t stride = _DE_ENTITY_STRIDE(bytes);
 
