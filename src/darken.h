@@ -126,9 +126,16 @@ void de_manager_update(de_manager *$)
         de_state s = e->state;
 
         if (de_state_is_active(s))
-            de_entity_update(e);
+        {
+            s = s(e->data);
+
+            if (!de_state_is_loop(s))
+                e->state = s;
+        }
+
         else if (de_state_is_paused(s))
             de_entity_pause(e);
+
         else if (de_state_is_deleted(s))
             de_entity_delete(e);
     }
@@ -203,7 +210,7 @@ void de_entity_delete(de_entity *$)
     $->state = de_state_delete;
 
     if ($->destructor)
-        ($->state = $->destructor($->data));
+        $->state = $->destructor($->data);
 
     if (de_state_is_deleted($->state))
     {
