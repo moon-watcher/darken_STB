@@ -1387,6 +1387,7 @@ static void run_usage_example(void)
 
 int main(void)
 {
+    BLASTEM_PROFIL_START
     SYS_setVIntCallback(bench_vblank_cb);
 
     run_usage_example();
@@ -1404,6 +1405,7 @@ int main(void)
     bench_swap();
     bench_systems_vs_individual();
     kprintf("=================================");
+    BLASTEM_PROFIL_END
 
     while (1)
         SYS_doVBlankProcess();
