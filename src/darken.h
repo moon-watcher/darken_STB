@@ -35,14 +35,18 @@ struct de_manager
     uint16_t size;
     uint16_t capacity;
     uint16_t pause_index;
+    void *ctx;
 };
 
-void de_manager_init(de_manager *, de_entity **, void *, uint16_t, uint16_t);
-de_entity *de_manager_new(de_manager *);
 void de_entity_swap(de_entity *, de_entity *);
 void de_entity_pause(de_entity *);
 void de_entity_resume(de_entity *);
 void de_entity_delete(de_entity *);
+
+//
+
+void de_manager_init(de_manager *, de_entity **, void *, uint16_t, uint16_t);
+de_entity *de_manager_new(de_manager *);
 void de_manager_pause(de_manager *);
 void de_manager_resume(de_manager *);
 void de_manager_reset(de_manager *);
@@ -87,77 +91,6 @@ void de_manager_update(de_manager *);
 #endif
 
 #ifdef DARKEN_IMPLEMENTATION
-
-void de_manager_init(de_manager *$, de_entity **items, void *storage, uint16_t capacity, uint16_t bytes)
-{
-    $->items = items;
-    $->capacity = capacity;
-    $->size = 0;
-    $->pause_index = 0;
-
-    uint16_t stride = _DE_ENTITY_STRIDE(bytes);
-
-    for (uint16_t i = 0; i < capacity; ++i)
-        $->items[i] = (de_entity *)((uint8_t *)storage + i * stride);
-}
-
-de_entity *de_manager_new(de_manager *$)
-{
-    if ($->size >= $->capacity)
-        return 0;
-
-    de_entity *e = $->items[$->size];
-    e->manager = $;
-    e->slot = $->size++;
-    e->state = de_state_delete;
-    e->destructor = 0;
-    e->tag = 0;
-
-    return e;
-}
-
-void de_manager_update(de_manager *$)
-{
-    uint16_t i = $->size;
-
-    while (i-- > $->pause_index)
-    {
-        de_entity *e = $->items[i];
-        de_state s = e->state;
-
-        if (de_state_is_active(s))
-        {
-            s = s(e->data);
-
-            if (!de_state_is_loop(s))
-                e->state = s;
-        }
-
-        else if (de_state_is_paused(s))
-            de_entity_pause(e);
-
-        else if (de_state_is_deleted(s))
-            de_entity_delete(e);
-    }
-}
-
-void de_manager_pause(de_manager *$)
-{
-    $->pause_index = $->size;
-}
-
-void de_manager_resume(de_manager *$)
-{
-    $->pause_index = 0;
-}
-
-void de_manager_reset(de_manager *$)
-{
-    $->pause_index = 0;
-
-    while ($->size)
-        de_entity_delete($->items[$->size - 1]);
-}
 
 void de_entity_update(de_entity *$)
 {
@@ -222,6 +155,80 @@ void de_entity_delete(de_entity *$)
         if ($->slot != m->size)
             de_entity_swap($, m->items[m->size]);
     }
+}
+
+//
+
+void de_manager_init(de_manager *$, de_entity **items, void *storage, uint16_t capacity, uint16_t bytes)
+{
+    $->items = items;
+    $->capacity = capacity;
+    $->size = 0;
+    $->pause_index = 0;
+    $->ctx = 0;
+
+    uint16_t stride = _DE_ENTITY_STRIDE(bytes);
+
+    for (uint16_t i = 0; i < capacity; ++i)
+        $->items[i] = (de_entity *)((uint8_t *)storage + i * stride);
+}
+
+de_entity *de_manager_new(de_manager *$)
+{
+    if ($->size >= $->capacity)
+        return 0;
+
+    de_entity *e = $->items[$->size];
+    e->manager = $;
+    e->slot = $->size++;
+    e->state = de_state_delete;
+    e->destructor = 0;
+    e->tag = 0;
+
+    return e;
+}
+
+void de_manager_update(de_manager *$)
+{
+    uint16_t i = $->size;
+
+    while (i-- > $->pause_index)
+    {
+        de_entity *e = $->items[i];
+        de_state s = e->state;
+
+        if (de_state_is_active(s))
+        {
+            s = s(e->data);
+
+            if (!de_state_is_loop(s))
+                e->state = s;
+        }
+
+        else if (de_state_is_paused(s))
+            de_entity_pause(e);
+
+        else if (de_state_is_deleted(s))
+            de_entity_delete(e);
+    }
+}
+
+void de_manager_pause(de_manager *$)
+{
+    $->pause_index = $->size;
+}
+
+void de_manager_resume(de_manager *$)
+{
+    $->pause_index = 0;
+}
+
+void de_manager_reset(de_manager *$)
+{
+    $->pause_index = 0;
+
+    while ($->size)
+        de_entity_delete($->items[$->size - 1]);
 }
 
 #endif

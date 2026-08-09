@@ -1,0 +1,256 @@
+#ifndef DARKEN_SYSTEMS_H
+#define DARKEN_SYSTEMS_H
+
+#include "darken.h"
+
+/* ============================================================
+ * SYSTEM FUNCTION TYPE
+ * ============================================================ */
+
+typedef void (*de_system_fn)(de_manager *);
+
+/* ============================================================
+ * SYSTEM DECLARATION MACROS
+ * ============================================================
+ *
+ * DE_SYSTEM(name, payload_type, code)
+ *   Declares a static function 'void name(de_manager *)' that
+ *   iterates all ACTIVE entities (respecting pause_index).
+ *   Inside 'code' you have:
+ *       de_entity *ENTITY
+ *       payload_type *data   (already casted)
+ *
+ * DE_SYSTEM_ALL(name, payload_type, code)
+ *   Same but iterates ALL entities, including paused ones.
+ *
+ * DE_SYSTEM_TAG(name, payload_type, tag_value, code)
+ *   Only processes entities where ENTITY->tag == tag_value.
+ */
+
+#define DE_SYSTEM(NAME, PAYLOAD_TYPE, CODE) \
+    static void NAME(de_manager *_sys_mgr) \
+    { \
+        de_manager_iterate(_sys_mgr, { \
+            PAYLOAD_TYPE *data = (PAYLOAD_TYPE *)ENTITY->data; \
+            (void)data; \
+            CODE; \
+        }); \
+    }
+
+#define DE_SYSTEM_ALL(NAME, PAYLOAD_TYPE, CODE) \
+    static void NAME(de_manager *_sys_mgr) \
+    { \
+        de_manager_iterateAll(_sys_mgr, { \
+            PAYLOAD_TYPE *data = (PAYLOAD_TYPE *)ENTITY->data; \
+            (void)data; \
+            CODE; \
+        }); \
+    }
+
+#define DE_SYSTEM_TAG(NAME, PAYLOAD_TYPE, TAG_VALUE, CODE) \
+    static void NAME(de_manager *_sys_mgr) \
+    { \
+        de_manager_iterate(_sys_mgr, { \
+            if (ENTITY->tag == (TAG_VALUE)) { \
+                PAYLOAD_TYPE *data = (PAYLOAD_TYPE *)ENTITY->data; \
+                (void)data; \
+                CODE; \
+            } \
+        }); \
+    }
+
+/* ============================================================
+ * PIPELINE
+ * ============================================================
+ * A pipeline holds up to 'capacity' system functions and runs
+ * them in registration order.
+ *
+ * Usage:
+ *   de_system_fn my_fns[8];
+ *   de_pipeline my_pipe;
+ *   de_pipeline_init(&my_pipe, my_fns, 8);
+ *   de_pipeline_add(&my_pipe, sys_movement);
+ *   de_pipeline_add(&my_pipe, sys_physics);
+ *   de_pipeline_run(&my_pipe, &g_manager);
+ */
+
+typedef struct de_pipeline
+{
+    de_system_fn *fns;
+    uint8_t       count;
+    uint8_t       capacity;
+} de_pipeline;
+
+#define de_pipeline_init(P, FNS_ARRAY, CAP) \
+    do { \
+        (P)->fns = (FNS_ARRAY); \
+        (P)->count = 0; \
+        (P)->capacity = (CAP); \
+    } while (0)
+
+#define de_pipeline_add(P, FN) \
+    do { \
+        if ((P)->count < (P)->capacity) \
+            (P)->fns[(P)->count++] = (FN); \
+    } while (0)
+
+#define de_pipeline_run(P, MGR) \
+    do { \
+        for (uint8_t _pi = 0; _pi < (P)->count; ++_pi) \
+            (P)->fns[_pi](MGR); \
+    } while (0)
+
+/* ============================================================
+ * SYSTEMS-ORIENTED UPDATE (replaces de_manager_update)
+ * ============================================================
+ * If you use the pipeline approach, you typically set all
+ * entities to a no-op state and let systems handle everything.
+ *
+ * Example no-op state:
+ *   void *state_pass(void *d) { (void)d; return (void *)de_state_loop; }
+ *
+ * Then in your frame:
+ *   de_manager_update(&mgr);   // runs no-ops (optional)
+ *   de_pipeline_run(&pipe, &mgr);
+ */
+
+#endif /* DARKEN_SYSTEMS_H */
+
+
+
+
+#include <genesis.h>
+#define DARKEN_IMPLEMENTATION
+#include "darken.h"
+#include "darken_systems.h"
+
+/* ============================================================
+ * PAYLOAD (todos los componentes en uno, estilo Genesis)
+ * ============================================================ */
+
+struct Actor
+{
+    int  x, y;          /* posicion  (16.16 fixed si quieres) */
+    int  vx, vy;        /* velocidad */
+    int  ax, ay;        /* aceleracion */
+    uint8_t frame;      /* frame de animacion */
+    uint8_t health;
+};
+
+/* ============================================================
+ * SISTEMAS INDIVIDUALES
+ * ============================================================ */
+
+/* Aceleracion -> Velocidad */
+DE_SYSTEM(sys_acceleration, struct Actor, {
+    data->vx += data->ax;
+    data->vy += data->ay;
+});
+
+/* Velocidad -> Posicion */
+DE_SYSTEM(sys_movement, struct Actor, {
+    data->x += data->vx;
+    data->y += data->vy;
+});
+
+/* Gravedad global (modifica velocidad Y) */
+DE_SYSTEM(sys_gravity, struct Actor, {
+    data->vy += 1;
+});
+
+/* Friccion / damping */
+DE_SYSTEM(sys_friction, struct Actor, {
+    data->vx = (data->vx * 15) >> 4;  /* *0.9375 */
+    data->vy = (data->vy * 15) >> 4;
+});
+
+/* Animacion ciclica (16 frames) */
+DE_SYSTEM(sys_animate, struct Actor, {
+    data->frame = (data->frame + 1) & 15;
+});
+
+/* Limites de pantalla (wrap) */
+DE_SYSTEM(sys_bounds, struct Actor, {
+    if (data->x >= 320 << 16) data->x -= 320 << 16;
+    if (data->y >= 224 << 16) data->y -= 224 << 16;
+    if (data->x < 0) data->x += 320 << 16;
+    if (data->y < 0) data->y += 224 << 16;
+});
+
+/* Sistema SOLO para enemigos (tag == 2) */
+DE_SYSTEM_TAG(sys_enemy_ai, struct Actor, 2, {
+    /* IA simple: perseguir al jugador */
+    data->vx += (data->x < g_player_x) ? 1 : -1;
+    data->vy += (data->y < g_player_y) ? 1 : -1;
+});
+
+/* ============================================================
+ * PIPELINE GLOBAL
+ * ============================================================ */
+
+static de_system_fn s_fns[8];
+static de_pipeline  s_pipeline;
+
+static void init_pipeline(void)
+{
+    de_pipeline_init(&s_pipeline, s_fns, 8);
+    de_pipeline_add(&s_pipeline, sys_acceleration);
+    de_pipeline_add(&s_pipeline, sys_gravity);
+    de_pipeline_add(&s_pipeline, sys_enemy_ai);
+    de_pipeline_add(&s_pipeline, sys_friction);
+    de_pipeline_add(&s_pipeline, sys_movement);
+    de_pipeline_add(&s_pipeline, sys_bounds);
+    de_pipeline_add(&s_pipeline, sys_animate);
+}
+
+/* ============================================================
+ * MAIN
+ * ============================================================ */
+
+static int g_player_x = 160 << 16;
+static int g_player_y = 112 << 16;
+
+int main(void)
+{
+    de_manager mgr;
+    de_manager_create(&mgr, 64, sizeof(struct Actor));
+
+    init_pipeline();
+
+    /* Crear algunas entidades */
+    for (int i = 0; i < 10; ++i)
+    {
+        de_entity *e = de_manager_new(&mgr);
+        struct Actor *a = (struct Actor *)e->data;
+        a->x = (i * 32) << 16;
+        a->y = (i * 20) << 16;
+        a->vx = (i & 1) ? (1 << 16) : -(1 << 16);
+        a->vy = 0;
+        a->health = 100;
+        a->frame = 0;
+        e->state = (de_state)state_noop;  /* dejamos que los sistemas hagan todo */
+        e->tag = (i == 0) ? 1 : 2;        /* 1=jugador, 2=enemigo */
+    }
+
+    while (1)
+    {
+        /* Opcional: si quieres que los destructores individuales sigan
+         * funcionando, llama de_manager_update antes del pipeline.
+         * Si no, omítelo y maneja la muerte desde un sistema. */
+        de_manager_update(&mgr);
+
+        /* Ejecuta TODOS los sistemas en orden */
+        de_pipeline_run(&s_pipeline, &mgr);
+
+        SYS_doVBlankProcess();
+    }
+
+    return 0;
+}
+
+/* Estado no-op: necesario porque de_manager_update llama a state() */
+static void *state_noop(void *d)
+{
+    (void)d;
+    return (void *)de_state_loop;
+}
