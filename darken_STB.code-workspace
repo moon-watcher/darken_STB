@@ -17,5 +17,6 @@
 		"C_Cpp.default.includePath": [
 			"C:\\MD\\SGDK\\inc"
 		],
+		"editor.stickyScroll.enabled": false,
 	}
 }
