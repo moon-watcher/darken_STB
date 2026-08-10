@@ -1382,10 +1382,10 @@ static void run_usage_example(void)
 }
 
 /* ============================================================
- * MAIN
+ * MAIN TESTS
  * ============================================================ */
 
-int main(void)
+void test(void)
 {
     BLASTEM_PROFIL_START
     SYS_setVIntCallback(bench_vblank_cb);
@@ -1406,6 +1406,14 @@ int main(void)
     bench_systems_vs_individual();
     kprintf("=================================");
     BLASTEM_PROFIL_END
+}
+
+int main(void)
+{
+    // test();
+
+
+    
 
     while (1)
         SYS_doVBlankProcess();
