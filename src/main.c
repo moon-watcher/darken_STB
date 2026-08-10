@@ -79,6 +79,7 @@ struct MyComponent
 {
     int x, y;
     uint8_t health;
+    ff32 fx, fy, vx, vy;
 };
 
 /* ============================================================
@@ -1381,6 +1382,77 @@ static void run_usage_example(void)
     kprintf("=====================================");
 }
 
+static void my_systems_test(void)
+{
+    struct sys_movement {
+        void *pool[50]; // void **pool;
+        uint16_t size;
+    };
+
+    void *sys_movement_f(struct sys_movement *sys)
+    {
+        uint16_t i = 0;
+        while (i < sys->size)
+        {
+            ff32 *fx = (ff32 *)sys->pool[i++];
+            ff32 *fy = (ff32 *)sys->pool[i++];
+            ff32 *vx = (ff32 *)sys->pool[i++];
+            ff32 *vy = (ff32 *)sys->pool[i++];
+
+            *fx += *vx;
+            *fy += *vy;
+        }
+        return 1;
+    };
+
+    kprintf("========== EJEMPLO DE USO ==========");
+
+    de_manager g_manager;
+    de_manager g_manager_sys;
+
+    de_manager_create(&g_manager, 10, sizeof(struct MyComponent));
+    de_manager_create(&g_manager_sys, 40, sizeof(struct sys_movement));
+
+    de_entity *e_sys_movement = de_manager_new(&g_manager_sys);
+    e_sys_movement->state = (de_state)sys_movement_f;
+
+    de_entity *create_entity(int x, int y, int health, ff32 vx, ff32 vy)
+    {
+        de_entity *e = de_manager_new(&g_manager);
+        struct MyComponent *d = (struct MyComponent *)e->data;
+        
+        d->x = x;
+        d->y = y;
+        d->health = health;
+        d->fx = FF32(x);
+        d->fy = FF32(y);
+        d->vx = vx;
+        d->vy = vy;
+
+        e->state = (de_state)update_walk;
+        e->destructor = (de_state)destructor;
+        e->tag = 1;
+        struct sys_movement *sys = (struct sys_movement *)e_sys_movement->data;
+
+        sys->pool[sys->size++] = &d->fx;
+        sys->pool[sys->size++] = &d->fy;
+        sys->pool[sys->size++] = &d->vx;
+        sys->pool[sys->size++] = &d->vy;
+
+        return e;
+    };
+
+    de_entity *e1 = create_entity(10,  5, 100, FF32(.6), FF32(1.1));
+    de_entity *e2 = create_entity(20, 20,  80, FF32(.6), FF32(1.1));
+    de_entity *e3 = create_entity( 5,  5,  50, FF32(.6), FF32(1.1));
+
+    while (1)
+    {
+        de_manager_update(&g_manager);
+        de_manager_update(&g_manager_sys);
+    }
+}
+
 /* ============================================================
  * MAIN TESTS
  * ============================================================ */
@@ -1412,7 +1484,7 @@ int main(void)
 {
     // test();
 
-
+    my_systems_test();
     
 
     while (1)
