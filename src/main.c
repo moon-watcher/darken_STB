@@ -137,10 +137,10 @@ static void test_creation(void)
     de_manager m;
     de_manager_create(&m, 3, sizeof(struct MyComponent));
     CHECK("manager empieza con size 0", m.size == 0);
-    de_entity *e0 = de_manager_new(&m);
-    de_entity *e1 = de_manager_new(&m);
-    de_entity *e2 = de_manager_new(&m);
-    de_entity *e3 = de_manager_new(&m);
+    de_entity e0 = de_manager_new(&m);
+    de_entity e1 = de_manager_new(&m);
+    de_entity e2 = de_manager_new(&m);
+    de_entity e3 = de_manager_new(&m);
     CHECK("new valida (1)", e0 != 0);
     CHECK("new valida (2)", e1 != 0);
     CHECK("new valida (3)", e2 != 0);
@@ -170,7 +170,7 @@ static void test_update(void)
     g_walkCalls = 0;
     de_manager m;
     de_manager_create(&m, 2, sizeof(struct MyComponent));
-    de_entity *e = de_manager_new(&m);
+    de_entity e = de_manager_new(&m);
     struct MyComponent *c = (struct MyComponent *)e->data;
     c->x = 0;
     e->state = (de_state)state_walk;
@@ -179,7 +179,7 @@ static void test_update(void)
     de_manager_update(&m);
     CHECK("loop no cambia puntero", e->state == (de_state)state_walk);
     CHECK("loop ejecuta x3", g_walkCalls == 3 && c->x == 3);
-    de_entity *e2 = de_manager_new(&m);
+    de_entity e2 = de_manager_new(&m);
     e2->state = (de_state)state_once_then_idle;
     de_manager_update(&m);
     CHECK("transicion actualiza estado", e2->state == (de_state)state_walk);
@@ -199,8 +199,8 @@ static void test_pause_resume(void)
     g_idleCalls = 0;
     de_manager m;
     de_manager_create(&m, 4, sizeof(struct MyComponent));
-    de_entity *a = de_manager_new(&m);
-    de_entity *b = de_manager_new(&m);
+    de_entity a = de_manager_new(&m);
+    de_entity b = de_manager_new(&m);
     a->state = (de_state)state_idle_counter;
     b->state = (de_state)state_idle_counter;
     de_manager_update(&m);
@@ -236,9 +236,9 @@ static void test_delete(void)
     g_destructorCalls = 0;
     de_manager m;
     de_manager_create(&m, 4, sizeof(struct MyComponent));
-    de_entity *a = de_manager_new(&m);
-    de_entity *b = de_manager_new(&m);
-    de_entity *c = de_manager_new(&m);
+    de_entity a = de_manager_new(&m);
+    de_entity b = de_manager_new(&m);
+    de_entity c = de_manager_new(&m);
     a->destructor = (de_state)my_destructor;
     b->destructor = (de_state)my_destructor;
     c->destructor = (de_state)my_destructor;
@@ -260,7 +260,7 @@ static void test_apply(void)
     de_manager_create(&m, 5, sizeof(struct MyComponent));
     for (int i = 0; i < 5; ++i)
     {
-        de_entity *e = de_manager_new(&m);
+        de_entity e = de_manager_new(&m);
         e->tag = i;
     }
     de_manager_applyAll(&m, (ENTITY->tag % 2) == 0, de_entity_delete);
@@ -281,7 +281,7 @@ static void test_reset(void)
     de_manager_create(&m, 6, sizeof(struct MyComponent));
     for (int i = 0; i < 6; ++i)
     {
-        de_entity *e = de_manager_new(&m);
+        de_entity e = de_manager_new(&m);
         e->destructor = (de_state)my_destructor;
     }
     de_manager_reset(&m);
@@ -303,7 +303,7 @@ static void test_destructor_abort(void)
     g_abortDestructorCalls = 0;
     de_manager m;
     de_manager_create(&m, 2, sizeof(struct MyComponent));
-    de_entity *e = de_manager_new(&m);
+    de_entity e = de_manager_new(&m);
     e->destructor = (de_state)state_abort_destructor;
     e->state = de_state_delete;
     de_manager_update(&m);
@@ -327,8 +327,8 @@ static void test_self_delete(void)
     g_selfKillCalls = 0;
     de_manager m;
     de_manager_create(&m, 3, sizeof(struct MyComponent));
-    de_entity *a = de_manager_new(&m);
-    de_entity *b = de_manager_new(&m);
+    de_entity a = de_manager_new(&m);
+    de_entity b = de_manager_new(&m);
     a->state = (de_state)state_self_kill;
     b->state = (de_state)state_noop;
     de_manager_update(&m);
@@ -345,10 +345,10 @@ static void test_slot_stability(void)
     kprintf("-- test_slot_stability --");
     de_manager m;
     de_manager_create(&m, 4, sizeof(struct MyComponent));
-    de_entity *e0 = de_manager_new(&m);
-    de_entity *e1 = de_manager_new(&m);
-    de_entity *e2 = de_manager_new(&m);
-    de_entity *e3 = de_manager_new(&m);
+    de_entity e0 = de_manager_new(&m);
+    de_entity e1 = de_manager_new(&m);
+    de_entity e2 = de_manager_new(&m);
+    de_entity e3 = de_manager_new(&m);
     e0->state = e1->state = e2->state = e3->state = (de_state)state_noop;
     de_entity_pause(e1);
     de_entity_pause(e3);
@@ -372,9 +372,9 @@ static void test_delete_paused(void)
     kprintf("-- test_delete_paused --");
     de_manager m;
     de_manager_create(&m, 4, sizeof(struct MyComponent));
-    de_entity *a = de_manager_new(&m);
-    de_entity *b = de_manager_new(&m);
-    de_entity *c = de_manager_new(&m);
+    de_entity a = de_manager_new(&m);
+    de_entity b = de_manager_new(&m);
+    de_entity c = de_manager_new(&m);
     a->state = b->state = c->state = (de_state)state_noop;
     de_entity_pause(b);
     de_entity_delete(b);
@@ -391,7 +391,7 @@ static void test_apply_pause(void)
     de_manager_create(&m, 6, sizeof(struct MyComponent));
     for (int i = 0; i < 6; ++i)
     {
-        de_entity *e = de_manager_new(&m);
+        de_entity e = de_manager_new(&m);
         e->tag = i;
         e->state = (de_state)state_noop;
     }
@@ -413,12 +413,12 @@ static void test_reuse(void)
     kprintf("-- test_reuse --");
     de_manager m;
     de_manager_create(&m, 3, sizeof(struct MyComponent));
-    de_entity *e0 = de_manager_new(&m);
+    de_entity e0 = de_manager_new(&m);
     e0->state = (de_state)state_noop;
     struct MyComponent *d0 = (struct MyComponent *)e0->data;
     d0->x = 42;
     de_entity_delete(e0);
-    de_entity *e1 = de_manager_new(&m);
+    de_entity e1 = de_manager_new(&m);
     CHECK("reuse: not null", e1 != 0);
     CHECK("reuse: slot 0", e1->slot == 0);
     CHECK("reuse: size 1", m.size == 1);
@@ -447,7 +447,7 @@ static void test_mixed_stress(void)
     g_stressCallsB = 0;
     de_manager m;
     de_manager_create(&m, 5, sizeof(struct MyComponent));
-    de_entity *e[5];
+    de_entity e[5];
     for (int i = 0; i < 5; ++i)
     {
         e[i] = de_manager_new(&m);
@@ -480,9 +480,9 @@ static void test_data_integrity(void)
     kprintf("-- test_data_integrity --");
     de_manager m;
     de_manager_create(&m, 3, sizeof(struct MyComponent));
-    de_entity *a = de_manager_new(&m);
-    de_entity *b = de_manager_new(&m);
-    de_entity *c = de_manager_new(&m);
+    de_entity a = de_manager_new(&m);
+    de_entity b = de_manager_new(&m);
+    de_entity c = de_manager_new(&m);
     struct MyComponent *da = (struct MyComponent *)a->data;
     struct MyComponent *db = (struct MyComponent *)b->data;
     struct MyComponent *dc = (struct MyComponent *)c->data;
@@ -515,7 +515,7 @@ static void test_delete_last(void)
     kprintf("-- test_delete_last --");
     de_manager m;
     de_manager_create(&m, 4, sizeof(struct MyComponent));
-    de_entity *e = de_manager_new(&m);
+    de_entity e = de_manager_new(&m);
     e->state = (de_state)state_noop;
     de_entity_delete(e);
     CHECK("last: size 0", m.size == 0);
@@ -532,7 +532,7 @@ static void test_stress_capacity(void)
     de_manager m;
     de_manager_create(&m, 50, sizeof(struct MyComponent));
 
-    de_entity *ents[50];
+    de_entity ents[50];
     for (int i = 0; i < 50; ++i)
     {
         ents[i] = de_manager_new(&m);
@@ -547,7 +547,7 @@ static void test_stress_capacity(void)
 
     for (int i = 0; i < 10; ++i)
     {
-        de_entity *e = de_manager_new(&m);
+        de_entity e = de_manager_new(&m);
         CHECK("rellenar huecos", e != 0);
     }
     CHECK("size final 35", m.size == 35);
@@ -569,7 +569,7 @@ static void test_stress_many_entities(void)
     de_manager m;
     de_manager_create(&m, 150, sizeof(struct MyComponent));
 
-    de_entity *ents[150];
+    de_entity ents[150];
     for (int i = 0; i < 150; ++i)
     {
         ents[i] = de_manager_new(&m);
@@ -606,7 +606,7 @@ static void test_stress_fragmentation(void)
     de_manager m;
     de_manager_create(&m, 20, sizeof(struct MyComponent));
 
-    de_entity *e[20];
+    de_entity e[20];
     for (int i = 0; i < 20; ++i)
     {
         e[i] = de_manager_new(&m);
@@ -621,7 +621,7 @@ static void test_stress_fragmentation(void)
 
     for (int i = 0; i < 5; ++i)
     {
-        de_entity *ne = de_manager_new(&m);
+        de_entity ne = de_manager_new(&m);
         ne->tag = 100 + i;
         ne->state = (de_state)state_noop;
     }
@@ -668,7 +668,7 @@ static void test_system_basic(void)
 
     for (int i = 0; i < 4; ++i)
     {
-        de_entity *e = de_manager_new(&m);
+        de_entity e = de_manager_new(&m);
         struct MyComponent *d = (struct MyComponent *)e->data;
         d->x = i;
         d->y = 1;
@@ -695,7 +695,7 @@ static void test_system_respects_pause(void)
     de_manager m;
     de_manager_create(&m, 4, sizeof(struct MyComponent));
 
-    de_entity *e[4];
+    de_entity e[4];
     for (int i = 0; i < 4; ++i)
     {
         e[i] = de_manager_new(&m);
@@ -725,7 +725,7 @@ static void test_system_all_includes_paused(void)
     de_manager m;
     de_manager_create(&m, 3, sizeof(struct MyComponent));
 
-    de_entity *e[3];
+    de_entity e[3];
     for (int i = 0; i < 3; ++i)
     {
         e[i] = de_manager_new(&m);
@@ -754,7 +754,7 @@ static void test_system_tag_filter(void)
 
     for (int i = 0; i < 6; ++i)
     {
-        de_entity *e = de_manager_new(&m);
+        de_entity e = de_manager_new(&m);
         struct MyComponent *d = (struct MyComponent *)e->data;
         d->health = 0;
         e->tag = (i < 3) ? 1 : 2;
@@ -782,7 +782,7 @@ static void test_pipeline_order(void)
 
     for (int i = 0; i < 2; ++i)
     {
-        de_entity *e = de_manager_new(&m);
+        de_entity e = de_manager_new(&m);
         struct MyComponent *d = (struct MyComponent *)e->data;
         d->x = 0;
         d->y = 3;
@@ -891,9 +891,9 @@ static void test_entity_system_basic(void)
     /* de_manager_update() recorre de atrás hacia delante.
        El orden de creación es, por tanto, el inverso del pipeline:
        physics -> movement -> frames. */
-    de_entity *frames_entity = de_manager_new(&systems);
-    de_entity *movement_entity = de_manager_new(&systems);
-    de_entity *physics_entity = de_manager_new(&systems);
+    de_entity frames_entity = de_manager_new(&systems);
+    de_entity movement_entity = de_manager_new(&systems);
+    de_entity physics_entity = de_manager_new(&systems);
 
     TestBatchSystem *physics_pool = (TestBatchSystem *)physics_entity->data;
     TestBatchSystem *movement_pool = (TestBatchSystem *)movement_entity->data;
@@ -911,8 +911,8 @@ static void test_entity_system_basic(void)
     frames_entity->state = (de_state)test_system_frames;
 
     /* Dos entidades normales. */
-    de_entity *p1_entity = de_manager_new(&entities);
-    de_entity *p2_entity = de_manager_new(&entities);
+    de_entity p1_entity = de_manager_new(&entities);
+    de_entity p2_entity = de_manager_new(&entities);
 
     TestSystemEntity *p1 = (TestSystemEntity *)p1_entity->data;
     TestSystemEntity *p2 = (TestSystemEntity *)p2_entity->data;
@@ -981,8 +981,8 @@ static void test_entity_system_shared_data(void)
     void *movement_items[8];
     void *frame_items[2];
 
-    de_entity *movement = de_manager_new(&systems);
-    de_entity *frames = de_manager_new(&systems);
+    de_entity movement = de_manager_new(&systems);
+    de_entity frames = de_manager_new(&systems);
 
     TestBatchSystem *movement_system = (TestBatchSystem *)movement->data;
     TestBatchSystem *frame_system = (TestBatchSystem *)frames->data;
@@ -995,7 +995,7 @@ static void test_entity_system_shared_data(void)
     movement->state = (de_state)test_system_movement;
     frames->state = (de_state)test_system_frames;
 
-    de_entity *e = de_manager_new(&entities);
+    de_entity e = de_manager_new(&entities);
     TestSystemEntity *data = (TestSystemEntity *)e->data;
 
     data->x = 50;
@@ -1031,14 +1031,14 @@ static void test_entity_system_paused_entity(void)
     de_manager_create(&systems, 1, sizeof(TestBatchSystem));
 
     void *movement_items[8];
-    de_entity *system_entity = de_manager_new(&systems);
+    de_entity system_entity = de_manager_new(&systems);
     TestBatchSystem *system = (TestBatchSystem *)system_entity->data;
     system->items = movement_items;
     system->size = 0;
     system_entity->state = (de_state)test_system_movement;
 
-    de_entity *active_entity = de_manager_new(&entities);
-    de_entity *paused_entity = de_manager_new(&entities);
+    de_entity active_entity = de_manager_new(&entities);
+    de_entity paused_entity = de_manager_new(&entities);
 
     TestSystemEntity *active = (TestSystemEntity *)active_entity->data;
     TestSystemEntity *paused = (TestSystemEntity *)paused_entity->data;
@@ -1175,7 +1175,7 @@ static void test_de_system_as_entities(void)
     de_manager_create(&entities, 2, sizeof(TestDeSystemEntity));
     de_manager_create(&systems, 3, sizeof(de_system));
     void *movement_pool[8], *physics_pool[2], *frames_pool[2];
-    de_entity *frames_entity = de_manager_new(&systems), *movement_entity = de_manager_new(&systems), *physics_entity = de_manager_new(&systems);
+    de_entity frames_entity = de_manager_new(&systems), movement_entity = de_manager_new(&systems), physics_entity = de_manager_new(&systems);
     de_system *frames = (de_system *)frames_entity->data, *physics = (de_system *)physics_entity->data, *movement = (de_system *)movement_entity->data;
     de_system_init(frames, frames_pool, 2, 1);
     de_system_init(physics, physics_pool, 2, 1);
@@ -1183,7 +1183,7 @@ static void test_de_system_as_entities(void)
     frames_entity->state = (de_state)test_de_system_frames;
     physics_entity->state = (de_state)test_de_system_physics;
     movement_entity->state = (de_state)test_de_system_movement;
-    de_entity *e1 = de_manager_new(&entities), *e2 = de_manager_new(&entities);
+    de_entity e1 = de_manager_new(&entities), e2 = de_manager_new(&entities);
     TestDeSystemEntity *p1 = (TestDeSystemEntity *)e1->data, *p2 = (TestDeSystemEntity *)e2->data;
     p1->x = 10;
     p1->y = 20;
@@ -1220,13 +1220,13 @@ static void test_de_system_shared_payload(void)
     de_manager_create(&entities, 1, sizeof(TestDeSystemEntity));
     de_manager_create(&systems, 2, sizeof(de_system));
     void *movement_pool[4], *frames_pool[1];
-    de_entity *movement_entity = de_manager_new(&systems), *frames_entity = de_manager_new(&systems);
+    de_entity movement_entity = de_manager_new(&systems), frames_entity = de_manager_new(&systems);
     de_system *movement = (de_system *)movement_entity->data, *frames = (de_system *)frames_entity->data;
     de_system_init(movement, movement_pool, 1, 4);
     de_system_init(frames, frames_pool, 1, 1);
     movement_entity->state = (de_state)test_de_system_movement;
     frames_entity->state = (de_state)test_de_system_frames;
-    de_entity *entity = de_manager_new(&entities);
+    de_entity entity = de_manager_new(&entities);
     TestDeSystemEntity *data = (TestDeSystemEntity *)entity->data;
     data->x = 50;
     data->y = 60;
@@ -1339,7 +1339,7 @@ static void bench_update(void)
     de_manager_create(&m, 32, sizeof(struct MyComponent));
     for (u16 i = 0; i < 32; ++i)
     {
-        de_entity *e = de_manager_new(&m);
+        de_entity e = de_manager_new(&m);
         e->state = (de_state)bench_state_fn;
     }
     u32 t0 = bench_start();
@@ -1358,7 +1358,7 @@ static void bench_apply(void)
     {
         for (u16 i = 0; i < 32; ++i)
         {
-            de_entity *e = de_manager_new(&m);
+            de_entity e = de_manager_new(&m);
             e->tag = i;
         }
         de_manager_applyAll(&m, (ENTITY->tag % 2) == 0, de_entity_delete);
@@ -1389,7 +1389,7 @@ static void bench_update_n(u16 n, u32 reps)
     de_manager_create(&m, n, sizeof(struct MyComponent));
     for (u16 i = 0; i < n; ++i)
     {
-        de_entity *e = de_manager_new(&m);
+        de_entity e = de_manager_new(&m);
         e->state = (de_state)bench_state_fn;
     }
     u32 t0 = bench_start();
@@ -1405,8 +1405,8 @@ static void bench_swap(void)
 {
     de_manager m;
     de_manager_create(&m, 2, sizeof(struct MyComponent));
-    de_entity *a = de_manager_new(&m);
-    de_entity *b = de_manager_new(&m);
+    de_entity a = de_manager_new(&m);
+    de_entity b = de_manager_new(&m);
     u32 t0 = bench_start();
     for (u32 r = 0; r < BENCH_SWAP_REPS; ++r)
         de_entity_swap(a, b);
@@ -1440,7 +1440,7 @@ static void bench_systems_vs_individual(void)
     de_manager_create(&m_ind, 32, sizeof(struct MyComponent));
     for (u16 i = 0; i < 32; ++i)
     {
-        de_entity *e = de_manager_new(&m_ind);
+        de_entity e = de_manager_new(&m_ind);
         e->state = (de_state)bench_system_state;
     }
     u32 t0 = bench_start();
@@ -1454,7 +1454,7 @@ static void bench_systems_vs_individual(void)
     de_manager_create(&m_sys, 32, sizeof(struct MyComponent));
     for (u16 i = 0; i < 32; ++i)
     {
-        de_entity *e = de_manager_new(&m_sys);
+        de_entity e = de_manager_new(&m_sys);
         e->state = (de_state)state_noop;
     }
     de_system_fn fns[2];
@@ -1545,7 +1545,7 @@ static void run_usage_example(void)
     de_manager_create(&g_manager, 10, sizeof(struct MyComponent));
     de_manager_create(&g_manager2, 20, sizeof(struct MyComponent) + 73);
 
-    de_entity *e1 = de_manager_new(&g_manager);
+    de_entity e1 = de_manager_new(&g_manager);
     struct MyComponent *data1 = (struct MyComponent *)e1->data;
     data1->x = 0;
     data1->y = 0;
@@ -1554,7 +1554,7 @@ static void run_usage_example(void)
     e1->destructor = (de_state)destructor;
     e1->tag = 1;
 
-    de_entity *e2 = de_manager_new(&g_manager);
+    de_entity e2 = de_manager_new(&g_manager);
     struct MyComponent *data2 = (struct MyComponent *)e2->data;
     data2->x = 10;
     data2->y = 20;
@@ -1563,7 +1563,7 @@ static void run_usage_example(void)
     e2->destructor = (de_state)destructor;
     e2->tag = 2;
 
-    de_entity *e3 = de_manager_new(&g_manager);
+    de_entity e3 = de_manager_new(&g_manager);
     struct MyComponent *data3 = (struct MyComponent *)e3->data;
     data3->x = 5;
     data3->y = 5;
@@ -1648,7 +1648,7 @@ int main(void)
  *          de_manager_create(&mgr, CAPACIDAD, sizeof(MiPayload));
  *
  *   3. Crear entidades:
- *          de_entity *e = de_manager_new(&mgr);
+ *          de_entity e = de_manager_new(&mgr);
  *          MiPayload *p = (MiPayload *)e->data;
  *          e->state = (de_state)mi_funcion_update;
  *
@@ -1699,7 +1699,7 @@ int main(void)
  *   de_manager_iterateAll(m, { ... }); // Todas las entidades
  *
  *   Dentro del bloque CODE se define automaticamente:
- *          de_entity *ENTITY = entidad_actual;
+ *          de_entity ENTITY = entidad_actual;
  *          uint16_t   INDEX  = indice en el array;
  *
  * APPLY (filtrado seguro)
