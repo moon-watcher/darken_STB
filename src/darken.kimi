@@ -1,0 +1,543 @@
+#ifndef DARKEN_H
+#define DARKEN_H
+
+#include <genesis.h>
+
+/* ============================================================
+ * DARKEN.H  v2
+ * ------------------------------------------------------------
+ * Entity / Manager library para Sega Genesis (m68k).
+ *
+ * CAMBIOS RESPECTO A v1:
+ *   - de_state es ahora una union type-safe (sin UB de casts
+ *     de enteros a punteros de funcion).
+ *   - applyAll usa un scratch buffer reservado en el manager;
+ *     no hay VLA en stack.
+ *   - 'tag' fue reemplazado por 'mask' (filtrado por bits).
+ *   - de_entity_kill()  -> marca para borrar (deferred).
+ *   - de_entity_destroy() -> borra inmediatamente (con destructor).
+ *   - de_manager_update() recorre de size-1 hacia pause_index.
+ *     El orden de ejecucion de "sistemas como entidades" es el
+ *     inverso al orden de creacion. Usar de_pipeline para control
+ *     explicito del orden.
+ * ------------------------------------------------------------
+ *
+ * MODELO DE MEMORIA
+ * -----------------
+ *   items[]  ----> [entity 0] --> [storage slot 0]
+ *              +-> [entity 1] --> [storage slot 1]
+ *              |
+ *              +-> [entity N] --> [storage slot N]
+ *
+ *   Particion logica (gestionada por pause_index):
+ *   [ 0 .. pausadas .. pause_index-1 | pause_index .. activas .. size-1 ]
+ *
+ *   de_manager_update() itera de size-1 hacia pause_index.
+ *   Por tanto, la entidad en items[size-1] se ejecuta PRIMERO.
+ *
+ * USO BASICO
+ * ----------
+ *   #define DARKEN_IMPLEMENTATION
+ *   #include "darken.h"
+ *
+ *   de_manager mgr;
+ *   de_manager_create(&mgr, CAPACITY, sizeof(MiPayload));
+ *
+ *   de_entity *e = de_manager_new(&mgr);
+ *   MiPayload *p = (MiPayload *)e->data;
+ *   de_entity_set_state(e, mi_update);
+ *
+ * ESTADOS
+ * -------
+ *   Las funciones de estado retornan un 'de_state':
+ *     return DE_STATE_LOOP;   // mantener este estado
+ *     return DE_STATE_DELETE; // marcar para borrar
+ *     return de_state_fn(otra_funcion); // transicionar
+ *
+ * ============================================================ */
+
+/* ------------------------------------------------------------
+ * ALINEACION
+ * ------------------------------------------------------------ */
+#define _DE_ALIGN4(X) (((X) + 3U) & ~3U)
+
+/* ------------------------------------------------------------
+ * de_state: union type-safe
+ * ------------------------------------------------------------ */
+typedef struct de_manager de_manager;
+typedef struct de_entity  de_entity;
+
+typedef de_state (*de_state_fn)(void *);
+
+typedef union de_state {
+    uintptr_t raw;
+    de_state_fn fn;
+} de_state;
+
+static inline de_state de_state_make(uintptr_t raw) {
+    de_state s; s.raw = raw; return s;
+}
+
+static inline de_state de_state_make_fn(de_state_fn fn) {
+    de_state s; s.fn = fn; return s;
+}
+
+#define DE_STATE_DELETE de_state_make(0)
+#define DE_STATE_LOOP   de_state_make(1)
+#define DE_STATE_PAUSE  de_state_make(2)
+
+#define de_state_is_deleted(S) ((S).raw == 0)
+#define de_state_is_loop(S)    ((S).raw == 1)
+#define de_state_is_paused(S)  ((S).raw == 2)
+#define de_state_is_active(S)  ((S).raw > 2)
+
+/* Helpers de asignacion */
+static inline void de_entity_set_state(de_entity *e, de_state_fn fn) {
+    de_state s; s.fn = fn; e->state = s;
+}
+static inline void de_entity_set_destructor(de_entity *e, de_state_fn fn) {
+    de_state s; s.fn = fn; e->destructor = s;
+}
+
+/* ------------------------------------------------------------
+ * Estructuras
+ * ------------------------------------------------------------ */
+struct de_entity {
+    de_state     state;
+    de_state     destructor;
+    de_manager  *manager;
+    uint16_t     slot;
+    uint16_t     mask;      /* reemplaza 'tag'; filtrado por bits */
+    uint8_t      data[];
+};
+
+struct de_manager {
+    de_entity **items;
+    void       **scratch;   /* buffer para applyAll (capacity punteros) */
+    uint16_t     size;
+    uint16_t     capacity;
+    uint16_t     pause_index;
+};
+
+#define _DE_ENTITY_STRIDE(PAYLOAD) _DE_ALIGN4(sizeof(de_entity) + (PAYLOAD))
+
+/* ------------------------------------------------------------
+ * Macros de creacion
+ * ------------------------------------------------------------ */
+#define _DE_CONCAT(A, B) A##B
+#define _DE_UNIQUE(A, B) _DE_CONCAT(A, B)
+
+#define de_manager_create(MGR, CAPACITY, PAYLOAD) \
+    de_entity *_DE_UNIQUE(_i_, __LINE__)[(CAPACITY)]; \
+    uint8_t _DE_UNIQUE(_s_, __LINE__)[(CAPACITY) * _DE_ENTITY_STRIDE((PAYLOAD))] __attribute__((aligned(4))); \
+    void *_DE_UNIQUE(_x_, __LINE__)[(CAPACITY)]; \
+    de_manager_init((MGR), _DE_UNIQUE(_i_, __LINE__), _DE_UNIQUE(_s_, __LINE__), _DE_UNIQUE(_x_, __LINE__), (CAPACITY), (PAYLOAD))
+
+/* ------------------------------------------------------------
+ * API publica
+ * ------------------------------------------------------------ */
+void de_manager_init(de_manager *, de_entity **, void *, void **, uint16_t, uint16_t);
+de_entity *de_manager_new(de_manager *);
+
+void de_entity_swap(de_entity *, de_entity *);
+void de_entity_pause(de_entity *);
+void de_entity_resume(de_entity *);
+void de_entity_kill(de_entity *);      /* marca delete; borrado deferred */
+void de_entity_destroy(de_entity *);   /* borra ahora, con destructor */
+
+void de_manager_pause(de_manager *);
+void de_manager_resume(de_manager *);
+void de_manager_reset(de_manager *);
+void de_entity_update(de_entity *);
+void de_manager_update(de_manager *);
+
+/* Helpers inline */
+static inline uint16_t de_manager_free(const de_manager *m) {
+    return m->capacity - m->size;
+}
+static inline bool de_entity_is_paused(const de_entity *e) {
+    return e->slot < e->manager->pause_index;
+}
+static inline bool de_entity_is_active(const de_entity *e) {
+    return de_state_is_active(e->state);
+}
+
+/* ------------------------------------------------------------
+ * Iteracion
+ * ------------------------------------------------------------ */
+#define de_manager_iterate(M, CODE) _de_manager_iterate(M, (M)->pause_index, CODE)
+#define de_manager_iterateAll(M, CODE) _de_manager_iterate(M, 0, CODE)
+
+#define _de_manager_iterate(M, LIMIT, CODE) \
+    do { \
+        uint16_t INDEX = (M)->size; \
+        while (INDEX-- > (LIMIT)) { \
+            de_entity *ENTITY = (M)->items[INDEX]; \
+            CODE; \
+        } \
+    } while (0)
+
+/* ------------------------------------------------------------
+ * Apply (filtrado seguro) -- usa scratch, sin VLA
+ * ------------------------------------------------------------ */
+#define de_manager_apply(M, FILTER, ACTION) _de_manager_apply(de_manager_iterate, M, FILTER, ACTION)
+#define de_manager_applyAll(M, FILTER, ACTION) _de_manager_apply(de_manager_iterateAll, M, FILTER, ACTION)
+
+#define _de_manager_apply(ITER, M, FILTER, ACTION) \
+    do { \
+        de_entity **_targets = (de_entity **)(M)->scratch; \
+        uint16_t _count = 0; \
+        ITER(M, { if (FILTER) _targets[_count++] = ENTITY; }); \
+        while (_count--) { \
+            de_entity *ENTITY = _targets[_count]; \
+            ACTION; \
+        } \
+    } while (0)
+
+/* ============================================================
+ * SISTEMAS: de_system (pool generico de punteros)
+ * ============================================================ */
+
+typedef struct {
+    void   **pool;
+    uint16_t size;
+    uint16_t capacity;
+    uint16_t params;
+} de_system;
+
+void de_system_init(de_system *, void **, uint16_t, uint16_t);
+uint16_t de_system_add(de_system *, void **);
+uint16_t de_system_remove(de_system *, void *);
+
+#define de_system_create(SYS, CAPACITY, PARAMS) \
+    void *_DE_UNIQUE(_sp_, __LINE__)[(CAPACITY) * (PARAMS)]; \
+    de_system_init((SYS), _DE_UNIQUE(_sp_, __LINE__), (CAPACITY), (PARAMS))
+
+/* ------------------------------------------------------------
+ * FOREACH / ITERATOR macros
+ * ------------------------------------------------------------ */
+#define de_system_foreach(...) \
+    _DE_SYSTEM_GET_MACRO(__VA_ARGS__, \
+        _DE_SYSTEM_FOREACH_5, _DE_SYSTEM_FOREACH_4, _DE_SYSTEM_FOREACH_3, \
+        _DE_SYSTEM_FOREACH_2, _DE_SYSTEM_FOREACH_1, _DE_SYSTEM_FOREACH_0)(__VA_ARGS__)
+
+#define de_system_iterator(...) \
+    _DE_SYSTEM_GET_MACRO(__VA_ARGS__, \
+        _DE_SYSTEM_ITERATOR_5, _DE_SYSTEM_ITERATOR_4, _DE_SYSTEM_ITERATOR_3, \
+        _DE_SYSTEM_ITERATOR_2, _DE_SYSTEM_ITERATOR_1, _DE_SYSTEM_ITERATOR_0)(__VA_ARGS__)
+
+/* Maquinaria interna */
+#define _DE_SYSTEM_GET_MACRO(_1,_2,_3,_4,_5,_6,_7,NAME,...) NAME
+
+#define _DE_SYSTEM_FOREACH(SYSTEM, IT) \
+    void **items = (SYSTEM)->pool; \
+    for (uint16_t i = 0, size = (SYSTEM)->size; i < size;) IT;
+
+#define _DE_SYSTEM_FOREACH_0(SYSTEM, IT) \
+    _DE_SYSTEM_FOREACH(SYSTEM, { IT; })
+
+#define _DE_SYSTEM_FOREACH_1(SYSTEM, A, IT) \
+    _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; IT; })
+
+#define _DE_SYSTEM_FOREACH_2(SYSTEM, A, B, IT) \
+    _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; IT; })
+
+#define _DE_SYSTEM_FOREACH_3(SYSTEM, A, B, C, IT) \
+    _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; IT; })
+
+#define _DE_SYSTEM_FOREACH_4(SYSTEM, A, B, C, D, IT) \
+    _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; D = items[i++]; IT; })
+
+#define _DE_SYSTEM_FOREACH_5(SYSTEM, A, B, C, D, E, IT) \
+    _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; D = items[i++]; E = items[i++]; IT; })
+
+/* Iterators retornan de_state (para usarse como estados de entidad) */
+#define _DE_SYSTEM_ITERATOR_0(NAME, IT) \
+    de_state NAME(de_system *system) { _DE_SYSTEM_FOREACH_0(system, IT); return DE_STATE_LOOP; }
+
+#define _DE_SYSTEM_ITERATOR_1(NAME, A, IT) \
+    de_state NAME(de_system *system) { _DE_SYSTEM_FOREACH_1(system, A, IT); return DE_STATE_LOOP; }
+
+#define _DE_SYSTEM_ITERATOR_2(NAME, A, B, IT) \
+    de_state NAME(de_system *system) { _DE_SYSTEM_FOREACH_2(system, A, B, IT); return DE_STATE_LOOP; }
+
+#define _DE_SYSTEM_ITERATOR_3(NAME, A, B, C, IT) \
+    de_state NAME(de_system *system) { _DE_SYSTEM_FOREACH_3(system, A, B, C, IT); return DE_STATE_LOOP; }
+
+#define _DE_SYSTEM_ITERATOR_4(NAME, A, B, C, D, IT) \
+    de_state NAME(de_system *system) { _DE_SYSTEM_FOREACH_4(system, A, B, C, D, IT); return DE_STATE_LOOP; }
+
+#define _DE_SYSTEM_ITERATOR_5(NAME, A, B, C, D, E, IT) \
+    de_state NAME(de_system *system) { _DE_SYSTEM_FOREACH_5(system, A, B, C, D, E, IT); return DE_STATE_LOOP; }
+
+/* ============================================================
+ * DARKEN_SYSTEMS.H (inline, autocontenido)
+ * ============================================================
+ * Capa opcional para procesar entidades por lotes.
+ * ============================================================ */
+
+typedef void (*de_system_fn)(de_manager *);
+
+#define DE_SYSTEM(NAME, PAYLOAD_TYPE, CODE) \
+    static void NAME(de_manager *_sys_mgr) \
+    { \
+        de_manager_iterate(_sys_mgr, { \
+            PAYLOAD_TYPE *data = (PAYLOAD_TYPE *)ENTITY->data; \
+            (void)data; \
+            CODE; \
+        }); \
+    }
+
+#define DE_SYSTEM_ALL(NAME, PAYLOAD_TYPE, CODE) \
+    static void NAME(de_manager *_sys_mgr) \
+    { \
+        de_manager_iterateAll(_sys_mgr, { \
+            PAYLOAD_TYPE *data = (PAYLOAD_TYPE *)ENTITY->data; \
+            (void)data; \
+            CODE; \
+        }); \
+    }
+
+/* Filtra por mask: requiere que TODOS los bits de TAG_MASK esten activos */
+#define DE_SYSTEM_TAG(NAME, PAYLOAD_TYPE, TAG_MASK, CODE) \
+    static void NAME(de_manager *_sys_mgr) \
+    { \
+        de_manager_iterate(_sys_mgr, { \
+            if ((ENTITY->mask & (TAG_MASK)) == (TAG_MASK)) \
+            { \
+                PAYLOAD_TYPE *data = (PAYLOAD_TYPE *)ENTITY->data; \
+                (void)data; \
+                CODE; \
+            } \
+        }); \
+    }
+
+/* Pipeline explicito (orden de ejecucion controlado por el usuario) */
+typedef struct de_pipeline {
+    de_system_fn *fns;
+    uint8_t       count;
+    uint8_t       capacity;
+} de_pipeline;
+
+#define de_pipeline_init(P, FNS_ARRAY, CAP) \
+    do { \
+        (P)->fns = (FNS_ARRAY); \
+        (P)->count = 0; \
+        (P)->capacity = (CAP); \
+    } while (0)
+
+#define de_pipeline_add(P, FN) \
+    do { \
+        if ((P)->count < (P)->capacity) \
+            (P)->fns[(P)->count++] = (FN); \
+    } while (0)
+
+#define de_pipeline_run(P, MGR) \
+    do { \
+        for (uint8_t _pi = 0; _pi < (P)->count; ++_pi) \
+            (P)->fns[_pi](MGR); \
+    } while (0)
+
+#endif /* DARKEN_H */
+
+/* ============================================================
+ * IMPLEMENTACION
+ * ============================================================ */
+#ifdef DARKEN_IMPLEMENTATION
+
+void de_entity_update(de_entity *$)
+{
+    de_state s = $->state;
+    if (de_state_is_active(s))
+    {
+        s = s.fn($->data);
+        if (!de_state_is_loop(s))
+            $->state = s;
+    }
+}
+
+void de_entity_swap(de_entity *a, de_entity *b)
+{
+    de_manager *m = a->manager;
+    uint16_t i = a->slot;
+    uint16_t j = b->slot;
+
+    m->items[i] = b;
+    b->slot = i;
+    m->items[j] = a;
+    a->slot = j;
+}
+
+void de_entity_pause(de_entity *$)
+{
+    de_manager *m = $->manager;
+    if ($->slot >= m->pause_index && $->slot < m->size)
+        de_entity_swap($, m->items[m->pause_index++]);
+}
+
+void de_entity_resume(de_entity *$)
+{
+    de_manager *m = $->manager;
+    if ($->slot < m->pause_index)
+        de_entity_swap($, m->items[--m->pause_index]);
+}
+
+/* Marca para borrar (el borrado fisico ocurre en el proximo update) */
+void de_entity_kill(de_entity *$)
+{
+    de_manager *m = $->manager;
+    if ($->slot < m->size && !de_state_is_deleted($.state))
+        $->state = DE_STATE_DELETE;
+}
+
+/* Borrado inmediato con destructor */
+void de_entity_destroy(de_entity *$)
+{
+    de_manager *m = $->manager;
+    if ($->slot >= m->size)
+        return;
+
+    $->state = DE_STATE_DELETE;
+
+    if ($->destructor.raw != 0)
+    {
+        de_state ds = $->destructor;
+        $->state = ds.fn($->data);
+    }
+
+    if (de_state_is_deleted($->state))
+    {
+        if ($->slot < m->pause_index)
+            de_entity_swap($, m->items[--m->pause_index]);
+
+        --m->size;
+
+        if ($->slot != m->size)
+            de_entity_swap($, m->items[m->size]);
+    }
+}
+
+/* ------------------------------------------------------------ */
+
+void de_manager_init(de_manager *$, de_entity **items, void *storage, void **scratch, uint16_t capacity, uint16_t bytes)
+{
+    $->items = items;
+    $->scratch = scratch;
+    $->capacity = capacity;
+    $->size = 0;
+    $->pause_index = 0;
+
+    uint16_t stride = _DE_ENTITY_STRIDE(bytes);
+
+    for (uint16_t i = 0; i < capacity; ++i)
+        $->items[i] = (de_entity *)((uint8_t *)storage + i * stride);
+}
+
+de_entity *de_manager_new(de_manager *$)
+{
+    if ($->size >= $->capacity)
+        return 0;
+
+    de_entity *e = $->items[$->size];
+    e->manager = $;
+    e->slot = $->size++;
+    e->state = DE_STATE_DELETE;
+    e->destructor = DE_STATE_DELETE;
+    e->mask = 0;
+
+    return e;
+}
+
+void de_manager_update(de_manager *$)
+{
+    uint16_t i = $->size;
+    while (i-- > $->pause_index)
+    {
+        de_entity *e = $->items[i];
+        de_state s = e->state;
+
+        if (de_state_is_active(s))
+        {
+            s = s.fn(e->data);
+            if (!de_state_is_loop(s))
+                e->state = s;
+        }
+        else if (de_state_is_paused(s))
+            de_entity_pause(e);
+        else if (de_state_is_deleted(s))
+            de_entity_destroy(e);
+    }
+}
+
+void de_manager_pause(de_manager *$)
+{
+    $->pause_index = $->size;
+}
+
+void de_manager_resume(de_manager *$)
+{
+    $->pause_index = 0;
+}
+
+void de_manager_reset(de_manager *$)
+{
+    $->pause_index = 0;
+    while ($->size)
+        de_entity_destroy($->items[$->size - 1]);
+}
+
+/* ------------------------------------------------------------ */
+
+void de_system_init(de_system *$, void **storage, uint16_t capacity_groups, uint16_t params)
+{
+    $->pool = storage;
+    $->size = 0;
+    $->capacity = capacity_groups * params;
+    $->params = params;
+}
+
+uint16_t de_system_add(de_system *$, void **group)
+{
+    if ($->size + $->params > $->capacity)
+        return 0;
+
+    for (uint16_t i = 0; i < $->params; ++i)
+        $->pool[$->size++] = group[i];
+
+    return 1;
+}
+
+uint16_t de_system_remove(de_system *$, void *first)
+{
+    uint16_t params = $->params;
+
+    for (uint16_t i = 0; i < $->size; i += params)
+        if ($->pool[i] == first)
+        {
+            $->size -= params;
+            if (i != $->size)
+                for (uint16_t k = 0; k < params; ++k)
+                    $->pool[i + k] = $->pool[$->size + k];
+            return 1;
+        }
+
+    return 0;
+}
+
+#endif /* DARKEN_IMPLEMENTATION */
+
+
+
+
+CAMBIOS
+============================
+
+| Antes (v1)                                   | Ahora (v2)                                                            |
+| -------------------------------------------- | --------------------------------------------------------------------- |
+| `e->state = (de_state)mi_funcion;`           | `de_entity_set_state(e, mi_funcion);`                                 |
+| `return (void *)de_state_loop;`              | `return DE_STATE_LOOP;`                                               |
+| `e->tag = 1;`                                | `e->mask = (1 << 0);`                                                 |
+| `DE_SYSTEM_TAG(sys, Payload, 1, {…})`        | `DE_SYSTEM_TAG(sys, Payload, (1<<0), {…})`                            |
+| `de_entity_delete(e);`                       | `de_entity_destroy(e);` (inmediato) o `de_entity_kill(e);` (deferred) |
+| `de_manager_create(&m, 8, sizeof(Payload));` | Misma macro, pero reserva scratch internamente.                       |
+| `e->destructor = (de_state)mi_destructor;`   | `de_entity_set_destructor(e, mi_destructor);`                         |
