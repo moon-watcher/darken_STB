@@ -11,62 +11,66 @@
 
 typedef void (*de_system_fn)(de_manager *);
 
-#define DE_SYSTEM(NAME, PAYLOAD_TYPE, CODE) \
-    static void NAME(de_manager *_sys_mgr) \
-    { \
-        de_manager_iterate(_sys_mgr, { \
+#define DE_SYSTEM(NAME, PAYLOAD_TYPE, CODE)                    \
+    static void NAME(de_manager *_sys_mgr)                     \
+    {                                                          \
+        de_manager_iterate(_sys_mgr, {                         \
             PAYLOAD_TYPE *data = (PAYLOAD_TYPE *)ENTITY->data; \
-            (void)data; \
-            CODE; \
-        }); \
+            (void)data;                                        \
+            CODE;                                              \
+        });                                                    \
     }
 
-#define DE_SYSTEM_ALL(NAME, PAYLOAD_TYPE, CODE) \
-    static void NAME(de_manager *_sys_mgr) \
-    { \
-        de_manager_iterateAll(_sys_mgr, { \
+#define DE_SYSTEM_ALL(NAME, PAYLOAD_TYPE, CODE)                \
+    static void NAME(de_manager *_sys_mgr)                     \
+    {                                                          \
+        de_manager_iterateAll(_sys_mgr, {                      \
             PAYLOAD_TYPE *data = (PAYLOAD_TYPE *)ENTITY->data; \
-            (void)data; \
-            CODE; \
-        }); \
+            (void)data;                                        \
+            CODE;                                              \
+        });                                                    \
     }
 
-#define DE_SYSTEM_TAG(NAME, PAYLOAD_TYPE, TAG_VALUE, CODE) \
-    static void NAME(de_manager *_sys_mgr) \
-    { \
-        de_manager_iterate(_sys_mgr, { \
-            if (ENTITY->tag == (TAG_VALUE)) { \
+#define DE_SYSTEM_TAG(NAME, PAYLOAD_TYPE, TAG_VALUE, CODE)         \
+    static void NAME(de_manager *_sys_mgr)                         \
+    {                                                              \
+        de_manager_iterate(_sys_mgr, {                             \
+            if (ENTITY->tag == (TAG_VALUE))                        \
+            {                                                      \
                 PAYLOAD_TYPE *data = (PAYLOAD_TYPE *)ENTITY->data; \
-                (void)data; \
-                CODE; \
-            } \
-        }); \
+                (void)data;                                        \
+                CODE;                                              \
+            }                                                      \
+        });                                                        \
     }
 
 typedef struct de_pipeline
 {
     de_system_fn *fns;
-    uint8_t       count;
-    uint8_t       capacity;
+    uint8_t count;
+    uint8_t capacity;
 } de_pipeline;
 
 #define de_pipeline_init(P, FNS_ARRAY, CAP) \
-    do { \
-        (P)->fns = (FNS_ARRAY); \
-        (P)->count = 0; \
-        (P)->capacity = (CAP); \
+    do                                      \
+    {                                       \
+        (P)->fns = (FNS_ARRAY);             \
+        (P)->count = 0;                     \
+        (P)->capacity = (CAP);              \
     } while (0)
 
-#define de_pipeline_add(P, FN) \
-    do { \
-        if ((P)->count < (P)->capacity) \
+#define de_pipeline_add(P, FN)             \
+    do                                     \
+    {                                      \
+        if ((P)->count < (P)->capacity)    \
             (P)->fns[(P)->count++] = (FN); \
     } while (0)
 
-#define de_pipeline_run(P, MGR) \
-    do { \
+#define de_pipeline_run(P, MGR)                        \
+    do                                                 \
+    {                                                  \
         for (uint8_t _pi = 0; _pi < (P)->count; ++_pi) \
-            (P)->fns[_pi](MGR); \
+            (P)->fns[_pi](MGR);                        \
     } while (0)
 
 #endif /* DARKEN_SYSTEMS_H */
@@ -79,7 +83,6 @@ struct MyComponent
 {
     int x, y;
     uint8_t health;
-    ff32 fx, fy, vx, vy;
 };
 
 /* ============================================================
@@ -89,19 +92,19 @@ struct MyComponent
 static u16 g_testsRun = 0;
 static u16 g_testsPassed = 0;
 
-#define CHECK(desc, cond)                     \
-    do                                         \
-    {                                          \
-        g_testsRun++;                         \
-        if (cond)                             \
-        {                                      \
-            g_testsPassed++;                  \
-            kprintf("  [PASS] %s", desc);     \
-        }                                      \
-        else                                   \
-        {                                      \
-            kprintf("  [FAIL] %s", desc);     \
-        }                                      \
+#define CHECK(desc, cond)                 \
+    do                                    \
+    {                                     \
+        g_testsRun++;                     \
+        if (cond)                         \
+        {                                 \
+            g_testsPassed++;              \
+            kprintf("  [PASS] %s", desc); \
+        }                                 \
+        else                              \
+        {                                 \
+            kprintf("  [FAIL] %s", desc); \
+        }                                 \
     } while (0)
 
 static bool all_slots_aligned(de_manager *mgr)
@@ -264,7 +267,8 @@ static void test_apply(void)
     CHECK("quedan 2 entidades", m.size == 2);
     bool onlyOdd = TRUE;
     de_manager_iterateAll(&m, {
-        if ((ENTITY->tag % 2) == 0) onlyOdd = FALSE;
+        if ((ENTITY->tag % 2) == 0)
+            onlyOdd = FALSE;
     });
     CHECK("quedan tags impares", onlyOdd);
 }
@@ -350,13 +354,15 @@ static void test_slot_stability(void)
     de_entity_pause(e3);
     bool stable = TRUE;
     for (uint16_t i = 0; i < m.size; ++i)
-        if (m.items[i]->slot != i) stable = FALSE;
+        if (m.items[i]->slot != i)
+            stable = FALSE;
     CHECK("slots tras pausar", stable);
     CHECK("pause_index 2", m.pause_index == 2);
     de_entity_delete(e0);
     stable = TRUE;
     for (uint16_t i = 0; i < m.size; ++i)
-        if (m.items[i]->slot != i) stable = FALSE;
+        if (m.items[i]->slot != i)
+            stable = FALSE;
     CHECK("slots tras delete", stable);
     CHECK("size 3", m.size == 3);
 }
@@ -396,7 +402,8 @@ static void test_apply_pause(void)
     de_manager_iterateAll(&m, {
         bool shouldBePaused = (ENTITY->tag % 2) == 0;
         bool isPaused = ENTITY->slot < m.pause_index;
-        if (shouldBePaused != isPaused) correct = FALSE;
+        if (shouldBePaused != isPaused)
+            correct = FALSE;
     });
     CHECK("apply pause: pares pausadas", correct);
 }
@@ -420,13 +427,24 @@ static void test_reuse(void)
 }
 
 static int g_stressCallsA = 0, g_stressCallsB = 0;
-static void *state_stress_a(void *data) { (void)data; ++g_stressCallsA; return (void *)de_state_loop; }
-static void *state_stress_b(void *data) { (void)data; ++g_stressCallsB; return (void *)de_state_loop; }
+static void *state_stress_a(void *data)
+{
+    (void)data;
+    ++g_stressCallsA;
+    return (void *)de_state_loop;
+}
+static void *state_stress_b(void *data)
+{
+    (void)data;
+    ++g_stressCallsB;
+    return (void *)de_state_loop;
+}
 
 static void test_mixed_stress(void)
 {
     kprintf("-- test_mixed_stress --");
-    g_stressCallsA = 0; g_stressCallsB = 0;
+    g_stressCallsA = 0;
+    g_stressCallsB = 0;
     de_manager m;
     de_manager_create(&m, 5, sizeof(struct MyComponent));
     de_entity *e[5];
@@ -440,17 +458,20 @@ static void test_mixed_stress(void)
     CHECK("stress f1: 5 llamadas", g_stressCallsA + g_stressCallsB == 5);
     de_entity_pause(e[1]);
     e[3]->state = de_state_delete;
-    g_stressCallsA = 0; g_stressCallsB = 0;
+    g_stressCallsA = 0;
+    g_stressCallsB = 0;
     de_manager_update(&m);
     CHECK("stress f2: 3 activas", g_stressCallsA + g_stressCallsB == 3);
     CHECK("stress f2: size 4", m.size == 4);
     de_entity_resume(e[1]);
-    g_stressCallsA = 0; g_stressCallsB = 0;
+    g_stressCallsA = 0;
+    g_stressCallsB = 0;
     de_manager_update(&m);
     CHECK("stress f3: 4 activas", g_stressCallsA + g_stressCallsB == 4);
     bool ok = TRUE;
     for (uint16_t i = 0; i < m.size; ++i)
-        if (m.items[i]->slot != i) ok = FALSE;
+        if (m.items[i]->slot != i)
+            ok = FALSE;
     CHECK("stress: slots ok", ok);
 }
 
@@ -465,7 +486,9 @@ static void test_data_integrity(void)
     struct MyComponent *da = (struct MyComponent *)a->data;
     struct MyComponent *db = (struct MyComponent *)b->data;
     struct MyComponent *dc = (struct MyComponent *)c->data;
-    da->x = 111; db->x = 333; dc->x = 555;
+    da->x = 111;
+    db->x = 333;
+    dc->x = 555;
     a->state = b->state = c->state = (de_state)state_noop;
     de_entity_pause(b);
     de_entity_delete(a);
@@ -532,8 +555,10 @@ static void test_stress_capacity(void)
     bool ok = TRUE;
     for (uint16_t i = 0; i < m.size; ++i)
     {
-        if (m.items[i]->slot != i) ok = FALSE;
-        if (m.items[i]->manager != &m) ok = FALSE;
+        if (m.items[i]->slot != i)
+            ok = FALSE;
+        if (m.items[i]->manager != &m)
+            ok = FALSE;
     }
     CHECK("slots coherentes tras fragmentacion", ok);
 }
@@ -563,13 +588,15 @@ static void test_stress_many_entities(void)
     /* Verificar que las entidades ORIGINALMENTE pares siguen en zona pausada */
     bool ok = TRUE;
     for (int i = 0; i < 150; i += 2)
-        if (ents[i]->slot >= m.pause_index) ok = FALSE;
+        if (ents[i]->slot >= m.pause_index)
+            ok = FALSE;
     CHECK("many: pares siguen pausados", ok);
 
     /* Verificar que las entidades ORIGINALMENTE impares siguen activas */
     bool ok2 = TRUE;
     for (int i = 1; i < 150; i += 2)
-        if (ents[i]->slot < m.pause_index) ok2 = FALSE;
+        if (ents[i]->slot < m.pause_index)
+            ok2 = FALSE;
     CHECK("many: impares siguen activas", ok2);
 }
 
@@ -605,7 +632,8 @@ static void test_stress_fragmentation(void)
     {
         for (uint16_t j = i + 1; j < m.size; ++j)
         {
-            if (m.items[i]->tag == m.items[j]->tag) unique = FALSE;
+            if (m.items[i]->tag == m.items[j]->tag)
+                unique = FALSE;
         }
     }
     CHECK("frag: tags unicos tras recreacion", unique);
@@ -654,7 +682,8 @@ static void test_system_basic(void)
     for (uint16_t i = 0; i < m.size; ++i)
     {
         struct MyComponent *d = (struct MyComponent *)m.items[i]->data;
-        if (d->x != (int)i + 1) ok = FALSE;
+        if (d->x != (int)i + 1)
+            ok = FALSE;
     }
     CHECK("system basic: todas las x incrementadas", ok);
     CHECK("system basic: size intacto", m.size == 4);
@@ -739,7 +768,8 @@ static void test_system_tag_filter(void)
     {
         struct MyComponent *d = (struct MyComponent *)m.items[i]->data;
         uint8_t expected = (m.items[i]->tag == 1) ? 10 : 0;
-        if (d->health != expected) ok = FALSE;
+        if (d->health != expected)
+            ok = FALSE;
     }
     CHECK("sys tag: solo tag 1 modificado", ok);
 }
@@ -762,9 +792,9 @@ static void test_pipeline_order(void)
     de_system_fn fns[4];
     de_pipeline pipe;
     de_pipeline_init(&pipe, fns, 4);
-    de_pipeline_add(&pipe, sys_inc_x);      /* x += 1 */
-    de_pipeline_add(&pipe, sys_double_y);   /* y *= 2 */
-    de_pipeline_add(&pipe, sys_inc_x);      /* x += 1 (de nuevo) */
+    de_pipeline_add(&pipe, sys_inc_x);    /* x += 1 */
+    de_pipeline_add(&pipe, sys_double_y); /* y *= 2 */
+    de_pipeline_add(&pipe, sys_inc_x);    /* x += 1 (de nuevo) */
 
     de_pipeline_run(&pipe, &m);
 
@@ -773,8 +803,6 @@ static void test_pipeline_order(void)
     CHECK("pipeline: y duplicado 1 vez", d0->y == 6);
     CHECK("pipeline: count 3", pipe.count == 3);
 }
-
-
 
 /* ============================================================
  * TESTS 26+: SISTEMAS COMO ENTIDADES DE DARKEN
@@ -786,14 +814,14 @@ static void test_pipeline_order(void)
 
 typedef struct TestSystemEntity
 {
-    int16_t  x, y;
-    int16_t  vx, vy;
+    int16_t x, y;
+    int16_t vx, vy;
     uint16_t frame;
 } TestSystemEntity;
 
 typedef struct TestBatchSystem
 {
-    void    **items;
+    void **items;
     uint16_t size;
 } TestBatchSystem;
 
@@ -818,8 +846,8 @@ static void *test_system_movement(void *data)
     uint16_t i = 0;
     while (i < system->size)
     {
-        int16_t *x  = (int16_t *)system->items[i++];
-        int16_t *y  = (int16_t *)system->items[i++];
+        int16_t *x = (int16_t *)system->items[i++];
+        int16_t *y = (int16_t *)system->items[i++];
         int16_t *vx = (int16_t *)system->items[i++];
         int16_t *vy = (int16_t *)system->items[i++];
 
@@ -863,24 +891,24 @@ static void test_entity_system_basic(void)
     /* de_manager_update() recorre de atrás hacia delante.
        El orden de creación es, por tanto, el inverso del pipeline:
        physics -> movement -> frames. */
-    de_entity *frames_entity   = de_manager_new(&systems);
+    de_entity *frames_entity = de_manager_new(&systems);
     de_entity *movement_entity = de_manager_new(&systems);
-    de_entity *physics_entity  = de_manager_new(&systems);
+    de_entity *physics_entity = de_manager_new(&systems);
 
-    TestBatchSystem *physics_pool  = (TestBatchSystem *)physics_entity->data;
+    TestBatchSystem *physics_pool = (TestBatchSystem *)physics_entity->data;
     TestBatchSystem *movement_pool = (TestBatchSystem *)movement_entity->data;
-    TestBatchSystem *frame_pool    = (TestBatchSystem *)frames_entity->data;
+    TestBatchSystem *frame_pool = (TestBatchSystem *)frames_entity->data;
 
-    physics_pool->items  = physics_items;
-    physics_pool->size   = 0;
+    physics_pool->items = physics_items;
+    physics_pool->size = 0;
     movement_pool->items = movement_items;
-    movement_pool->size  = 0;
-    frame_pool->items    = frame_items;
-    frame_pool->size     = 0;
+    movement_pool->size = 0;
+    frame_pool->items = frame_items;
+    frame_pool->size = 0;
 
-    physics_entity->state  = (de_state)test_system_physics;
+    physics_entity->state = (de_state)test_system_physics;
     movement_entity->state = (de_state)test_system_movement;
-    frames_entity->state   = (de_state)test_system_frames;
+    frames_entity->state = (de_state)test_system_frames;
 
     /* Dos entidades normales. */
     de_entity *p1_entity = de_manager_new(&entities);
@@ -889,12 +917,16 @@ static void test_entity_system_basic(void)
     TestSystemEntity *p1 = (TestSystemEntity *)p1_entity->data;
     TestSystemEntity *p2 = (TestSystemEntity *)p2_entity->data;
 
-    p1->x = 10; p1->y = 20;
-    p1->vx = 2; p1->vy = 3;
+    p1->x = 10;
+    p1->y = 20;
+    p1->vx = 2;
+    p1->vy = 3;
     p1->frame = 0;
 
-    p2->x = 100; p2->y = 200;
-    p2->vx = -4; p2->vy = 5;
+    p2->x = 100;
+    p2->y = 200;
+    p2->vx = -4;
+    p2->vy = 5;
     p2->frame = 10;
 
     p1_entity->state = (de_state)state_noop;
@@ -924,7 +956,7 @@ static void test_entity_system_basic(void)
 
     CHECK("entity systems: movement procesa ambas entidades",
           p1->x == 12 && p1->y == 24 &&
-          p2->x == 96 && p2->y == 206);
+              p2->x == 96 && p2->y == 206);
 
     CHECK("entity systems: frames procesa ambas entidades",
           p1->frame == 1 && p2->frame == 11);
@@ -1011,10 +1043,14 @@ static void test_entity_system_paused_entity(void)
     TestSystemEntity *active = (TestSystemEntity *)active_entity->data;
     TestSystemEntity *paused = (TestSystemEntity *)paused_entity->data;
 
-    active->x = 10; active->y = 20;
-    active->vx = 1; active->vy = 2;
-    paused->x = 100; paused->y = 200;
-    paused->vx = 3; paused->vy = 4;
+    active->x = 10;
+    active->y = 20;
+    active->vx = 1;
+    active->vy = 2;
+    paused->x = 100;
+    paused->y = 200;
+    paused->vx = 3;
+    paused->vy = 4;
 
     active_entity->state = (de_state)state_noop;
     paused_entity->state = (de_state)state_noop;
@@ -1039,6 +1075,183 @@ static void test_entity_system_paused_entity(void)
           active->x == 11 && active->y == 22);
     CHECK("paused entity: sigue pausada en su manager",
           paused_entity->slot < entities.pause_index);
+}
+
+/* ============================================================
+ * TESTS ADICIONALES: de_system como pool de campos
+ * ============================================================ */
+
+typedef struct TestDeSystemEntity
+{
+    int16_t x, y;
+    int16_t vx, vy;
+    uint16_t frame;
+} TestDeSystemEntity;
+
+static void *test_de_system_movement(void *data)
+{
+    de_system *sys = (de_system *)data;
+    DE_SYSTEM_FOREACH(sys, {
+        int16_t *x = (int16_t *)GROUP[0];
+        int16_t *y = (int16_t *)GROUP[1];
+        int16_t *vx = (int16_t *)GROUP[2];
+        int16_t *vy = (int16_t *)GROUP[3];
+        *x += *vx;
+        *y += *vy;
+    });
+    return (void *)de_state_loop;
+}
+static void *test_de_system_physics(void *data)
+{
+    de_system *sys = (de_system *)data;
+    DE_SYSTEM_FOREACH(sys, { *(int16_t *)GROUP[0] += 1; });
+    return (void *)de_state_loop;
+}
+static void *test_de_system_frames(void *data)
+{
+    de_system *sys = (de_system *)data;
+    DE_SYSTEM_FOREACH(sys, { *(uint16_t *)GROUP[0] += 1; });
+    return (void *)de_state_loop;
+}
+
+static void test_de_system_init_add(void)
+{
+    kprintf("-- test_de_system_init_add --");
+    de_system sys;
+    void *pool[12];
+    de_system_init(&sys, pool, 3, 4);
+    CHECK("de_system init: size 0", sys.size == 0);
+    CHECK("de_system init: params 4", sys.params == 4);
+    CHECK("de_system init: capacity 12", sys.capacity == 12);
+    int a, b, c, d;
+    void *group[4] = {&a, &b, &c, &d};
+    CHECK("de_system add: primer grupo", de_system_add(&sys, group) == 1);
+    CHECK("de_system add: size 4", sys.size == 4);
+    CHECK("de_system add: punteros conservados", sys.pool[0] == &a && sys.pool[1] == &b && sys.pool[2] == &c && sys.pool[3] == &d);
+}
+
+static void test_de_system_multiple_groups(void)
+{
+    kprintf("-- test_de_system_multiple_groups --");
+    de_system sys;
+    void *pool[12];
+    de_system_init(&sys, pool, 3, 4);
+    int a1, b1, c1, d1, a2, b2, c2, d2;
+    void *g1[4] = {&a1, &b1, &c1, &d1};
+    void *g2[4] = {&a2, &b2, &c2, &d2};
+    de_system_add(&sys, g1);
+    de_system_add(&sys, g2);
+    CHECK("de_system: dos grupos", sys.size == 8);
+    CHECK("de_system: grupo 1 intacto", sys.pool[0] == &a1 && sys.pool[1] == &b1 && sys.pool[2] == &c1 && sys.pool[3] == &d1);
+    CHECK("de_system: grupo 2 intacto", sys.pool[4] == &a2 && sys.pool[5] == &b2 && sys.pool[6] == &c2 && sys.pool[7] == &d2);
+}
+
+static void test_de_system_remove(void)
+{
+    kprintf("-- test_de_system_remove --");
+    de_system sys;
+    void *pool[12];
+    de_system_init(&sys, pool, 3, 4);
+    int a1, b1, c1, d1, a2, b2, c2, d2, a3, b3, c3, d3;
+    void *g1[4] = {&a1, &b1, &c1, &d1};
+    void *g2[4] = {&a2, &b2, &c2, &d2};
+    void *g3[4] = {&a3, &b3, &c3, &d3};
+    de_system_add(&sys, g1);
+    de_system_add(&sys, g2);
+    de_system_add(&sys, g3);
+    CHECK("de_system remove: encuentra grupo", de_system_remove(&sys, &a2) == 1);
+    CHECK("de_system remove: size 8", sys.size == 8);
+    CHECK("de_system remove: grupo final compactado", sys.pool[0] == &a1 && sys.pool[1] == &b1 && sys.pool[2] == &c1 && sys.pool[3] == &d1 && sys.pool[4] == &a3 && sys.pool[5] == &b3 && sys.pool[6] == &c3 && sys.pool[7] == &d3);
+    CHECK("de_system remove: no encuentra grupo ausente", de_system_remove(&sys, &a2) == 0);
+}
+
+static void test_de_system_capacity(void)
+{
+    kprintf("-- test_de_system_capacity --");
+    de_system sys;
+    void *pool[8];
+    de_system_init(&sys, pool, 2, 4);
+    int a[2], b[2], c[2], d[2];
+    void *g1[4] = {&a[0], &a[1], &b[0], &b[1]};
+    void *g2[4] = {&b[0], &b[1], &c[0], &c[1]};
+    void *g3[4] = {&c[0], &c[1], &d[0], &d[1]};
+    CHECK("de_system capacity: primer grupo", de_system_add(&sys, g1) == 1);
+    CHECK("de_system capacity: segundo grupo", de_system_add(&sys, g2) == 1);
+    CHECK("de_system capacity: rechaza grupo lleno", de_system_add(&sys, g3) == 0);
+    CHECK("de_system capacity: size no cambia", sys.size == 8);
+}
+
+static void test_de_system_as_entities(void)
+{
+    kprintf("-- test_de_system_as_entities --");
+    de_manager entities, systems;
+    de_manager_create(&entities, 2, sizeof(TestDeSystemEntity));
+    de_manager_create(&systems, 3, sizeof(de_system));
+    void *movement_pool[8], *physics_pool[2], *frames_pool[2];
+    de_entity *frames_entity = de_manager_new(&systems), *physics_entity = de_manager_new(&systems), *movement_entity = de_manager_new(&systems);
+    de_system *frames = (de_system *)frames_entity->data, *physics = (de_system *)physics_entity->data, *movement = (de_system *)movement_entity->data;
+    de_system_init(frames, frames_pool, 2, 1);
+    de_system_init(physics, physics_pool, 2, 1);
+    de_system_init(movement, movement_pool, 2, 4);
+    frames_entity->state = (de_state)test_de_system_frames;
+    physics_entity->state = (de_state)test_de_system_physics;
+    movement_entity->state = (de_state)test_de_system_movement;
+    de_entity *e1 = de_manager_new(&entities), *e2 = de_manager_new(&entities);
+    TestDeSystemEntity *p1 = (TestDeSystemEntity *)e1->data, *p2 = (TestDeSystemEntity *)e2->data;
+    p1->x = 10;
+    p1->y = 20;
+    p1->vx = 2;
+    p1->vy = 3;
+    p1->frame = 0;
+    p2->x = 100;
+    p2->y = 200;
+    p2->vx = -4;
+    p2->vy = 5;
+    p2->frame = 10;
+    e1->state = (de_state)state_noop;
+    e2->state = (de_state)state_noop;
+    void *g1[4] = {&p1->x, &p1->y, &p1->vx, &p1->vy}, *g2[4] = {&p2->x, &p2->y, &p2->vx, &p2->vy};
+    void *v1[1] = {&p1->vy}, *v2[1] = {&p2->vy}, *f1[1] = {&p1->frame}, *f2[1] = {&p2->frame};
+    de_system_add(movement, g1);
+    de_system_add(movement, g2);
+    de_system_add(physics, v1);
+    de_system_add(physics, v2);
+    de_system_add(frames, f1);
+    de_system_add(frames, f2);
+    de_manager_update(&systems);
+    CHECK("de_system entities: physics modifica vy", p1->vy == 4 && p2->vy == 6);
+    CHECK("de_system entities: movement procesa ambas", p1->x == 12 && p1->y == 24 && p2->x == 96 && p2->y == 206);
+    CHECK("de_system entities: frames procesa ambas", p1->frame == 1 && p2->frame == 11);
+    CHECK("de_system entities: manager contiene 3 sistemas", systems.size == 3);
+    CHECK("de_system entities: manager de entidades intacto", entities.size == 2);
+}
+
+static void test_de_system_shared_payload(void)
+{
+    kprintf("-- test_de_system_shared_payload --");
+    de_manager entities, systems;
+    de_manager_create(&entities, 1, sizeof(TestDeSystemEntity));
+    de_manager_create(&systems, 2, sizeof(de_system));
+    void *movement_pool[4], *frames_pool[1];
+    de_entity *movement_entity = de_manager_new(&systems), *frames_entity = de_manager_new(&systems);
+    de_system *movement = (de_system *)movement_entity->data, *frames = (de_system *)frames_entity->data;
+    de_system_init(movement, movement_pool, 1, 4);
+    de_system_init(frames, frames_pool, 1, 1);
+    movement_entity->state = (de_state)test_de_system_movement;
+    frames_entity->state = (de_state)test_de_system_frames;
+    de_entity *entity = de_manager_new(&entities);
+    TestDeSystemEntity *data = (TestDeSystemEntity *)entity->data;
+    data->x = 50;
+    data->y = 60;
+    data->vx = 7;
+    data->vy = -2;
+    data->frame = 3;
+    void *g[4] = {&data->x, &data->y, &data->vx, &data->vy}, *f[1] = {&data->frame};
+    de_system_add(movement, g);
+    de_system_add(frames, f);
+    de_manager_update(&systems);
+    CHECK("de_system shared: movimiento modifica payload", data->x == 57 && data->y == 58);
+    CHECK("de_system shared: frames usa el mismo payload", data->frame == 4);
 }
 
 /* ============================================================
@@ -1076,6 +1289,12 @@ static void run_all_tests(void)
     test_system_all_includes_paused();
     test_system_tag_filter();
     test_pipeline_order();
+    test_de_system_init_add();
+    test_de_system_multiple_groups();
+    test_de_system_remove();
+    test_de_system_capacity();
+    test_de_system_as_entities();
+    test_de_system_shared_payload();
     test_entity_system_basic();
     test_entity_system_shared_data();
     test_entity_system_paused_entity();
@@ -1275,8 +1494,8 @@ static void bench_memory_overhead(void)
 
     u16 stride16 = _DE_ENTITY_STRIDE(16);
     u16 stride32 = _DE_ENTITY_STRIDE(32);
-    u16 stride1  = _DE_ENTITY_STRIDE(1);
-    u16 stride9  = _DE_ENTITY_STRIDE(9);
+    u16 stride1 = _DE_ENTITY_STRIDE(1);
+    u16 stride9 = _DE_ENTITY_STRIDE(9);
 
     kprintf("sizeof(de_entity) base: %d bytes", sizeof(de_entity));
     kprintf("stride payload=1:  %d bytes/entidad", stride1);
@@ -1341,21 +1560,27 @@ static void run_usage_example(void)
 
     de_entity *e1 = de_manager_new(&g_manager);
     struct MyComponent *data1 = (struct MyComponent *)e1->data;
-    data1->x = 0; data1->y = 0; data1->health = 100;
+    data1->x = 0;
+    data1->y = 0;
+    data1->health = 100;
     e1->state = (de_state)update_walk;
     e1->destructor = (de_state)destructor;
     e1->tag = 1;
 
     de_entity *e2 = de_manager_new(&g_manager);
     struct MyComponent *data2 = (struct MyComponent *)e2->data;
-    data2->x = 10; data2->y = 20; data2->health = 80;
+    data2->x = 10;
+    data2->y = 20;
+    data2->health = 80;
     e2->state = (de_state)update_idle;
     e2->destructor = (de_state)destructor;
     e2->tag = 2;
 
     de_entity *e3 = de_manager_new(&g_manager);
     struct MyComponent *data3 = (struct MyComponent *)e3->data;
-    data3->x = 5; data3->y = 5; data3->health = 50;
+    data3->x = 5;
+    data3->y = 5;
+    data3->health = 50;
     e3->state = (de_state)update_walk;
     e3->destructor = (de_state)destructor;
     e3->tag = 3;
@@ -1380,77 +1605,6 @@ static void run_usage_example(void)
     kprintf("Tamano final g_manager: %d", g_manager.size);
     kprintf("Tamano final g_manager2: %d", g_manager2.size);
     kprintf("=====================================");
-}
-
-static void my_systems_test(void)
-{
-    struct sys_movement {
-        void *pool[50]; // void **pool;
-        uint16_t size;
-    };
-
-    void *sys_movement_f(struct sys_movement *sys)
-    {
-        uint16_t i = 0;
-        while (i < sys->size)
-        {
-            ff32 *fx = (ff32 *)sys->pool[i++];
-            ff32 *fy = (ff32 *)sys->pool[i++];
-            ff32 *vx = (ff32 *)sys->pool[i++];
-            ff32 *vy = (ff32 *)sys->pool[i++];
-
-            *fx += *vx;
-            *fy += *vy;
-        }
-        return 1;
-    };
-
-    kprintf("========== EJEMPLO DE USO ==========");
-
-    de_manager g_manager;
-    de_manager g_manager_sys;
-
-    de_manager_create(&g_manager, 10, sizeof(struct MyComponent));
-    de_manager_create(&g_manager_sys, 40, sizeof(struct sys_movement));
-
-    de_entity *e_sys_movement = de_manager_new(&g_manager_sys);
-    e_sys_movement->state = (de_state)sys_movement_f;
-
-    de_entity *create_entity(int x, int y, int health, ff32 vx, ff32 vy)
-    {
-        de_entity *e = de_manager_new(&g_manager);
-        struct MyComponent *d = (struct MyComponent *)e->data;
-        
-        d->x = x;
-        d->y = y;
-        d->health = health;
-        d->fx = FF32(x);
-        d->fy = FF32(y);
-        d->vx = vx;
-        d->vy = vy;
-
-        e->state = (de_state)update_walk;
-        e->destructor = (de_state)destructor;
-        e->tag = 1;
-        struct sys_movement *sys = (struct sys_movement *)e_sys_movement->data;
-
-        sys->pool[sys->size++] = &d->fx;
-        sys->pool[sys->size++] = &d->fy;
-        sys->pool[sys->size++] = &d->vx;
-        sys->pool[sys->size++] = &d->vy;
-
-        return e;
-    };
-
-    de_entity *e1 = create_entity(10,  5, 100, FF32(.6), FF32(1.1));
-    de_entity *e2 = create_entity(20, 20,  80, FF32(.6), FF32(1.1));
-    de_entity *e3 = create_entity( 5,  5,  50, FF32(.6), FF32(1.1));
-
-    while (1)
-    {
-        de_manager_update(&g_manager);
-        de_manager_update(&g_manager_sys);
-    }
 }
 
 /* ============================================================
@@ -1482,10 +1636,7 @@ void test(void)
 
 int main(void)
 {
-    // test();
-
-    my_systems_test();
-    
+    test();
 
     while (1)
         SYS_doVBlankProcess();

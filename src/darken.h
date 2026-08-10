@@ -87,6 +87,64 @@ void de_manager_update(de_manager *);
     uint8_t _DE_UNIQUE(_s_, __LINE__)[(CAPACITY) * _DE_ENTITY_STRIDE((PAYLOAD))] __attribute__((aligned(4))); \
     de_manager_init((MGR), _DE_UNIQUE(_i_, __LINE__), _DE_UNIQUE(_s_, __LINE__), (CAPACITY), (PAYLOAD))
 
+//
+
+/* ============================================================
+ * SYSTEM: pool generico de punteros agrupados de N en N.
+ * ============================================================
+ * Pensado para entidades-sistema: una de_entity mas, dentro de un
+ * de_manager como cualquier otra, cuyo payload ES un de_system.
+ * Cada entidad "normal" que quiere ser procesada por ese sistema
+ * registra un grupo de punteros (uno por campo que el sistema va a
+ * tocar cada frame) con de_system_add, y se da de baja con
+ * de_system_remove (normalmente desde su propio destructor).
+ *
+ * `params` (punteros por grupo) vive en la instancia, no en el tipo,
+ * asi que de_system es un unico tipo valido para cualquier sistema
+ * -- todas las entidades-sistema, sea cual sea su sistema, pueden
+ * compartir manager con el mismo payload fijo (sizeof(de_system)).
+ *
+ * de_system NO posee su buffer: `pool` apunta a memoria externa que
+ * tu reservas aparte (un array estatico del tamano que necesites), asi
+ * el payload de la entidad-sistema no depende de cuantas entidades
+ * quieras poder registrar en ella.
+ */
+
+typedef struct
+{
+    void **pool;
+    uint16_t size;
+    uint16_t capacity;
+    uint16_t params;
+} de_system;
+
+void de_system_init(de_system *, void **, uint16_t, uint16_t);
+uint16_t de_system_add(de_system *, void **);
+uint16_t de_system_remove(de_system *, void *);
+
+/* Recorre todos los grupos registrados. Dentro de CODE, `GROUP` es un
+ * void** al primer puntero del grupo actual (GROUP[0]..GROUP[params-1]),
+ * e `INDEX` es su posicion dentro de pool[]. */
+#define DE_SYSTEM_FOREACH(SYS, CODE)                                   \
+    do                                                                 \
+    {                                                                  \
+        de_system *_sys = (SYS);                                       \
+        uint16_t _params = _sys->params;                               \
+        for (uint16_t INDEX = 0; INDEX < _sys->size; INDEX += _params) \
+        {                                                              \
+            void **GROUP = &_sys->pool[INDEX];                         \
+            CODE;                                                      \
+        }                                                              \
+    } while (0)
+
+/* Analoga a de_manager_create: declara el buffer de punteros del
+ * sistema (CAPACITY grupos de PARAMS punteros cada uno) y llama a
+ * de_system_init con el. SYS debe ser un puntero (&mi_sistema), igual
+ * que MGR en de_manager_create. */
+#define de_system_create(SYS, CAPACITY, PARAMS)              \
+    void *_DE_UNIQUE(_sp_, __LINE__)[(CAPACITY) * (PARAMS)]; \
+    de_system_init((SYS), _DE_UNIQUE(_sp_, __LINE__), (CAPACITY), (PARAMS))
+
 #endif
 
 #ifdef DARKEN_IMPLEMENTATION
@@ -227,6 +285,46 @@ void de_manager_reset(de_manager *$)
 
     while ($->size)
         de_entity_delete($->items[$->size - 1]);
+}
+
+//
+
+void de_system_init(de_system *$, void **storage, uint16_t capacity_groups, uint16_t params)
+{
+    $->pool = storage;
+    $->size = 0;
+    $->capacity = capacity_groups * params;
+    $->params = params;
+}
+
+uint16_t de_system_add(de_system *$, void **group)
+{
+    if ($->size + $->params > $->capacity)
+        return 0;
+
+    for (uint16_t i = 0; i < $->params; ++i)
+        $->pool[$->size++] = group[i];
+
+    return 1;
+}
+
+uint16_t de_system_remove(de_system *$, void *first)
+{
+    uint16_t params = $->params;
+
+    for (uint16_t i = 0; i < $->size; i += params)
+    {
+        if ($->pool[i] == first)
+        {
+            $->size -= params;
+            if (i != $->size)
+                for (uint16_t k = 0; k < params; ++k)
+                    $->pool[i + k] = $->pool[$->size + k];
+
+            return 1;
+        }
+    }
+    return 0;
 }
 
 #endif
