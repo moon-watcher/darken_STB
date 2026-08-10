@@ -122,20 +122,6 @@ void de_system_init(de_system *, void **, uint16_t, uint16_t);
 uint16_t de_system_add(de_system *, void **);
 uint16_t de_system_remove(de_system *, void *);
 
-/* Recorre todos los grupos registrados. Dentro de CODE, `GROUP` es un
- * void** al primer puntero del grupo actual (GROUP[0]..GROUP[params-1]),
- * e `INDEX` es su posicion dentro de pool[]. */
-#define DE_SYSTEM_FOREACH(SYS, CODE)                                   \
-    do                                                                 \
-    {                                                                  \
-        de_system *_sys = (SYS);                                       \
-        uint16_t _params = _sys->params;                               \
-        for (uint16_t INDEX = 0; INDEX < _sys->size; INDEX += _params) \
-        {                                                              \
-            void **GROUP = &_sys->pool[INDEX];                         \
-            CODE;                                                      \
-        }                                                              \
-    } while (0)
 
 /* Analoga a de_manager_create: declara el buffer de punteros del
  * sistema (CAPACITY grupos de PARAMS punteros cada uno) y llama a
@@ -145,6 +131,95 @@ uint16_t de_system_remove(de_system *, void *);
     void *_DE_UNIQUE(_sp_, __LINE__)[(CAPACITY) * (PARAMS)]; \
     de_system_init((SYS), _DE_UNIQUE(_sp_, __LINE__), (CAPACITY), (PARAMS))
 
+ 
+/* ============================================================
+ * FOREACH MACROS
+ * ============================================================
+ *
+ * de_system_foreach(system [, A [, B [, C [, D [, E]]]]], CODE)
+ *   Iterates all entries in the system, unpacking params into
+ *   the provided variables in order.
+ *
+ * @example — params=1
+ *   de_system_foreach(sys, pos, { pos->x += 1; });
+ *
+ * @example — params=2
+ *   de_system_foreach(sys, pos, vel, { pos->x += vel->x; });
+ *
+ * @example — no variables (access via items[i] manually)
+ *   de_system_foreach(sys, { printf("%p\n", items[i++]); });
+ */
+#define de_system_foreach(...) \
+    _DE_SYSTEM_GET_MACRO(__VA_ARGS__, \
+        _DE_SYSTEM_FOREACH_5, _DE_SYSTEM_FOREACH_4, _DE_SYSTEM_FOREACH_3, \
+        _DE_SYSTEM_FOREACH_2, _DE_SYSTEM_FOREACH_1, _DE_SYSTEM_FOREACH_0)(__VA_ARGS__)
+
+/* ============================================================
+ * ITERATOR MACROS
+ * ============================================================
+ *
+ * de_system_iterator(name [, A [, B [, C [, D [, E]]]]], CODE)
+ *   Defines a void name(de_system *system) function that iterates
+ *   all entries, unpacking params into variables.
+ *
+ * @example — params=2
+ *   de_system_iterator(physics_update, pos, vel, {
+ *       pos->x += vel->x;
+ *       pos->y += vel->y;
+ *   });
+ *   // generates: void physics_update(de_system *system) { ... }
+ */
+#define de_system_iterator(...) \
+    _DE_SYSTEM_GET_MACRO(__VA_ARGS__, \
+        _DE_SYSTEM_ITERATOR_5, _DE_SYSTEM_ITERATOR_4, _DE_SYSTEM_ITERATOR_3, \
+        _DE_SYSTEM_ITERATOR_2, _DE_SYSTEM_ITERATOR_1, _DE_SYSTEM_ITERATOR_0)(__VA_ARGS__)
+
+/* ============================================================
+ * INTERNAL MACRO MACHINERY
+ * ============================================================ */
+
+#define _DE_SYSTEM_GET_MACRO(_1,_2,_3,_4,_5,_6,_7,NAME,...) NAME
+
+#define _DE_SYSTEM_FOREACH(SYSTEM, IT)                               \
+    void **items = (SYSTEM)->pool;                       \
+    for (uint16_t i = 0, size = (SYSTEM)->size; i < size;)\
+        IT;
+
+#define _DE_SYSTEM_FOREACH_0(SYSTEM, IT) \
+    _DE_SYSTEM_FOREACH(SYSTEM, { IT; })
+
+#define _DE_SYSTEM_FOREACH_1(SYSTEM, A, IT) \
+    _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; IT; })
+
+#define _DE_SYSTEM_FOREACH_2(SYSTEM, A, B, IT) \
+    _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; IT; })
+
+#define _DE_SYSTEM_FOREACH_3(SYSTEM, A, B, C, IT) \
+    _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; IT; })
+
+#define _DE_SYSTEM_FOREACH_4(SYSTEM, A, B, C, D, IT) \
+    _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; D = items[i++]; IT; })
+
+#define _DE_SYSTEM_FOREACH_5(SYSTEM, A, B, C, D, E, IT) \
+    _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; D = items[i++]; E = items[i++]; IT; })
+
+#define _DE_SYSTEM_ITERATOR_0(NAME, IT) \
+    void *NAME(de_system *system) { _DE_SYSTEM_FOREACH_0(system, IT); return 1; }
+
+#define _DE_SYSTEM_ITERATOR_1(NAME, A, IT) \
+    void *NAME(de_system *system) { _DE_SYSTEM_FOREACH_1(system, A, IT); return 1; }
+
+#define _DE_SYSTEM_ITERATOR_2(NAME, A, B, IT) \
+    void *NAME(de_system *system) { _DE_SYSTEM_FOREACH_2(system, A, B, IT); return 1; }
+
+#define _DE_SYSTEM_ITERATOR_3(NAME, A, B, C, IT) \
+    void *NAME(de_system *system) { _DE_SYSTEM_FOREACH_3(system, A, B, C, IT); return 1; }
+
+#define _DE_SYSTEM_ITERATOR_4(NAME, A, B, C, D, IT) \
+    void *NAME(de_system *system) { _DE_SYSTEM_FOREACH_4(system, A, B, C, D, IT); return 1; }
+
+#define _DE_SYSTEM_ITERATOR_5(NAME, A, B, C, D, E, IT) \
+    void *NAME(de_system *system) { _DE_SYSTEM_FOREACH_5(system, A, B, C, D, E, IT); return 1; }
 #endif
 
 #ifdef DARKEN_IMPLEMENTATION
@@ -313,17 +388,17 @@ uint16_t de_system_remove(de_system *$, void *first)
     uint16_t params = $->params;
 
     for (uint16_t i = 0; i < $->size; i += params)
-    {
         if ($->pool[i] == first)
         {
             $->size -= params;
+
             if (i != $->size)
                 for (uint16_t k = 0; k < params; ++k)
                     $->pool[i + k] = $->pool[$->size + k];
 
             return 1;
         }
-    }
+
     return 0;
 }
 

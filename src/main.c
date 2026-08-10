@@ -1088,31 +1088,18 @@ typedef struct TestDeSystemEntity
     uint16_t frame;
 } TestDeSystemEntity;
 
-static void *test_de_system_movement(void *data)
-{
-    de_system *sys = (de_system *)data;
-    DE_SYSTEM_FOREACH(sys, {
-        int16_t *x = (int16_t *)GROUP[0];
-        int16_t *y = (int16_t *)GROUP[1];
-        int16_t *vx = (int16_t *)GROUP[2];
-        int16_t *vy = (int16_t *)GROUP[3];
-        *x += *vx;
-        *y += *vy;
-    });
-    return (void *)de_state_loop;
-}
-static void *test_de_system_physics(void *data)
-{
-    de_system *sys = (de_system *)data;
-    DE_SYSTEM_FOREACH(sys, { *(int16_t *)GROUP[0] += 1; });
-    return (void *)de_state_loop;
-}
-static void *test_de_system_frames(void *data)
-{
-    de_system *sys = (de_system *)data;
-    DE_SYSTEM_FOREACH(sys, { *(uint16_t *)GROUP[0] += 1; });
-    return (void *)de_state_loop;
-}
+static de_system_iterator(test_de_system_movement, int16_t *x, int16_t *y, int16_t *vx, int16_t *vy, {
+    *x += *vx;
+    *y += *vy;
+});
+
+static de_system_iterator(test_de_system_physics, int16_t *vy, {
+    *vy += 1;
+});
+
+static de_system_iterator(test_de_system_frames, uint16_t *frame, {
+    *frame += 1;
+});
 
 static void test_de_system_init_add(void)
 {
