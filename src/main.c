@@ -1175,7 +1175,7 @@ static void test_de_system_as_entities(void)
     de_manager_create(&entities, 2, sizeof(TestDeSystemEntity));
     de_manager_create(&systems, 3, sizeof(de_system));
     void *movement_pool[8], *physics_pool[2], *frames_pool[2];
-    de_entity *frames_entity = de_manager_new(&systems), *physics_entity = de_manager_new(&systems), *movement_entity = de_manager_new(&systems);
+    de_entity *frames_entity = de_manager_new(&systems), *movement_entity = de_manager_new(&systems), *physics_entity = de_manager_new(&systems);
     de_system *frames = (de_system *)frames_entity->data, *physics = (de_system *)physics_entity->data, *movement = (de_system *)movement_entity->data;
     de_system_init(frames, frames_pool, 2, 1);
     de_system_init(physics, physics_pool, 2, 1);
