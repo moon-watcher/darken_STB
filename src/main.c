@@ -1112,7 +1112,7 @@ static void test_de_system_init_add(void)
     CHECK("de_system init: capacity 12", sys.capacity == 12);
     int a, b, c, d;
     void *group[4] = {&a, &b, &c, &d};
-    CHECK("de_system add: primer grupo", de_system_add(&sys, group) == 1);
+    CHECK("de_system add: primer grupo", de_system_add_group(&sys, group) == 1);
     CHECK("de_system add: size 4", sys.size == 4);
     CHECK("de_system add: punteros conservados", sys.pool[0] == &a && sys.pool[1] == &b && sys.pool[2] == &c && sys.pool[3] == &d);
 }
@@ -1126,8 +1126,8 @@ static void test_de_system_multiple_groups(void)
     int a1, b1, c1, d1, a2, b2, c2, d2;
     void *g1[4] = {&a1, &b1, &c1, &d1};
     void *g2[4] = {&a2, &b2, &c2, &d2};
-    de_system_add(&sys, g1);
-    de_system_add(&sys, g2);
+    de_system_add_group(&sys, g1);
+    de_system_add_group(&sys, g2);
     CHECK("de_system: dos grupos", sys.size == 8);
     CHECK("de_system: grupo 1 intacto", sys.pool[0] == &a1 && sys.pool[1] == &b1 && sys.pool[2] == &c1 && sys.pool[3] == &d1);
     CHECK("de_system: grupo 2 intacto", sys.pool[4] == &a2 && sys.pool[5] == &b2 && sys.pool[6] == &c2 && sys.pool[7] == &d2);
@@ -1143,9 +1143,9 @@ static void test_de_system_remove(void)
     void *g1[4] = {&a1, &b1, &c1, &d1};
     void *g2[4] = {&a2, &b2, &c2, &d2};
     void *g3[4] = {&a3, &b3, &c3, &d3};
-    de_system_add(&sys, g1);
-    de_system_add(&sys, g2);
-    de_system_add(&sys, g3);
+    de_system_add_group(&sys, g1);
+    de_system_add_group(&sys, g2);
+    de_system_add_group(&sys, g3);
     CHECK("de_system remove: encuentra grupo", de_system_remove(&sys, &a2) == 1);
     CHECK("de_system remove: size 8", sys.size == 8);
     CHECK("de_system remove: grupo final compactado", sys.pool[0] == &a1 && sys.pool[1] == &b1 && sys.pool[2] == &c1 && sys.pool[3] == &d1 && sys.pool[4] == &a3 && sys.pool[5] == &b3 && sys.pool[6] == &c3 && sys.pool[7] == &d3);
@@ -1162,9 +1162,9 @@ static void test_de_system_capacity(void)
     void *g1[4] = {&a[0], &a[1], &b[0], &b[1]};
     void *g2[4] = {&b[0], &b[1], &c[0], &c[1]};
     void *g3[4] = {&c[0], &c[1], &d[0], &d[1]};
-    CHECK("de_system capacity: primer grupo", de_system_add(&sys, g1) == 1);
-    CHECK("de_system capacity: segundo grupo", de_system_add(&sys, g2) == 1);
-    CHECK("de_system capacity: rechaza grupo lleno", de_system_add(&sys, g3) == 0);
+    CHECK("de_system capacity: primer grupo", de_system_add_group(&sys, g1) == 1);
+    CHECK("de_system capacity: segundo grupo", de_system_add_group(&sys, g2) == 1);
+    CHECK("de_system capacity: rechaza grupo lleno", de_system_add_group(&sys, g3) == 0);
     CHECK("de_system capacity: size no cambia", sys.size == 8);
 }
 
@@ -1213,19 +1213,12 @@ static void test_de_system_as_entities(void)
     e1->state = (de_state)state_noop;
     e2->state = (de_state)state_noop;
 
-    void *g1[4] = {&p1->x, &p1->y, &p1->vx, &p1->vy};
-    void *g2[4] = {&p2->x, &p2->y, &p2->vx, &p2->vy};
-    void *v1[1] = {&p1->vy};
-    void *v2[1] = {&p2->vy};
-    void *f1[1] = {&p1->frame};
-    void *f2[1] = {&p2->frame};
-
-    de_system_add(movement, g1);
-    de_system_add(movement, g2);
-    de_system_add(physics, v1);
-    de_system_add(physics, v2);
-    de_system_add(frames, f1);
-    de_system_add(frames, f2);
+    de_system_add(movement, &p1->x, &p1->y, &p1->vx, &p1->vy);
+    de_system_add(movement, &p2->x, &p2->y, &p2->vx, &p2->vy);
+    de_system_add(physics, &p1->vy);
+    de_system_add(physics, &p2->vy);
+    de_system_add(frames, &p1->frame);
+    de_system_add(frames, &p2->frame);
 
     de_manager_update(&systems);
 
@@ -1235,6 +1228,7 @@ static void test_de_system_as_entities(void)
     CHECK("de_system entities: manager contiene 3 sistemas", systems.size == 3);
     CHECK("de_system entities: manager de entidades intacto", entities.size == 2);
 }
+
 static void test_de_system_shared_payload(void)
 {
     kprintf("-- test_de_system_shared_payload --");
@@ -1256,8 +1250,8 @@ static void test_de_system_shared_payload(void)
     data->vy = -2;
     data->frame = 3;
     void *g[4] = {&data->x, &data->y, &data->vx, &data->vy}, *f[1] = {&data->frame};
-    de_system_add(movement, g);
-    de_system_add(frames, f);
+    de_system_add_group(movement, g);
+    de_system_add_group(frames, f);
     de_manager_update(&systems);
     CHECK("de_system shared: movimiento modifica payload", data->x == 57 && data->y == 58);
     CHECK("de_system shared: frames usa el mismo payload", data->frame == 4);

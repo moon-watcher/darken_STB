@@ -123,7 +123,7 @@ typedef struct
 } de_system;
 
 void de_system_init(de_system *, void **, uint16_t, uint16_t);
-uint16_t de_system_add(de_system *, void **);
+uint16_t de_system_add_group(de_system *, void **);
 uint16_t de_system_remove(de_system *, void *);
 
 /* Analoga a de_manager_create: declara el buffer de punteros del
@@ -401,7 +401,10 @@ void de_system_init(de_system *$, void **storage, uint16_t capacity_groups, uint
     $->params = params;
 }
 
-uint16_t de_system_add(de_system *$, void **group)
+#define de_system_add(SYS, ...) \
+    de_system_add_group((SYS), (void *[]){__VA_ARGS__})
+
+uint16_t de_system_add_group(de_system *$, void **group)
 {
     if ($->size + $->params > $->capacity)
         return 0;
