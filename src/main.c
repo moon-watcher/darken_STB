@@ -1171,20 +1171,34 @@ static void test_de_system_capacity(void)
 static void test_de_system_as_entities(void)
 {
     kprintf("-- test_de_system_as_entities --");
+
     de_manager entities, systems;
     de_manager_create(&entities, 2, sizeof(TestDeSystemEntity));
     de_manager_create(&systems, 3, sizeof(de_system));
-    void *movement_pool[8], *physics_pool[2], *frames_pool[2];
-    de_entity frames_entity = de_manager_new(&systems), movement_entity = de_manager_new(&systems), physics_entity = de_manager_new(&systems);
-    de_system *frames = (de_system *)frames_entity->data, *physics = (de_system *)physics_entity->data, *movement = (de_system *)movement_entity->data;
-    de_system_init(frames, frames_pool, 2, 1);
-    de_system_init(physics, physics_pool, 2, 1);
-    de_system_init(movement, movement_pool, 2, 4);
+
+    /* Orden de creacion = inverso al de ejecucion (update recorre size-1 -> 0) */
+    de_entity frames_entity = de_manager_new(&systems);
+    de_entity movement_entity = de_manager_new(&systems);
+    de_entity physics_entity = de_manager_new(&systems);
+
+    de_system *frames = (de_system *)frames_entity->data;
+    de_system *movement = (de_system *)movement_entity->data;
+    de_system *physics = (de_system *)physics_entity->data;
+
+    /* de_system_create declara el pool estatico y llama de_system_init */
+    de_system_create(frames, 2, 1);
+    de_system_create(movement, 2, 4);
+    de_system_create(physics, 2, 1);
+
     frames_entity->state = (de_state)test_de_system_frames;
-    physics_entity->state = (de_state)test_de_system_physics;
     movement_entity->state = (de_state)test_de_system_movement;
-    de_entity e1 = de_manager_new(&entities), e2 = de_manager_new(&entities);
-    TestDeSystemEntity *p1 = (TestDeSystemEntity *)e1->data, *p2 = (TestDeSystemEntity *)e2->data;
+    physics_entity->state = (de_state)test_de_system_physics;
+
+    de_entity e1 = de_manager_new(&entities);
+    de_entity e2 = de_manager_new(&entities);
+    TestDeSystemEntity *p1 = (TestDeSystemEntity *)e1->data;
+    TestDeSystemEntity *p2 = (TestDeSystemEntity *)e2->data;
+
     p1->x = 10;
     p1->y = 20;
     p1->vx = 2;
@@ -1195,24 +1209,32 @@ static void test_de_system_as_entities(void)
     p2->vx = -4;
     p2->vy = 5;
     p2->frame = 10;
+
     e1->state = (de_state)state_noop;
     e2->state = (de_state)state_noop;
-    void *g1[4] = {&p1->x, &p1->y, &p1->vx, &p1->vy}, *g2[4] = {&p2->x, &p2->y, &p2->vx, &p2->vy};
-    void *v1[1] = {&p1->vy}, *v2[1] = {&p2->vy}, *f1[1] = {&p1->frame}, *f2[1] = {&p2->frame};
+
+    void *g1[4] = {&p1->x, &p1->y, &p1->vx, &p1->vy};
+    void *g2[4] = {&p2->x, &p2->y, &p2->vx, &p2->vy};
+    void *v1[1] = {&p1->vy};
+    void *v2[1] = {&p2->vy};
+    void *f1[1] = {&p1->frame};
+    void *f2[1] = {&p2->frame};
+
     de_system_add(movement, g1);
     de_system_add(movement, g2);
     de_system_add(physics, v1);
     de_system_add(physics, v2);
     de_system_add(frames, f1);
     de_system_add(frames, f2);
+
     de_manager_update(&systems);
+
     CHECK("de_system entities: physics modifica vy", p1->vy == 4 && p2->vy == 6);
     CHECK("de_system entities: movement procesa ambas", p1->x == 12 && p1->y == 24 && p2->x == 96 && p2->y == 206);
     CHECK("de_system entities: frames procesa ambas", p1->frame == 1 && p2->frame == 11);
     CHECK("de_system entities: manager contiene 3 sistemas", systems.size == 3);
     CHECK("de_system entities: manager de entidades intacto", entities.size == 2);
 }
-
 static void test_de_system_shared_payload(void)
 {
     kprintf("-- test_de_system_shared_payload --");
