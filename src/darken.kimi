@@ -199,7 +199,7 @@ static inline bool de_entity_is_active(const de_entity *e) {
  * ============================================================ */
 
 typedef struct {
-    void   **pool;
+    void   *de_entity;
     uint16_t size;
     uint16_t capacity;
     uint16_t params;

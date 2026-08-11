@@ -1,3 +1,13 @@
+/**
+ * Darken es un pool de entidades ejecutables.
+ *
+ * Y:
+ *
+ * Un de_system es un tipo especial de payload que permite a una entidad 
+ * ejecutar una operación sobre múltiples entidades sin recorrer sus payloads.
+ * 
+ */
+
 #ifndef DARKEN_H
 #define DARKEN_H
 
@@ -45,6 +55,130 @@ void de_entity_swap(de_entity, de_entity);
 void de_entity_pause(de_entity);
 void de_entity_resume(de_entity);
 void de_entity_delete(de_entity);
+
+/**
+#define de_entity_data(E, TYPE) ((TYPE *)((E)->data))
+de_entity_state
+de_entity_destructor
+de_entity_tag
+
+#define de_system_entity_create(MGR, ENTITY, PAYLOAD, STATE) \
+    do { \
+        (ENTITY) = de_manager_new(MGR); \
+        (ENTITY)->state = STATE; \
+    } while (0)
+
+static inline de_state de_entity_state(const de_entity *e)
+{
+    return e->state;
+}
+
+static inline void de_entity_set_state(de_entity *e, de_state state)
+{
+    e->state = state;
+}
+
+static inline de_state de_entity_destructor(const de_entity *e)
+{
+    return e->destructor;
+}
+
+static inline void de_entity_set_destructor(de_entity *e, de_state destructor)
+{
+    e->destructor = destructor;
+}
+
+static inline uint16_t de_entity_tag(const de_entity *e)
+{
+    return e->tag;
+}
+
+static inline void de_entity_set_tag(de_entity *e, uint16_t tag)
+{
+    e->tag = tag;
+}
+
+static inline void *de_entity_data(de_entity *e)
+{
+    return e->data;
+}
+
+static inline const void *de_entity_const_data(const de_entity *e)
+{
+    return e->data;
+}
+
+static inline de_manager *de_entity_manager(const de_entity *e)
+{
+    return e->manager;
+}
+
+static inline uint16_t de_entity_slot(const de_entity *e)
+{
+    return e->slot;
+}
+
+
+============================================================
+
+static inline uint16_t de_entity_is_deleted(const de_entity *e)
+{
+    return de_state_is_deleted(e->state);
+}
+
+static inline uint16_t de_entity_is_loop(const de_entity *e)
+{
+    return de_state_is_loop(e->state);
+}
+
+static inline uint16_t de_entity_is_paused(const de_entity *e)
+{
+    return de_state_is_paused(e->state);
+}
+
+static inline uint16_t de_entity_is_active(const de_entity *e)
+{
+    return de_state_is_active(e->state);
+}
+
+
+============================================================
+
+void de_entity_update(de_entity *);
+
+void de_entity_pause(de_entity *);
+void de_entity_resume(de_entity *);
+void de_entity_delete(de_entity *);
+
+
+ ============================================================
+
+static inline void de_entity_loop(de_entity *e)
+{
+    e->state = de_state_loop;
+}
+
+static inline void de_entity_pause_state(de_entity *e)
+{
+    e->state = de_state_pause;
+}
+
+static inline void de_entity_delete_state(de_entity *e)
+{
+    e->state = de_state_delete;
+}
+
+
+de_manager *de_entity_manager(const de_entity *e);
+uint16_t    de_entity_slot(const de_entity *e);
+uint16_t    de_entity_tag(const de_entity *e);
+void        de_entity_set_tag(de_entity *, uint16_t);
+
+void       *de_entity_data(de_entity *);
+const void *de_entity_const_data(const de_entity *);
+
+*/
+
 
 //
 
