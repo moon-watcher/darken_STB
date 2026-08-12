@@ -1111,8 +1111,7 @@ static void test_de_system_init_add(void)
     CHECK("de_system init: params 4", sys.params == 4);
     CHECK("de_system init: capacity 12", sys.capacity == 12);
     int a, b, c, d;
-    void *group[4] = {&a, &b, &c, &d};
-    CHECK("de_system add: primer grupo", de_system_add_group(&sys, group) == 1);
+    CHECK("de_system add: primer grupo", de_system_add(&sys, &a, &b, &c, &d) == 1);
     CHECK("de_system add: size 4", sys.size == 4);
     CHECK("de_system add: punteros conservados", sys.pool[0] == &a && sys.pool[1] == &b && sys.pool[2] == &c && sys.pool[3] == &d);
 }
@@ -1124,10 +1123,8 @@ static void test_de_system_multiple_groups(void)
     void *pool[12];
     de_system_init(&sys, pool, 3, 4);
     int a1, b1, c1, d1, a2, b2, c2, d2;
-    void *g1[4] = {&a1, &b1, &c1, &d1};
-    void *g2[4] = {&a2, &b2, &c2, &d2};
-    de_system_add_group(&sys, g1);
-    de_system_add_group(&sys, g2);
+    de_system_add(&sys, &a1, &b1, &c1, &d1);
+    de_system_add(&sys, &a2, &b2, &c2, &d2);
     CHECK("de_system: dos grupos", sys.size == 8);
     CHECK("de_system: grupo 1 intacto", sys.pool[0] == &a1 && sys.pool[1] == &b1 && sys.pool[2] == &c1 && sys.pool[3] == &d1);
     CHECK("de_system: grupo 2 intacto", sys.pool[4] == &a2 && sys.pool[5] == &b2 && sys.pool[6] == &c2 && sys.pool[7] == &d2);
@@ -1140,12 +1137,9 @@ static void test_de_system_remove(void)
     void *pool[12];
     de_system_init(&sys, pool, 3, 4);
     int a1, b1, c1, d1, a2, b2, c2, d2, a3, b3, c3, d3;
-    void *g1[4] = {&a1, &b1, &c1, &d1};
-    void *g2[4] = {&a2, &b2, &c2, &d2};
-    void *g3[4] = {&a3, &b3, &c3, &d3};
-    de_system_add_group(&sys, g1);
-    de_system_add_group(&sys, g2);
-    de_system_add_group(&sys, g3);
+    de_system_add(&sys, &a1, &b1, &c1, &d1);
+    de_system_add(&sys, &a2, &b2, &c2, &d2);
+    de_system_add(&sys, &a3, &b3, &c3, &d3);
     CHECK("de_system remove: encuentra grupo", de_system_remove(&sys, &a2) == 1);
     CHECK("de_system remove: size 8", sys.size == 8);
     CHECK("de_system remove: grupo final compactado", sys.pool[0] == &a1 && sys.pool[1] == &b1 && sys.pool[2] == &c1 && sys.pool[3] == &d1 && sys.pool[4] == &a3 && sys.pool[5] == &b3 && sys.pool[6] == &c3 && sys.pool[7] == &d3);
@@ -1159,12 +1153,9 @@ static void test_de_system_capacity(void)
     void *pool[8];
     de_system_init(&sys, pool, 2, 4);
     int a[2], b[2], c[2], d[2];
-    void *g1[4] = {&a[0], &a[1], &b[0], &b[1]};
-    void *g2[4] = {&b[0], &b[1], &c[0], &c[1]};
-    void *g3[4] = {&c[0], &c[1], &d[0], &d[1]};
-    CHECK("de_system capacity: primer grupo", de_system_add_group(&sys, g1) == 1);
-    CHECK("de_system capacity: segundo grupo", de_system_add_group(&sys, g2) == 1);
-    CHECK("de_system capacity: rechaza grupo lleno", de_system_add_group(&sys, g3) == 0);
+    CHECK("de_system capacity: primer grupo", de_system_add(&sys, &a[0], &a[1], &b[0], &b[1]) == 1);
+    CHECK("de_system capacity: segundo grupo", de_system_add(&sys, &b[0], &b[1], &c[0], &c[1]) == 1);
+    CHECK("de_system capacity: rechaza grupo lleno", de_system_add(&sys, &c[0], &c[1], &d[0], &d[1]) == 0);
     CHECK("de_system capacity: size no cambia", sys.size == 8);
 }
 
@@ -1249,9 +1240,8 @@ static void test_de_system_shared_payload(void)
     data->vx = 7;
     data->vy = -2;
     data->frame = 3;
-    void *g[4] = {&data->x, &data->y, &data->vx, &data->vy}, *f[1] = {&data->frame};
-    de_system_add_group(movement, g);
-    de_system_add_group(frames, f);
+    de_system_add(movement, &data->x, &data->y, &data->vx, &data->vy);
+    de_system_add(frames, &data->frame);
     de_manager_update(&systems);
     CHECK("de_system shared: movimiento modifica payload", data->x == 57 && data->y == 58);
     CHECK("de_system shared: frames usa el mismo payload", data->frame == 4);
