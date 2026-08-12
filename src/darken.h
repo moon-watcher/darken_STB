@@ -44,10 +44,11 @@ struct de_manager
 
 void de_entity_exec(de_entity);
 void de_entity_update(de_entity);
-void de_entity_swap(de_entity, de_entity);
 void de_entity_pause(de_entity);
 void de_entity_resume(de_entity);
 void de_entity_delete(de_entity);
+void de_entity_move_front(de_entity);
+void de_entity_move_back(de_entity);
 
 void de_manager_init(de_manager *, de_entity *, void *, uint16_t, uint16_t);
 de_entity de_manager_new(de_manager *);
@@ -217,7 +218,7 @@ void de_entity_update(de_entity $)
     }
 }
 
-void de_entity_swap(de_entity a, de_entity b)
+static void _de_entity_swap(de_entity a, de_entity b)
 {
     de_manager *m = a->manager;
     uint16_t i = a->slot;
@@ -234,7 +235,7 @@ void de_entity_pause(de_entity $)
     de_manager *m = $->manager;
 
     if ($->slot >= m->pause_index && $->slot < m->size)
-        de_entity_swap($, m->items[m->pause_index++]);
+        _de_entity_swap($, m->items[m->pause_index++]);
 }
 
 void de_entity_resume(de_entity $)
@@ -242,7 +243,7 @@ void de_entity_resume(de_entity $)
     de_manager *m = $->manager;
 
     if ($->slot < m->pause_index)
-        de_entity_swap($, m->items[--m->pause_index]);
+        _de_entity_swap($, m->items[--m->pause_index]);
 }
 
 void de_entity_delete(de_entity $)
@@ -260,13 +261,37 @@ void de_entity_delete(de_entity $)
     if (de_state_is_deleted($->state))
     {
         if ($->slot < m->pause_index)
-            de_entity_swap($, m->items[--m->pause_index]);
+            _de_entity_swap($, m->items[--m->pause_index]);
 
         --m->size;
 
         if ($->slot != m->size)
-            de_entity_swap($, m->items[m->size]);
+            _de_entity_swap($, m->items[m->size]);
     }
+}
+
+void de_entity_move_front(de_entity $)
+{
+    de_manager *m = $->manager;
+
+    if ($->slot < m->pause_index || $->slot >= m->size)
+        return;
+
+    de_entity last = m->items[m->size - 1];
+    if ($ != last)
+        _de_entity_swap($, last);
+}
+
+void de_entity_move_back(de_entity $)
+{
+    de_manager *m = $->manager;
+
+    if ($->slot < m->pause_index || $->slot >= m->size)
+        return;
+
+    de_entity first = m->items[m->pause_index];
+    if ($ != first)
+        _de_entity_swap($, first);
 }
 
 // ============================================================
@@ -292,7 +317,7 @@ de_entity de_manager_new(de_manager *$)
     de_entity e = $->items[$->size];
     e->manager = $;
     e->slot = $->size++;
-    e->state = 0;
+    e->state = de_state_delete;
     e->destructor = 0;
     e->tag = 0;
 
@@ -338,7 +363,8 @@ void de_manager_reset(de_manager *$)
 {
     $->pause_index = 0;
 
-    while ($->size)
+    uint16_t remaining = $->size;
+    while (remaining--)
         de_entity_delete($->items[$->size - 1]);
 }
 
@@ -355,6 +381,9 @@ void de_system_init(de_system *$, void **storage, uint16_t capacity_groups, uint
 uint16_t de_system_remove(de_system *$, void *first)
 {
     uint16_t params = $->params;
+
+    if (!params)
+        return 0;
 
     for (uint16_t i = 0; i < $->size; i += params)
         if ($->pool[i] == first)

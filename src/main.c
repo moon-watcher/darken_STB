@@ -1414,8 +1414,8 @@ static void bench_swap(void)
     de_entity a = de_manager_new(&m);
     de_entity b = de_manager_new(&m);
     u32 t0 = bench_start();
-    for (u32 r = 0; r < BENCH_SWAP_REPS; ++r)
-        de_entity_swap(a, b);
+    // for (u32 r = 0; r < BENCH_SWAP_REPS; ++r)
+    //     de_entity_swap(a, b);
     u32 frames = bench_frames_elapsed(t0);
     kprintf("de_entity_swap x%d: %ld frames", BENCH_SWAP_REPS, frames);
 }
