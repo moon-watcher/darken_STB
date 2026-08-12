@@ -292,7 +292,7 @@ de_entity de_manager_new(de_manager *$)
     de_entity e = $->items[$->size];
     e->manager = $;
     e->slot = $->size++;
-    e->state = de_state_delete;
+    e->state = 0;
     e->destructor = 0;
     e->tag = 0;
 
