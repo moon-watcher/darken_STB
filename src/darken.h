@@ -3,24 +3,11 @@
 
 #include <genesis.h>
 
-#define _DE_ALIGN4(X) (((X) + 3U) & ~3U)
-#define _DE_CONCAT(A, B) A##B
-#define _DE_UNIQUE(A, B) _DE_CONCAT(A, B)
-#define _DE_ENTITY_STRIDE(PAYLOAD) _DE_ALIGN4(sizeof(struct de_entity) + (PAYLOAD))
-#define _DE_GET_MACRO(_1, _2, _3, _4, _5, _6, _7, NAME, ...) NAME
-
 typedef void *(*de_state)(void *);
 
-#define de_state_delete ((de_state)0)
-#define de_state_loop ((de_state)1)
-#define de_state_pause ((de_state)2)
-
-#define de_state_is_deleted(S) ((S) == de_state_delete)
-#define de_state_is_loop(S) ((S) == de_state_loop)
-#define de_state_is_paused(S) ((S) == de_state_pause)
-#define de_state_is_active(S) ((S) > de_state_pause)
-
+typedef struct de_entity *de_entity;
 typedef struct de_manager de_manager;
+typedef struct de_system de_system;
 
 struct de_entity
 {
@@ -32,8 +19,6 @@ struct de_entity
     uint8_t data[];
 };
 
-typedef struct de_entity *de_entity;
-
 struct de_manager
 {
     de_entity *items;
@@ -41,6 +26,27 @@ struct de_manager
     uint16_t capacity;
     uint16_t pause_index;
 };
+
+struct de_system
+{
+    void **pool;
+    uint16_t size;
+    uint16_t capacity;
+    uint16_t params;
+};
+
+//
+
+#define de_state_delete ((de_state)0)
+#define de_state_loop ((de_state)1)
+#define de_state_pause ((de_state)2)
+
+#define de_state_is_deleted(S) ((S) == de_state_delete)
+#define de_state_is_loop(S) ((S) == de_state_loop)
+#define de_state_is_paused(S) ((S) == de_state_pause)
+#define de_state_is_active(S) ((S) > de_state_pause)
+
+//
 
 void de_entity_exec(de_entity);
 void de_entity_update(de_entity);
@@ -50,6 +56,13 @@ void de_entity_delete(de_entity);
 void de_entity_move_front(de_entity);
 void de_entity_move_back(de_entity);
 
+//
+
+#define de_manager_create(MGR, CAPACITY, PAYLOAD)                                                             \
+    de_entity _DE_UNIQUE(_i_, __LINE__)[(CAPACITY)];                                                          \
+    uint8_t _DE_UNIQUE(_s_, __LINE__)[(CAPACITY) * _DE_ENTITY_STRIDE((PAYLOAD))] __attribute__((aligned(4))); \
+    de_manager_init((MGR), _DE_UNIQUE(_i_, __LINE__), _DE_UNIQUE(_s_, __LINE__), (CAPACITY), (PAYLOAD))
+
 void de_manager_init(de_manager *, de_entity *, void *, uint16_t, uint16_t);
 de_entity de_manager_new(de_manager *);
 void de_manager_update(de_manager *);
@@ -57,13 +70,36 @@ void de_manager_pause(de_manager *);
 void de_manager_resume(de_manager *);
 void de_manager_reset(de_manager *);
 
-#define de_manager_create(MGR, CAPACITY, PAYLOAD)                                                             \
-    de_entity _DE_UNIQUE(_i_, __LINE__)[(CAPACITY)];                                                          \
-    uint8_t _DE_UNIQUE(_s_, __LINE__)[(CAPACITY) * _DE_ENTITY_STRIDE((PAYLOAD))] __attribute__((aligned(4))); \
-    de_manager_init((MGR), _DE_UNIQUE(_i_, __LINE__), _DE_UNIQUE(_s_, __LINE__), (CAPACITY), (PAYLOAD))
-
 #define de_manager_iterate(M, CODE) _de_manager_iterate(M, (M)->pause_index, CODE)
 #define de_manager_iterateAll(M, CODE) _de_manager_iterate(M, 0, CODE)
+#define de_manager_apply(M, F, A) _de_manager_apply(de_manager_iterate, M, F, A)
+#define de_manager_applyAll(M, F, A) _de_manager_apply(de_manager_iterateAll, M, F, A)
+
+//
+
+#define de_system_create(SYS, CAPACITY, PARAMS)              \
+    void *_DE_UNIQUE(_sp_, __LINE__)[(CAPACITY) * (PARAMS)]; \
+    de_system_init((SYS), _DE_UNIQUE(_sp_, __LINE__), (CAPACITY), (PARAMS))
+
+void de_system_init(de_system *, void **, uint16_t, uint16_t);
+uint16_t de_system_remove(de_system *, void *);
+
+#define de_system_add(...)                                           \
+    _DE_GET_MACRO(__VA_ARGS__, _,                                    \
+                  _de_system_add5, _de_system_add4, _de_system_add3, \
+                  _de_system_add2, _de_system_add1, unused)(__VA_ARGS__)
+
+#define de_system_foreach(...)                                                      \
+    _DE_GET_MACRO(__VA_ARGS__,                                                      \
+                  _de_system_foreach_5, _de_system_foreach_4, _de_system_foreach_3, \
+                  _de_system_foreach_2, _de_system_foreach_1, _de_system_foreach_0)(__VA_ARGS__)
+
+#define de_system_iterator(...)                                                        \
+    _DE_GET_MACRO(__VA_ARGS__,                                                         \
+                  _de_system_iterator_5, _de_system_iterator_4, _de_system_iterator_3, \
+                  _de_system_iterator_2, _de_system_iterator_1, _de_system_iterator_0)(__VA_ARGS__)
+
+//
 
 #define _de_manager_iterate(M, LIMIT, CODE)       \
     do                                            \
@@ -76,9 +112,6 @@ void de_manager_reset(de_manager *);
         }                                         \
     } while (0)
 
-#define de_manager_apply(M, F, A) _de_manager_apply(de_manager_iterate, M, F, A)
-#define de_manager_applyAll(M, F, A) _de_manager_apply(de_manager_iterateAll, M, F, A)
-
 #define _de_manager_apply(ITER, M, FILTER, ACTION) \
     do                                             \
     {                                              \
@@ -89,22 +122,7 @@ void de_manager_reset(de_manager *);
             ACTION(_targets[_count]);              \
     } while (0)
 
-typedef struct
-{
-    void **pool;
-    uint16_t size;
-    uint16_t capacity;
-    uint16_t params;
-} de_system;
-
-void de_system_init(de_system *, void **, uint16_t, uint16_t);
-uint16_t de_system_remove(de_system *, void *);
-
-#define de_system_create(SYS, CAPACITY, PARAMS)              \
-    void *_DE_UNIQUE(_sp_, __LINE__)[(CAPACITY) * (PARAMS)]; \
-    de_system_init((SYS), _DE_UNIQUE(_sp_, __LINE__), (CAPACITY), (PARAMS))
-
-#define _DE_SYSTEM_ADD(SYS, N, ...)          \
+#define _de_system_add(SYS, N, ...)          \
     ({                                       \
         de_system *_s = (SYS);               \
         uint16_t _ok = 0;                    \
@@ -118,83 +136,74 @@ uint16_t de_system_remove(de_system *, void *);
         _ok;                                 \
     })
 
-#define _DE_SYSTEM_ADD1(SYS, A) \
-    _DE_SYSTEM_ADD(SYS, 1, _p[0] = (void *)(A);)
+#define _de_system_add1(SYS, A) \
+    _de_system_add(SYS, 1, _p[0] = (void *)(A);)
 
-#define _DE_SYSTEM_ADD2(SYS, A, B) \
-    _DE_SYSTEM_ADD(SYS, 2, _p[0] = (void *)(A); _p[1] = (void *)(B);)
+#define _de_system_add2(SYS, A, B) \
+    _de_system_add(SYS, 2, _p[0] = (void *)(A); _p[1] = (void *)(B);)
 
-#define _DE_SYSTEM_ADD3(SYS, A, B, C) \
-    _DE_SYSTEM_ADD(SYS, 3, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C);)
+#define _de_system_add3(SYS, A, B, C) \
+    _de_system_add(SYS, 3, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C);)
 
-#define _DE_SYSTEM_ADD4(SYS, A, B, C, D) \
-    _DE_SYSTEM_ADD(SYS, 4, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D);)
+#define _de_system_add4(SYS, A, B, C, D) \
+    _de_system_add(SYS, 4, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D);)
 
-#define _DE_SYSTEM_ADD5(SYS, A, B, C, D, E) \
-    _DE_SYSTEM_ADD(SYS, 5, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D); _p[4] = (void *)(E);)
+#define _de_system_add5(SYS, A, B, C, D, E) \
+    _de_system_add(SYS, 5, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D); _p[4] = (void *)(E);)
 
-#define de_system_add(...)                                           \
-    _DE_GET_MACRO(__VA_ARGS__, _,                                    \
-                  _DE_SYSTEM_ADD5, _DE_SYSTEM_ADD4, _DE_SYSTEM_ADD3, \
-                  _DE_SYSTEM_ADD2, _DE_SYSTEM_ADD1, unused)(__VA_ARGS__)
-
-#define _DE_SYSTEM_ITERATOR(NAME, FOREACH, ...) \
+#define _de_system_iterator(NAME, FOREACH, ...) \
     void *NAME(de_system *system)               \
     {                                           \
         FOREACH(system, __VA_ARGS__);           \
         return (void *)de_state_loop;           \
     }
 
-#define _DE_SYSTEM_FOREACH(SYSTEM, IT)                     \
+#define _de_system_foreach(SYSTEM, IT)                     \
     void **items = (SYSTEM)->pool;                         \
     for (uint16_t i = 0, size = (SYSTEM)->size; i < size;) \
         IT;
 
-#define _DE_SYSTEM_FOREACH_0(SYSTEM, IT) \
-    _DE_SYSTEM_FOREACH(SYSTEM, { IT; })
+#define _de_system_foreach_0(SYSTEM, IT) \
+    _de_system_foreach(SYSTEM, { IT; })
 
-#define _DE_SYSTEM_FOREACH_1(SYSTEM, A, IT) \
-    _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; IT; })
+#define _de_system_foreach_1(SYSTEM, A, IT) \
+    _de_system_foreach(SYSTEM, { A = items[i++]; IT; })
 
-#define _DE_SYSTEM_FOREACH_2(SYSTEM, A, B, IT) \
-    _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; IT; })
+#define _de_system_foreach_2(SYSTEM, A, B, IT) \
+    _de_system_foreach(SYSTEM, { A = items[i++]; B = items[i++]; IT; })
 
-#define _DE_SYSTEM_FOREACH_3(SYSTEM, A, B, C, IT) \
-    _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; IT; })
+#define _de_system_foreach_3(SYSTEM, A, B, C, IT) \
+    _de_system_foreach(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; IT; })
 
-#define _DE_SYSTEM_FOREACH_4(SYSTEM, A, B, C, D, IT) \
-    _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; D = items[i++]; IT; })
+#define _de_system_foreach_4(SYSTEM, A, B, C, D, IT) \
+    _de_system_foreach(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; D = items[i++]; IT; })
 
-#define _DE_SYSTEM_FOREACH_5(SYSTEM, A, B, C, D, E, IT) \
-    _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; D = items[i++]; E = items[i++]; IT; })
+#define _de_system_foreach_5(SYSTEM, A, B, C, D, E, IT) \
+    _de_system_foreach(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; D = items[i++]; E = items[i++]; IT; })
 
-#define _DE_SYSTEM_ITERATOR_0(NAME, IT) \
-    _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_0, IT)
+#define _de_system_iterator_0(NAME, IT) \
+    _de_system_iterator(NAME, _de_system_foreach_0, IT)
 
-#define _DE_SYSTEM_ITERATOR_1(NAME, A, IT) \
-    _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_1, A, IT)
+#define _de_system_iterator_1(NAME, A, IT) \
+    _de_system_iterator(NAME, _de_system_foreach_1, A, IT)
 
-#define _DE_SYSTEM_ITERATOR_2(NAME, A, B, IT) \
-    _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_2, A, B, IT)
+#define _de_system_iterator_2(NAME, A, B, IT) \
+    _de_system_iterator(NAME, _de_system_foreach_2, A, B, IT)
 
-#define _DE_SYSTEM_ITERATOR_3(NAME, A, B, C, IT) \
-    _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_3, A, B, C, IT)
+#define _de_system_iterator_3(NAME, A, B, C, IT) \
+    _de_system_iterator(NAME, _de_system_foreach_3, A, B, C, IT)
 
-#define _DE_SYSTEM_ITERATOR_4(NAME, A, B, C, D, IT) \
-    _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_4, A, B, C, D, IT)
+#define _de_system_iterator_4(NAME, A, B, C, D, IT) \
+    _de_system_iterator(NAME, _de_system_foreach_4, A, B, C, D, IT)
 
-#define _DE_SYSTEM_ITERATOR_5(NAME, A, B, C, D, E, IT) \
-    _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_5, A, B, C, D, E, IT)
+#define _de_system_iterator_5(NAME, A, B, C, D, E, IT) \
+    _de_system_iterator(NAME, _de_system_foreach_5, A, B, C, D, E, IT)
 
-#define de_system_foreach(...)                                                      \
-    _DE_GET_MACRO(__VA_ARGS__,                                                      \
-                  _DE_SYSTEM_FOREACH_5, _DE_SYSTEM_FOREACH_4, _DE_SYSTEM_FOREACH_3, \
-                  _DE_SYSTEM_FOREACH_2, _DE_SYSTEM_FOREACH_1, _DE_SYSTEM_FOREACH_0)(__VA_ARGS__)
-
-#define de_system_iterator(...)                                                        \
-    _DE_GET_MACRO(__VA_ARGS__,                                                         \
-                  _DE_SYSTEM_ITERATOR_5, _DE_SYSTEM_ITERATOR_4, _DE_SYSTEM_ITERATOR_3, \
-                  _DE_SYSTEM_ITERATOR_2, _DE_SYSTEM_ITERATOR_1, _DE_SYSTEM_ITERATOR_0)(__VA_ARGS__)
+#define _DE_ALIGN4(X) (((X) + 3U) & ~3U)
+#define _DE_CONCAT(A, B) A##B
+#define _DE_UNIQUE(A, B) _DE_CONCAT(A, B)
+#define _DE_ENTITY_STRIDE(PAYLOAD) _DE_ALIGN4(sizeof(struct de_entity) + (PAYLOAD))
+#define _DE_GET_MACRO(_1, _2, _3, _4, _5, _6, _7, NAME, ...) NAME
 
 #endif
 
@@ -202,7 +211,8 @@ uint16_t de_system_remove(de_system *, void *);
 
 void de_entity_exec(de_entity $)
 {
-    $->state($->data);
+    if (!de_state_is_deleted($->state))
+        $->state($->data);
 }
 
 void de_entity_update(de_entity $)
@@ -294,7 +304,7 @@ void de_entity_move_back(de_entity $)
         _de_entity_swap($, first);
 }
 
-// ============================================================
+//
 
 void de_manager_init(de_manager *$, de_entity *items, void *storage, uint16_t capacity, uint16_t bytes)
 {
@@ -368,7 +378,7 @@ void de_manager_reset(de_manager *$)
         de_entity_delete($->items[$->size - 1]);
 }
 
-// ============================================================
+//
 
 void de_system_init(de_system *$, void **storage, uint16_t capacity_groups, uint16_t params)
 {

@@ -1,79 +1,7 @@
 #include <genesis.h>
+
 #define DARKEN_IMPLEMENTATION
 #include "darken.h"
-
-/* ============================================================
- * DARKEN_SYSTEMS.H (inline para ser autocontenido)
- * ============================================================ */
-
-#ifndef DARKEN_SYSTEMS_H
-#define DARKEN_SYSTEMS_H
-
-typedef void (*de_system_fn)(de_manager *);
-
-#define DE_SYSTEM(NAME, PAYLOAD_TYPE, CODE)                    \
-    static void NAME(de_manager *_sys_mgr)                     \
-    {                                                          \
-        de_manager_iterate(_sys_mgr, {                         \
-            PAYLOAD_TYPE *data = (PAYLOAD_TYPE *)ENTITY->data; \
-            (void)data;                                        \
-            CODE;                                              \
-        });                                                    \
-    }
-
-#define DE_SYSTEM_ALL(NAME, PAYLOAD_TYPE, CODE)                \
-    static void NAME(de_manager *_sys_mgr)                     \
-    {                                                          \
-        de_manager_iterateAll(_sys_mgr, {                      \
-            PAYLOAD_TYPE *data = (PAYLOAD_TYPE *)ENTITY->data; \
-            (void)data;                                        \
-            CODE;                                              \
-        });                                                    \
-    }
-
-#define DE_SYSTEM_TAG(NAME, PAYLOAD_TYPE, TAG_VALUE, CODE)         \
-    static void NAME(de_manager *_sys_mgr)                         \
-    {                                                              \
-        de_manager_iterate(_sys_mgr, {                             \
-            if (ENTITY->tag == (TAG_VALUE))                        \
-            {                                                      \
-                PAYLOAD_TYPE *data = (PAYLOAD_TYPE *)ENTITY->data; \
-                (void)data;                                        \
-                CODE;                                              \
-            }                                                      \
-        });                                                        \
-    }
-
-typedef struct de_pipeline
-{
-    de_system_fn *fns;
-    uint8_t count;
-    uint8_t capacity;
-} de_pipeline;
-
-#define de_pipeline_init(P, FNS_ARRAY, CAP) \
-    do                                      \
-    {                                       \
-        (P)->fns = (FNS_ARRAY);             \
-        (P)->count = 0;                     \
-        (P)->capacity = (CAP);              \
-    } while (0)
-
-#define de_pipeline_add(P, FN)             \
-    do                                     \
-    {                                      \
-        if ((P)->count < (P)->capacity)    \
-            (P)->fns[(P)->count++] = (FN); \
-    } while (0)
-
-#define de_pipeline_run(P, MGR)                        \
-    do                                                 \
-    {                                                  \
-        for (uint8_t _pi = 0; _pi < (P)->count; ++_pi) \
-            (P)->fns[_pi](MGR);                        \
-    } while (0)
-
-#endif /* DARKEN_SYSTEMS_H */
 
 /* ============================================================
  * PAYLOAD DE EJEMPLO
@@ -639,170 +567,8 @@ static void test_stress_fragmentation(void)
     CHECK("frag: tags unicos tras recreacion", unique);
 }
 
-/* ============================================================
- * TESTS 21-25: SISTEMAS (DARKSYS / DARKEN_SYSTEMS)
- * ============================================================ */
 
-/* Sistemas de prueba */
-DE_SYSTEM(sys_inc_x, struct MyComponent, {
-    data->x += 1;
-});
 
-DE_SYSTEM(sys_double_y, struct MyComponent, {
-    data->y *= 2;
-});
-
-DE_SYSTEM_TAG(sys_tag1_only, struct MyComponent, 1, {
-    data->health += 10;
-});
-
-DE_SYSTEM_ALL(sys_all_health_dec, struct MyComponent, {
-    data->health -= 1;
-});
-
-static void test_system_basic(void)
-{
-    kprintf("-- test_system_basic --");
-    de_manager m;
-    de_manager_create(&m, 4, sizeof(struct MyComponent));
-
-    for (int i = 0; i < 4; ++i)
-    {
-        de_entity e = de_manager_new(&m);
-        struct MyComponent *d = (struct MyComponent *)e->data;
-        d->x = i;
-        d->y = 1;
-        d->health = 100;
-        e->state = (de_state)state_noop;
-    }
-
-    sys_inc_x(&m);
-
-    bool ok = TRUE;
-    for (uint16_t i = 0; i < m.size; ++i)
-    {
-        struct MyComponent *d = (struct MyComponent *)m.items[i]->data;
-        if (d->x != (int)i + 1)
-            ok = FALSE;
-    }
-    CHECK("system basic: todas las x incrementadas", ok);
-    CHECK("system basic: size intacto", m.size == 4);
-}
-
-static void test_system_respects_pause(void)
-{
-    kprintf("-- test_system_respects_pause --");
-    de_manager m;
-    de_manager_create(&m, 4, sizeof(struct MyComponent));
-
-    de_entity e[4];
-    for (int i = 0; i < 4; ++i)
-    {
-        e[i] = de_manager_new(&m);
-        struct MyComponent *d = (struct MyComponent *)e[i]->data;
-        d->x = 0;
-        e[i]->state = (de_state)state_noop;
-    }
-
-    de_entity_pause(e[1]);
-    de_entity_pause(e[3]);
-
-    sys_inc_x(&m);
-
-    CHECK("sys respect pause: activa[0] modificada",
-          ((struct MyComponent *)e[0]->data)->x == 1);
-    CHECK("sys respect pause: pausada[1] NO modificada",
-          ((struct MyComponent *)e[1]->data)->x == 0);
-    CHECK("sys respect pause: activa[2] modificada",
-          ((struct MyComponent *)e[2]->data)->x == 1);
-    CHECK("sys respect pause: pausada[3] NO modificada",
-          ((struct MyComponent *)e[3]->data)->x == 0);
-}
-
-static void test_system_all_includes_paused(void)
-{
-    kprintf("-- test_system_all_includes_paused --");
-    de_manager m;
-    de_manager_create(&m, 3, sizeof(struct MyComponent));
-
-    de_entity e[3];
-    for (int i = 0; i < 3; ++i)
-    {
-        e[i] = de_manager_new(&m);
-        struct MyComponent *d = (struct MyComponent *)e[i]->data;
-        d->health = 5;
-        e[i]->state = (de_state)state_noop;
-    }
-
-    de_entity_pause(e[1]);
-
-    sys_all_health_dec(&m);
-
-    CHECK("sys all: activa[0] health 4",
-          ((struct MyComponent *)e[0]->data)->health == 4);
-    CHECK("sys all: pausada[1] health 4 (tambien tocada)",
-          ((struct MyComponent *)e[1]->data)->health == 4);
-    CHECK("sys all: activa[2] health 4",
-          ((struct MyComponent *)e[2]->data)->health == 4);
-}
-
-static void test_system_tag_filter(void)
-{
-    kprintf("-- test_system_tag_filter --");
-    de_manager m;
-    de_manager_create(&m, 6, sizeof(struct MyComponent));
-
-    for (int i = 0; i < 6; ++i)
-    {
-        de_entity e = de_manager_new(&m);
-        struct MyComponent *d = (struct MyComponent *)e->data;
-        d->health = 0;
-        e->tag = (i < 3) ? 1 : 2;
-        e->state = (de_state)state_noop;
-    }
-
-    sys_tag1_only(&m);
-
-    bool ok = TRUE;
-    for (uint16_t i = 0; i < m.size; ++i)
-    {
-        struct MyComponent *d = (struct MyComponent *)m.items[i]->data;
-        uint8_t expected = (m.items[i]->tag == 1) ? 10 : 0;
-        if (d->health != expected)
-            ok = FALSE;
-    }
-    CHECK("sys tag: solo tag 1 modificado", ok);
-}
-
-static void test_pipeline_order(void)
-{
-    kprintf("-- test_pipeline_order --");
-    de_manager m;
-    de_manager_create(&m, 2, sizeof(struct MyComponent));
-
-    for (int i = 0; i < 2; ++i)
-    {
-        de_entity e = de_manager_new(&m);
-        struct MyComponent *d = (struct MyComponent *)e->data;
-        d->x = 0;
-        d->y = 3;
-        e->state = (de_state)state_noop;
-    }
-
-    de_system_fn fns[4];
-    de_pipeline pipe;
-    de_pipeline_init(&pipe, fns, 4);
-    de_pipeline_add(&pipe, sys_inc_x);    /* x += 1 */
-    de_pipeline_add(&pipe, sys_double_y); /* y *= 2 */
-    de_pipeline_add(&pipe, sys_inc_x);    /* x += 1 (de nuevo) */
-
-    de_pipeline_run(&pipe, &m);
-
-    struct MyComponent *d0 = (struct MyComponent *)m.items[0]->data;
-    CHECK("pipeline: x incrementado 2 veces", d0->x == 2);
-    CHECK("pipeline: y duplicado 1 vez", d0->y == 6);
-    CHECK("pipeline: count 3", pipe.count == 3);
-}
 
 /* ============================================================
  * TESTS 26+: SISTEMAS COMO ENTIDADES DE DARKEN
@@ -1277,11 +1043,6 @@ static void run_all_tests(void)
     test_stress_capacity();
     test_stress_many_entities();
     test_stress_fragmentation();
-    test_system_basic();
-    test_system_respects_pause();
-    test_system_all_includes_paused();
-    test_system_tag_filter();
-    test_pipeline_order();
     test_de_system_init_add();
     test_de_system_multiple_groups();
     test_de_system_remove();
@@ -1432,10 +1193,10 @@ static void *bench_system_state(void *data)
     return (void *)de_state_loop;
 }
 
-DE_SYSTEM(sys_bench_move, struct MyComponent, {
-    data->x += 1;
-    data->y += 2;
-});
+// de_system_iterator(sys_bench_move, struct MyComponent, {
+//     data->x += 1;
+//     data->y += 2;
+// });
 
 static void bench_systems_vs_individual(void)
 {
@@ -1463,16 +1224,16 @@ static void bench_systems_vs_individual(void)
         de_entity e = de_manager_new(&m_sys);
         e->state = (de_state)state_noop;
     }
-    de_system_fn fns[2];
-    de_pipeline pipe;
-    de_pipeline_init(&pipe, fns, 2);
-    de_pipeline_add(&pipe, sys_bench_move);
+    // de_system_fn fns[2];
+    // de_pipeline pipe;
+    // de_pipeline_init(&pipe, fns, 2);
+    // de_pipeline_add(&pipe, sys_bench_move);
 
-    t0 = bench_start();
-    for (u32 r = 0; r < BENCH_REPS; ++r)
-        de_pipeline_run(&pipe, &m_sys);
-    u32 frames_sys = bench_frames_elapsed(t0);
-    kprintf("update PIPELINE sys_move (32 ent x%d reps): %ld frames", BENCH_REPS, frames_sys);
+    // t0 = bench_start();
+    // for (u32 r = 0; r < BENCH_REPS; ++r)
+    //     de_pipeline_run(&pipe, &m_sys);
+    // u32 frames_sys = bench_frames_elapsed(t0);
+    // kprintf("update PIPELINE sys_move (32 ent x%d reps): %ld frames", BENCH_REPS, frames_sys);
 
     kprintf("=======================================");
 }
