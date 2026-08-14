@@ -70,10 +70,36 @@ void de_manager_pause(de_manager *);
 void de_manager_resume(de_manager *);
 void de_manager_reset(de_manager *);
 
-#define de_manager_iterate(M, CODE) _de_manager_iterate(M, (M)->pause_index, CODE)
-#define de_manager_iterateAll(M, CODE) _de_manager_iterate(M, 0, CODE)
+#define _de_manager_limit_active(M) ((M)->pause_index)
+#define _de_manager_limit_all(M) (0)
+
+#define de_manager_iterate(M, CODE) _de_manager_iterate(_de_manager_limit_active, M, CODE)
+#define de_manager_iterateAll(M, CODE) _de_manager_iterate(_de_manager_limit_all, M, CODE)
+
+#define _de_manager_iterate(LIMIT_FN, M, CODE)    \
+    do                                            \
+    {                                             \
+        uint16_t INDEX = (M)->size;               \
+        uint16_t _limit = LIMIT_FN(M);            \
+        while (INDEX-- > _limit)                  \
+        {                                         \
+            de_entity ENTITY = (M)->items[INDEX]; \
+            CODE;                                 \
+        }                                         \
+    } while (0)
+
 #define de_manager_apply(M, F, A) _de_manager_apply(de_manager_iterate, M, F, A)
 #define de_manager_applyAll(M, F, A) _de_manager_apply(de_manager_iterateAll, M, F, A)
+
+#define _de_manager_apply(ITER, M, FILTER, ACTION) \
+    do                                             \
+    {                                              \
+        de_entity _targets[(M)->size + 1];         \
+        uint16_t _count = 0;                       \
+        ITER(M, { if (FILTER) _targets[_count++] = ENTITY; });                              \
+        while (_count--)                           \
+            ACTION(_targets[_count]);              \
+    } while (0)
 
 //
 
@@ -101,27 +127,6 @@ uint16_t de_system_remove(de_system *, void *);
 
 //
 
-#define _de_manager_iterate(M, LIMIT, CODE)       \
-    do                                            \
-    {                                             \
-        uint16_t INDEX = (M)->size;               \
-        while (INDEX-- > (LIMIT))                 \
-        {                                         \
-            de_entity ENTITY = (M)->items[INDEX]; \
-            CODE;                                 \
-        }                                         \
-    } while (0)
-
-#define _de_manager_apply(ITER, M, FILTER, ACTION) \
-    do                                             \
-    {                                              \
-        de_entity _targets[(M)->size + 1];         \
-        uint16_t _count = 0;                       \
-        ITER(M, { if (FILTER) _targets[_count++] = ENTITY; });                              \
-        while (_count--)                           \
-            ACTION(_targets[_count]);              \
-    } while (0)
-
 #define _de_system_add(SYS, N, ...)          \
     ({                                       \
         de_system *_s = (SYS);               \
@@ -136,20 +141,11 @@ uint16_t de_system_remove(de_system *, void *);
         _ok;                                 \
     })
 
-#define _de_system_add1(SYS, A) \
-    _de_system_add(SYS, 1, _p[0] = (void *)(A);)
-
-#define _de_system_add2(SYS, A, B) \
-    _de_system_add(SYS, 2, _p[0] = (void *)(A); _p[1] = (void *)(B);)
-
-#define _de_system_add3(SYS, A, B, C) \
-    _de_system_add(SYS, 3, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C);)
-
-#define _de_system_add4(SYS, A, B, C, D) \
-    _de_system_add(SYS, 4, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D);)
-
-#define _de_system_add5(SYS, A, B, C, D, E) \
-    _de_system_add(SYS, 5, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D); _p[4] = (void *)(E);)
+#define _de_system_add1(SYS, A) _de_system_add(SYS, 1, _p[0] = (void *)(A);)
+#define _de_system_add2(SYS, A, B) _de_system_add(SYS, 2, _p[0] = (void *)(A); _p[1] = (void *)(B);)
+#define _de_system_add3(SYS, A, B, C) _de_system_add(SYS, 3, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C);)
+#define _de_system_add4(SYS, A, B, C, D) _de_system_add(SYS, 4, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D);)
+#define _de_system_add5(SYS, A, B, C, D, E) _de_system_add(SYS, 5, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D); _p[4] = (void *)(E);)
 
 #define _de_system_iterator(NAME, FOREACH, ...) \
     void *NAME(de_system *system)               \
@@ -158,46 +154,24 @@ uint16_t de_system_remove(de_system *, void *);
         return (void *)de_state_loop;           \
     }
 
+#define _de_system_iterator_0(NAME, IT) _de_system_iterator(NAME, _de_system_foreach_0, IT)
+#define _de_system_iterator_1(NAME, A, IT) _de_system_iterator(NAME, _de_system_foreach_1, A, IT)
+#define _de_system_iterator_2(NAME, A, B, IT) _de_system_iterator(NAME, _de_system_foreach_2, A, B, IT)
+#define _de_system_iterator_3(NAME, A, B, C, IT) _de_system_iterator(NAME, _de_system_foreach_3, A, B, C, IT)
+#define _de_system_iterator_4(NAME, A, B, C, D, IT) _de_system_iterator(NAME, _de_system_foreach_4, A, B, C, D, IT)
+#define _de_system_iterator_5(NAME, A, B, C, D, E, IT) _de_system_iterator(NAME, _de_system_foreach_5, A, B, C, D, E, IT)
+
 #define _de_system_foreach(SYSTEM, IT)                     \
     void **items = (SYSTEM)->pool;                         \
     for (uint16_t i = 0, size = (SYSTEM)->size; i < size;) \
         IT;
 
-#define _de_system_foreach_0(SYSTEM, IT) \
-    _de_system_foreach(SYSTEM, { IT; })
-
-#define _de_system_foreach_1(SYSTEM, A, IT) \
-    _de_system_foreach(SYSTEM, { A = items[i++]; IT; })
-
-#define _de_system_foreach_2(SYSTEM, A, B, IT) \
-    _de_system_foreach(SYSTEM, { A = items[i++]; B = items[i++]; IT; })
-
-#define _de_system_foreach_3(SYSTEM, A, B, C, IT) \
-    _de_system_foreach(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; IT; })
-
-#define _de_system_foreach_4(SYSTEM, A, B, C, D, IT) \
-    _de_system_foreach(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; D = items[i++]; IT; })
-
-#define _de_system_foreach_5(SYSTEM, A, B, C, D, E, IT) \
-    _de_system_foreach(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; D = items[i++]; E = items[i++]; IT; })
-
-#define _de_system_iterator_0(NAME, IT) \
-    _de_system_iterator(NAME, _de_system_foreach_0, IT)
-
-#define _de_system_iterator_1(NAME, A, IT) \
-    _de_system_iterator(NAME, _de_system_foreach_1, A, IT)
-
-#define _de_system_iterator_2(NAME, A, B, IT) \
-    _de_system_iterator(NAME, _de_system_foreach_2, A, B, IT)
-
-#define _de_system_iterator_3(NAME, A, B, C, IT) \
-    _de_system_iterator(NAME, _de_system_foreach_3, A, B, C, IT)
-
-#define _de_system_iterator_4(NAME, A, B, C, D, IT) \
-    _de_system_iterator(NAME, _de_system_foreach_4, A, B, C, D, IT)
-
-#define _de_system_iterator_5(NAME, A, B, C, D, E, IT) \
-    _de_system_iterator(NAME, _de_system_foreach_5, A, B, C, D, E, IT)
+#define _de_system_foreach_0(SYSTEM, IT) _de_system_foreach(SYSTEM, { IT; })
+#define _de_system_foreach_1(SYSTEM, A, IT) _de_system_foreach(SYSTEM, { A = items[i++]; IT; })
+#define _de_system_foreach_2(SYSTEM, A, B, IT) _de_system_foreach(SYSTEM, { A = items[i++]; B = items[i++]; IT; })
+#define _de_system_foreach_3(SYSTEM, A, B, C, IT) _de_system_foreach(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; IT; })
+#define _de_system_foreach_4(SYSTEM, A, B, C, D, IT) _de_system_foreach(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; D = items[i++]; IT; })
+#define _de_system_foreach_5(SYSTEM, A, B, C, D, E, IT) _de_system_foreach(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; D = items[i++]; E = items[i++]; IT; })
 
 #define _DE_ALIGN4(X) (((X) + 3U) & ~3U)
 #define _DE_CONCAT(A, B) A##B
@@ -211,7 +185,7 @@ uint16_t de_system_remove(de_system *, void *);
 
 void de_entity_exec(de_entity $)
 {
-    if (!de_state_is_deleted($->state))
+    if (de_state_is_active($->state))
         $->state($->data);
 }
 
@@ -284,24 +258,16 @@ void de_entity_move_front(de_entity $)
 {
     de_manager *m = $->manager;
 
-    if ($->slot < m->pause_index || $->slot >= m->size)
-        return;
-
-    de_entity last = m->items[m->size - 1];
-    if ($ != last)
-        _de_entity_swap($, last);
+    if ($->slot >= m->pause_index && $->slot < m->size)
+        _de_entity_swap($, m->items[m->size - 1]);
 }
 
 void de_entity_move_back(de_entity $)
 {
     de_manager *m = $->manager;
 
-    if ($->slot < m->pause_index || $->slot >= m->size)
-        return;
-
-    de_entity first = m->items[m->pause_index];
-    if ($ != first)
-        _de_entity_swap($, first);
+    if ($->slot >= m->pause_index && $->slot < m->size)
+        _de_entity_swap($, m->items[m->pause_index]);
 }
 
 //
