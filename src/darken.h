@@ -70,7 +70,7 @@
  * 4. Create entities and set their initial states
  * 5. Update manager each frame
  *
- * BENCHMARKS (from actual hardware testing):
+ * BENCHMARKS (from BlastEm emulator kdebug):
  * -----------------------------------------
  * - Create+reset 32 entities x2000 reps: 343 frames
  * - Update 32 entities x2000 reps: 105 frames
