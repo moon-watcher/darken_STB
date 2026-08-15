@@ -93,6 +93,17 @@ explicitly when the entity is created.
 
 # Naming convention
 
+The current source is consistent about the public namespace:
+
+```text
+de_*  -> public types and functions
+DE_*  -> public macros
+_de_* -> internal functions
+_DE_* -> internal macros
+```
+
+For example, `DE_ENTITY_STRIDE()` is a public macro, while `de_manager_init()` is a public function. The internal alignment helper is `_DE_ALIGN4()`.
+
 Darken deliberately separates its namespaces:
 
 | Category | Convention | Example |
@@ -862,12 +873,12 @@ de_system_init(
 
 ---
 
-# `DE_SYSTEM_CREATE`
+# `DE_SYSTEM_STORAGE` + `de_system_init()`
 
 The API documentation also exposes:
 
 ```c
-DE_SYSTEM_CREATE(sys, capacity, params)
+DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS) + de_system_init()
 ```
 
 for initializing a system with stack storage.
@@ -1220,7 +1231,6 @@ de_system_remove()
 ```c
 DE_SYSTEM_STORAGE()
 DE_SYSTEM_ARGS()
-DE_SYSTEM_CREATE()
 DE_SYSTEM_ADD()
 DE_SYSTEM_FOREACH()
 DE_SYSTEM_ITERATOR()
