@@ -1259,3 +1259,134 @@ int main(void)
     while (1) SYS_doVBlankProcess();
     return 0;
 }
+
+
+/* ============================================================
+ * DOCUMENTACION DE LA API
+ * ============================================================
+ *
+ * darken.h -- Entity/Manager library para Sega Genesis (m68k)
+ *
+ * USO BASICO
+ * ----------
+ *   1. Incluir en un solo archivo .c:
+ *          #define DARKEN_IMPLEMENTATION
+ *          #include "darken.h"
+ *
+ *   2. Declarar un manager (storage estatico):
+ *          de_manager mgr;
+ *          DE_MANAGER_STORAGE(mgr_storage, CAPACIDAD, sizeof(MiPayload));
+ *          de_manager_init(&mgr, DE_MANAGER_ARGS(mgr_storage));
+ *
+ *   3. Crear entidades:
+ *          de_entity e = de_manager_new(&mgr);
+ *          MiPayload *p = (MiPayload *)e->data;
+ *          e->state = (de_state)mi_funcion_update;
+ *
+ * CICLO DE VIDA DE UNA ENTIDAD
+ * ----------------------------
+ *   [new] -> state=delete, slot=asignado, data=sin inicializar
+ *     |
+ *     v
+ *   [active]  state > DE_STATE_PAUSE  -> se ejecuta cada frame
+ *   [paused]  state == DE_STATE_PAUSE -> se ignora en update
+ *   [deleted] state == DE_STATE_DELETE -> se elimina en el proximo update
+ *
+ *   Transiciones:
+ *     - Un estado activo puede retornar otro estado para cambiar.
+ *     - Retornar DE_STATE_LOOP mantiene el estado actual (no toca puntero).
+ *     - Retornar DE_STATE_DELETE marca para borrar (borrado DIFERIDO).
+ *
+ * ESTADOS ESPECIALES
+ * ------------------
+ *   DE_STATE_DELETE (0) : La entidad se elimina. Si tiene destructor,
+ *                         se le da una oportunidad de abortar.
+ *   DE_STATE_LOOP   (1) : Valor magico. update() no modifica e->state.
+ *   DE_STATE_PAUSE  (2) : La entidad se mueve a la zona pausada.
+ *   >2                  : Puntero a funcion de estado activo.
+ *
+ * PAUSE / RESUME
+ * --------------
+ *   de_entity_pause(e)  : Mueve 'e' a la particion pausada [0, pause_index).
+ *   de_entity_resume(e) : Mueve 'e' a la particion activa [pause_index, size).
+ *   de_manager_pause(m) : Pausa TODAS las entidades (pause_index = size).
+ *   de_manager_resume(m): Activa TODAS las entidades (pause_index = 0).
+ *
+ *   La particion es O(1) por swap de punteros. El orden relativo dentro
+ *   de cada particion NO esta garantizado tras swaps.
+ *
+ * DELETE
+ * ------
+ *   Via estado: la entidad retorna DE_STATE_DELETE en su update.
+ *               El borrado fisico ocurre en el SIGUIENTE frame.
+ *   Directo:    de_entity_delete(e) fuerza el estado y compacta inmediatamente.
+ *
+ *   Si e->destructor != NULL, se llama antes de borrar. El destructor
+ *   puede ABORTAR el borrado retornando un estado distinto de delete.
+ *
+ * ITERACION
+ * ---------
+ *   DE_MANAGER_ITERATE(m, { ... });    // Solo entidades ACTIVAS
+ *   DE_MANAGER_ITERATE_ALL(m, { ... }); // Todas las entidades
+ *
+ *   Dentro del bloque CODE se define automaticamente:
+ *          de_entity ENTITY = entidad_actual;
+ *          uint16_t   INDEX  = indice en el array;
+ *
+ * APPLY (filtrado seguro)
+ * -----------------------
+ *   DE_MANAGER_APPLY(m, FILTRO, ACCION);
+ *   DE_MANAGER_APPLY_ALL(m, FILTRO, ACCION);
+ *
+ *   Primero acumula en un array auxiliar las entidades que cumplen
+ *   FILTRO, luego ejecuta ACCION sobre cada una. Es seguro usar
+ *   de_entity_delete como ACCION porque el filtrado termina antes
+ *   de tocar el manager.
+ *
+ *   OJO: El array auxiliar es un VLA en stack. En hardware real con
+ *   stack limitado, no uses APPLY_ALL con managers de >200 entidades.
+ *
+ * SISTEMAS (DARKEN_SYSTEMS)
+ * -------------------------
+ *   Capa opcional sobre darken.h para procesar entidades por lotes.
+ *
+ *   DE_SYSTEM_ITERATOR(name, args..., code)
+ *       Define una funcion void *name(de_system *) que itera sobre
+ *       el sistema y retorna DE_STATE_LOOP. Ideal para usar como estado.
+ *
+ *   DE_SYSTEM_FOREACH(sys, args..., code)
+ *       Itera directamente sobre un sistema sin generar funcion.
+ *
+ *   DE_SYSTEM_ADD(sys, args...)
+ *       Anade un grupo de punteros al sistema. Retorna 1 si ok, 0 si lleno.
+ *
+ *   DE_SYSTEM_CREATE(sys, capacity, params)
+ *       Inicializa un sistema con storage en stack.
+ *
+ * REGLAS DE ALINEACION (m68k)
+ * ---------------------------
+ *   El Motorola 68000 exige que los accesos LONG (32-bit, punteros)
+ *   caigan en direcciones multiplo de 4. darken.h fuerza:
+ *     - stride de entidad redondeado a 4 (_DE_ALIGN4).
+ *     - buffer de storage alineado a 4 bytes.
+ *   Si modificas la estructura de de_entity, manten sizeof() multiplo
+ *   de 4 o ajusta _DE_ALIGN4.
+ *
+ * RENDIMIENTO TIPICO (NTSC 60Hz, 7.6MHz m68k)
+ * --------------------------------------------
+ *   ~27-45 us por entidad activa y frame (depende del payload).
+ *   ~600 entidades activas maximo por frame sin drop.
+ *   de_entity_swap: ~50 us (operacion base de pause/resume/delete).
+ *
+ * LIMITES
+ * -------
+ *   - Capacidad maxima: uint16_t (65535), limitado por RAM.
+ *   - No hay zero-fill automatico al reutilizar slots.
+ *   - No es thread-safe (obviamente, es Genesis).
+ *   - APPLY_ALL usa VLA: cuidado con stack en hardware real.
+ *
+ * LICENCIA
+ * --------
+ *   Public domain. Usa, modifica y rompe a tu gusto.
+ *
+ * ============================================================ */
