@@ -228,6 +228,28 @@ void de_entity_move_back(de_entity);  // Move to back of active section (defer)
     uint8_t _DE_UNIQUE(_s_, __LINE__)[(CAPACITY) * _DE_ENTITY_STRIDE((PAYLOAD))] __attribute__((aligned(4))); \
     de_manager_init((MGR), _DE_UNIQUE(_i_, __LINE__), _DE_UNIQUE(_s_, __LINE__), (CAPACITY), (PAYLOAD))
 
+/**
+ * Structured storage declaration.
+ * Use with DE_MANAGER_ARGS() when calling de_manager_init().
+ *
+ * Example:
+ * DE_MANAGER_STORAGE(m1st, 8, sizeof(struct MyComponent));
+ * de_manager_init(&m1, DE_MANAGER_ARGS(m1st));
+ */
+#define DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE) \
+    struct { \
+        de_entity entities[(CAPACITY)]; \
+        uint8_t   data[(CAPACITY) * DE_ENTITY_STRIDE((PAYLOAD_SIZE))] __attribute__((aligned(4))); \
+        uint16_t  capacity; \
+        uint16_t  payload_size; \
+    } NAME = { \
+        .capacity     = (CAPACITY), \
+        .payload_size = (PAYLOAD_SIZE), \
+    }
+
+#define DE_MANAGER_ARGS(NAME) \
+    (NAME).entities, (NAME).data, (NAME).capacity, (NAME).payload_size
+
 /* ============================================================================
  * MANAGER API
  * ============================================================================ */
