@@ -1,91 +1,12 @@
 /**
- * Darken (Darkula Engine) Entity System - Optimized for Motorola 68000
+ * darken.h — Darken (DARKula ENgine) 2.0 Entity System
  *
- * NAMING CONVENTION:
- * ------------------
- *   de_*   — public types and functions  (lowercase)
- *   DE_*   — public macros               (uppercase)
- *   _de_*  — internal functions          (lowercase + underscore prefix)
- *   _DE_*  — internal macros             (uppercase + underscore prefix)
+ * Public functions/types: de_*
+ * Public macros:          DE_*
+ * Internal functions:     _de_*
+ * Internal macros:        _DE_*
  *
- * ARCHITECTURE OVERVIEW:
- * ----------------------
- * This library implements a lightweight Entity-Component-System (ECS) architecture
- * optimized specifically for the Motorola 68000 processor. The design focuses on:
- *
- * 1. CACHE-FRIENDLY MEMORY LAYOUT:
- *    - Entities are stored in contiguous memory blocks
- *    - Pre-calculated pointers eliminate runtime address calculations
- *    - Sequential memory access patterns maximize performance
- *
- * 2. O(1) OPERATIONS:
- *    - Entity creation, deletion, and swapping use constant-time operations
- *    - No memory allocation/deallocation at runtime (static allocation)
- *    - Swap-and-pop technique for removal avoids array shifting
- *
- * 3. STATE MACHINE PATTERN:
- *    - Each entity has a function pointer representing its current state
- *    - States return the next state (or special control codes)
- *    - Enables simple, efficient state transitions without switch statements
- *
- * 4. ACTIVE/PAUSED PARTITIONING:
- *    - Entities are partitioned into active and paused sections
- *    - Updates only iterate over active entities
- *    - Pause/resume operations are O(1) swaps
- *
- * CORE CONCEPTS:
- * -------------
- * ENTITY:
- *   A container with lifecycle management (state, destructor, manager reference)
- *   and user-defined data. Entities don't contain logic themselves - they are
- *   managed by the entity manager and processed by systems.
- *
- * MANAGER:
- *   Owns and updates a collection of entities. Maintains the active/paused
- *   partition and handles entity lifecycle (creation, deletion, pausing).
- *   Uses static memory allocation for predictable performance.
- *
- * SYSTEM:
- *   A generic data pool for component storage. Systems process entities
- *   by iterating over their component data. The pool layout is optimized
- *   for sequential access patterns.
- *
- * STATE FUNCTIONS:
- *   Functions that take entity data as parameter and return the next state.
- *   Special return values control entity lifecycle:
- *   - DE_STATE_LOOP: Continue with current state (no change)
- *   - DE_STATE_PAUSE: Pause the entity
- *   - DE_STATE_DELETE: Delete the entity
- *   - Custom function pointer: Transition to new state
- *
- * 68K-SPECIFIC OPTIMIZATIONS:
- * ---------------------------
- * - Register-friendly code structure (minimal memory access)
- * - Avoid multiplication in hot paths (pre-calculated strides)
- * - Sequential memory access (leverages 68K's address registers)
- * - Minimal branching (linear code where possible)
- * - 4-byte alignment (critical for 68K bus performance)
- * - Word-sized operations (16-bit native for 68K)
- *
- * USAGE PATTERNS:
- * --------------
- * 1. Define entity data structure
- * 2. Create manager with static allocation
- * 3. Implement state functions for entity behavior
- * 4. Create entities and set their initial states
- * 5. Update manager each frame
- *
- * BENCHMARKS (from BlastEm emulator kdebug):
- * -----------------------------------------
- * - Create+reset 32 entities x2000 reps: 343 frames
- * - Update 32 entities x2000 reps: 105 frames
- * - Create32+applyAll(delete pairs)+reset x2000 reps: 501 frames
- * - Create+reset 128 entities x500 reps: 343 frames
- * - Create+reset 256 entities x250 reps: 342 frames
- * - Update 128 entities x500 reps: 103 frames
- * - Update 256 entities x250 reps: 102 frames
- * - Entity swap x50000: 0 frames (negligible overhead)
- * - Individual update (32 entities x2000 reps): 135 frames
+ * Full documentation: README.md
  */
 
 #ifndef DARKEN_H
