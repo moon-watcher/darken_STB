@@ -208,27 +208,6 @@ void de_entity_move_back(de_entity);  // Move to back of active section (defer)
  * ============================================================================ */
 
 /**
- * Creates a manager with static memory allocation
- *
- * Parameters:
- * - MGR: Manager variable name
- * - CAPACITY: Maximum number of entities
- * - PAYLOAD: Size of entity data in bytes
- *
- * The macro generates:
- * 1. Array of entity pointers
- * 2. Contiguous storage for entity data
- * 3. Initialization call
- *
- * Example:
- * de_manager_create(my_manager, 32, sizeof(MyEntityData));
- */
-#define de_manager_create(MGR, CAPACITY, PAYLOAD)                                                            \
-    de_entity _DE_UNIQUE(_i_, __LINE__)[(CAPACITY)];                                                         \
-    uint8_t _DE_UNIQUE(_s_, __LINE__)[(CAPACITY) * de_entity_stride((PAYLOAD))] __attribute__((aligned(4))); \
-    de_manager_init((MGR), _DE_UNIQUE(_i_, __LINE__), _DE_UNIQUE(_s_, __LINE__), (CAPACITY), (PAYLOAD))
-
-/**
  * Structured storage declaration.
  * Use with de_manager_args() when calling de_manager_init().
  *
