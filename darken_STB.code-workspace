@@ -2,21 +2,31 @@
 	"folders": [
 		{
 			"path": ".",
-			// "name": "STB",
+			"name": "STB",
 		}
 	],
 	"settings": {
 		"files.exclude": {
-			".gitignore": true,
-			"out/": true,
-			// "darken_STB.code-workspace": true,
+			// ".gitignore": true,
+			// "out/": true,
 		},
+		"terminal.integrated.defaultProfile.windows": "Command Prompt",
 		"git.confirmEmptyCommits": true,
-		"C_Cpp.default.compilerPath": "c:\\MD\\SGDK\\bin\\gcc.exe",
-		"editor.lineNumbers": "off",
+		"C_Cpp.default.compilerPath": "D:/MDDev/SGDKs/SGDK-master/bin/gcc.exe",
 		"C_Cpp.default.includePath": [
-			"C:\\MD\\SGDK\\inc"
+			"D:/MDDev/SGDKs/SGDK-master/inc",
+			"P:/msys64/mingw64/include",
 		],
+		"files.autoSave": "afterDelay",
+		"workbench.tree.indent": 26,
+		"workbench.activityBar.location": "top",
+		"workbench.colorTheme": "Visual Studio Dark - C++",
+		"workbench.statusBar.visible": true,
+		"editor.lineNumbers": "off",
 		"editor.stickyScroll.enabled": false,
+		"editor.minimap.enabled": false,
+		"editor.fontLigatures": true,
+		"editor.fontFamily": "'Victor Mono', 'Fira Code', Consolas, 'Courier New', monospace",
+		"editor.fontSize": 13.5,
 	}
 }
