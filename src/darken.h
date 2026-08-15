@@ -683,18 +683,22 @@ void de_entity_move_back(de_entity $)
  * Performance: O(n) where n = capacity (one-time initialization)
  * 68K Optimization: Sequential pointer calculation for cache efficiency
  */
-void de_manager_init(de_manager *$, de_entity *items, void *storage, uint16_t capacity, uint16_t bytes)
+void de_manager_init(de_manager *$, de_entity *items, void *storage, uint16_t capacity, uint16_t payload_size)
 {
     $->items = items;
     $->capacity = capacity;
     $->size = 0;
     $->pause_index = 0;
 
-    uint16_t stride = DE_ENTITY_STRIDE(bytes);
+    uint16_t stride = DE_ENTITY_STRIDE(payload_size);
+    uint8_t *data = (uint8_t *)storage;
 
     // Pre-calculate pointers for fast access
     for (uint16_t i = 0; i < capacity; ++i)
-        $->items[i] = (de_entity)((uint8_t *)storage + i * stride);
+    {
+        items[i] = (de_entity)data;
+        data += stride;
+    }
 }
 
 /**
