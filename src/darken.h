@@ -58,7 +58,6 @@ struct de_entity
  * Manager: Entity container and lifecycle manager
  *
  * Maintains entities in a contiguous array with active/paused partitioning.
- * The array layout allows efficient iteration and O(1) entity operations.
  *
  * Array Layout:
  * [paused entities...][active entities...]
@@ -119,7 +118,6 @@ struct de_system
 
 /**
  * Entity management functions
- * All operations are O(1) unless otherwise noted
  */
 void de_entity_exec(de_entity);       // Execute current state without updating it
 void de_entity_update(de_entity);     // Update entity (call state, handle transitions)
@@ -166,8 +164,8 @@ void de_entity_move_back(de_entity);  // Move to back of active section (defer)
  * de_manager_init: Initializes manager with pre-allocated storage
  * de_manager_new: Creates new entity (returns NULL if full)
  * de_manager_update: Updates all active entities
- * de_manager_pause: Pauses all entities (O(1))
- * de_manager_resume: Resumes all entities (O(1))
+ * de_manager_pause: Pauses all entities
+ * de_manager_resume: Resumes all entities
  * de_manager_reset: Deletes all entities
  */
 void de_manager_init(de_manager *, de_entity *, void *, uint16_t, uint16_t);
@@ -434,8 +432,6 @@ uint16_t de_system_remove(de_system *, void *);
 /**
  * Executes the entity's current state without updating it.
  * Useful for initialization or manual execution scenarios.
- *
- * Performance: O(1) - Direct function pointer call
  */
 void de_entity_exec(de_entity $)
 {
@@ -446,9 +442,6 @@ void de_entity_exec(de_entity $)
 /**
  * Updates a single entity.
  * Calls the state function and handles state transitions.
- *
- * Performance: O(1) - Direct function pointer call with state check
- * 68K Optimization: Uses register variables for state to minimize memory access
  */
 void de_entity_update(de_entity $)
 {
@@ -466,10 +459,6 @@ void de_entity_update(de_entity $)
 
 /**
  * Swaps two entities in the manager's array.
- * Internal function critical for O(1) entity operations.
- *
- * Performance: O(1) - Pointer and index swaps
- * 68K Optimization: Minimizes memory access by using local registers
  */
 static void _de_entity_swap(de_entity a, de_entity b)
 {
@@ -486,9 +475,6 @@ static void _de_entity_swap(de_entity a, de_entity b)
 
 /**
  * Pauses an entity by moving it to the paused section.
- * Uses swap-and-increment technique for O(1) operation.
- *
- * Performance: O(1) - Single swap operation
  */
 void de_entity_pause(de_entity $)
 {
@@ -501,9 +487,6 @@ void de_entity_pause(de_entity $)
 
 /**
  * Resumes an entity by moving it to the active section.
- * Uses swap-and-decrement technique for O(1) operation.
- *
- * Performance: O(1) - Single swap operation
  */
 void de_entity_resume(de_entity $)
 {
@@ -523,9 +506,6 @@ void de_entity_resume(de_entity $)
  * 2. Set state to delete
  * 3. Call destructor if present (can override deletion)
  * 4. If deletion confirmed, swap with last entity and reduce size
- *
- * Performance: O(1) - Single swap operation after destructor
- * 68K Optimization: Early checks avoid unnecessary work
  */
 void de_entity_delete(de_entity $)
 {
@@ -559,8 +539,6 @@ void de_entity_delete(de_entity $)
 /**
  * Moves entity to front of active section.
  * Useful for prioritizing entity updates.
- *
- * Performance: O(1) - Single swap operation
  */
 void de_entity_move_front(de_entity $)
 {
@@ -573,8 +551,6 @@ void de_entity_move_front(de_entity $)
 /**
  * Moves entity to back of active section.
  * Useful for deferring entity updates.
- *
- * Performance: O(1) - Single swap operation
  */
 void de_entity_move_back(de_entity $)
 {
@@ -586,15 +562,11 @@ void de_entity_move_back(de_entity $)
 
 /**
  * Initializes an entity manager.
- * Pre-calculates entity pointers for O(1) access.
  *
  * Algorithm:
  * 1. Store basic manager data
  * 2. Calculate entity stride (aligned)
  * 3. Pre-calculate all entity pointers
- *
- * Performance: O(n) where n = capacity (one-time initialization)
- * 68K Optimization: Sequential pointer calculation for cache efficiency
  */
 void de_manager_init(de_manager *$, de_entity *items, void *storage, uint16_t capacity, uint16_t bytes)
 {
@@ -613,9 +585,6 @@ void de_manager_init(de_manager *$, de_entity *items, void *storage, uint16_t ca
 /**
  * Creates a new entity in the manager.
  * Returns NULL if manager is full.
- *
- * Performance: O(1) - Direct array access
- * 68K Optimization: Minimal operations for entity setup
  */
 de_entity de_manager_new(de_manager *$)
 {
@@ -641,9 +610,6 @@ de_entity de_manager_new(de_manager *$)
  * 1. Iterate backwards through active section
  * 2. Call state function for each active entity
  * 3. Handle state transitions (pause, delete, change)
- *
- * Performance: O(n) where n = number of active entities
- * 68K Optimization: Backward iteration allows safe deletion during update
  */
 void de_manager_update(de_manager *$)
 {
@@ -672,8 +638,6 @@ void de_manager_update(de_manager *$)
 
 /**
  * Pauses all entities.
- *
- * Performance: O(1) - Single index update
  */
 void de_manager_pause(de_manager *$)
 {
@@ -682,8 +646,6 @@ void de_manager_pause(de_manager *$)
 
 /**
  * Resumes all entities.
- *
- * Performance: O(1) - Single index update
  */
 void de_manager_resume(de_manager *$)
 {
@@ -692,9 +654,6 @@ void de_manager_resume(de_manager *$)
 
 /**
  * Deletes all entities in the manager.
- *
- * Performance: O(n) where n = number of entities
- * 68K Optimization: Deletes from end to avoid array reorganization
  */
 void de_manager_reset(de_manager *$)
 {
@@ -708,8 +667,6 @@ void de_manager_reset(de_manager *$)
 /**
  * Initializes a data system.
  * Prepares pool for sequential access.
- *
- * Performance: O(1) - Direct field assignments
  */
 void de_system_init(de_system *$, void **storage, uint16_t capacity_groups, uint16_t params)
 {
@@ -727,9 +684,6 @@ void de_system_init(de_system *$, void **storage, uint16_t capacity_groups, uint
  * 1. Find group by first element
  * 2. Move last group to removed position
  * 3. Reduce size
- *
- * Performance: O(n) worst case (search), O(params) for compaction
- * 68K Optimization: Uses first element as identifier for fast comparison
  */
 uint16_t de_system_remove(de_system *$, void *first)
 {
@@ -754,4 +708,4 @@ uint16_t de_system_remove(de_system *$, void *first)
     return 0;
 }
 
-#endif /* STB_DARKEN_IMPLEMENTATION */
+#endif /* DARKEN_IMPLEMENTATION */

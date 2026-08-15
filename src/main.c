@@ -745,9 +745,18 @@ typedef struct TestDeSystemEntity
     uint16_t frame;
 } TestDeSystemEntity;
 
-DE_SYSTEM_ITERATOR(test_de_system_movement, int16_t *x, int16_t *y, int16_t *vx, int16_t *vy, { *x += *vx; *y += *vy; });
-DE_SYSTEM_ITERATOR(test_de_system_physics, int16_t *vy, { *vy += 1; });
-DE_SYSTEM_ITERATOR(test_de_system_frames, uint16_t *frame, { *frame += 1; });
+DE_SYSTEM_ITERATOR(test_de_system_movement, int16_t *x, int16_t *y, int16_t *vx, int16_t *vy, {
+    *x += *vx;
+    *y += *vy;
+});
+
+DE_SYSTEM_ITERATOR(test_de_system_physics, int16_t *vy, {
+    *vy += 1;
+});
+
+DE_SYSTEM_ITERATOR(test_de_system_frames, uint16_t *frame, {
+    *frame += 1;
+});
 
 static void test_de_system_init_add(void)
 {
