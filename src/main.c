@@ -52,6 +52,11 @@ static void test_alignment(void)
     kprintf("-- test_alignment --");
     de_manager m1, m2, m3;
     de_manager_create(&m1, 8, sizeof(struct MyComponent));
+
+    de_manager_storage(m1st, 8, sizeof(struct MyComponent));
+    de_manager_init(&m1, de_manager_args(m1st));
+///////////////
+
     de_manager_create(&m2, 8, sizeof(struct MyComponent) + 73);
     de_manager_create(&m3, 8, 1);
     CHECK("payload par: todos los slots alineados a 4", all_slots_aligned(&m1));
@@ -566,9 +571,6 @@ static void test_stress_fragmentation(void)
     }
     CHECK("frag: tags unicos tras recreacion", unique);
 }
-
-
-
 
 /* ============================================================
  * TESTS 26+: SISTEMAS COMO ENTIDADES DE DARKEN
@@ -1246,10 +1248,10 @@ static void bench_memory_overhead(void)
 {
     kprintf("========== MEMORIA ==========");
 
-    u16 stride16 = _DE_ENTITY_STRIDE(16);
-    u16 stride32 = _DE_ENTITY_STRIDE(32);
-    u16 stride1 = _DE_ENTITY_STRIDE(1);
-    u16 stride9 = _DE_ENTITY_STRIDE(9);
+    u16 stride16 = de_entity_stride(16);
+    u16 stride32 = de_entity_stride(32);
+    u16 stride1 = de_entity_stride(1);
+    u16 stride9 = de_entity_stride(9);
 
     kprintf("sizeof(de_entity) base: %d bytes", sizeof(de_entity));
     kprintf("stride payload=1:  %d bytes/entidad", stride1);
@@ -1259,21 +1261,21 @@ static void bench_memory_overhead(void)
 
     de_manager m32;
     de_manager_create(&m32, 32, sizeof(struct MyComponent));
-    u32 bytes32 = 32 * _DE_ENTITY_STRIDE(sizeof(struct MyComponent));
+    u32 bytes32 = 32 * de_entity_stride(sizeof(struct MyComponent));
     kprintf("Manager 32 entidades (payload %d): %ld bytes en storage",
             sizeof(struct MyComponent), bytes32);
 
     de_manager m128;
     de_manager_create(&m128, 128, sizeof(struct MyComponent));
-    u32 bytes128 = 128 * _DE_ENTITY_STRIDE(sizeof(struct MyComponent));
+    u32 bytes128 = 128 * de_entity_stride(sizeof(struct MyComponent));
     kprintf("Manager 128 entidades (payload %d): %ld bytes en storage",
             sizeof(struct MyComponent), bytes128);
 
-    u16 overhead = _DE_ENTITY_STRIDE(sizeof(struct MyComponent)) - sizeof(struct MyComponent);
+    u16 overhead = de_entity_stride(sizeof(struct MyComponent)) - sizeof(struct MyComponent);
     kprintf("Overhead por entidad: %d bytes (header + padding)", overhead);
 
     u32 ramAvailable = 64 * 1024;
-    u32 entidadesEn64k = ramAvailable / _DE_ENTITY_STRIDE(sizeof(struct MyComponent));
+    u32 entidadesEn64k = ramAvailable / de_entity_stride(sizeof(struct MyComponent));
     kprintf("Entidades de MyComponent que caben en 64 KB: ~%ld", entidadesEn64k);
     kprintf("==============================");
 }

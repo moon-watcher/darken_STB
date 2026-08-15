@@ -225,22 +225,22 @@ void de_entity_move_back(de_entity);  // Move to back of active section (defer)
  */
 #define de_manager_create(MGR, CAPACITY, PAYLOAD)                                                            \
     de_entity _DE_UNIQUE(_i_, __LINE__)[(CAPACITY)];                                                         \
-    uint8_t _DE_UNIQUE(_s_, __LINE__)[(CAPACITY) * DE_ENTITY_STRIDE((PAYLOAD))] __attribute__((aligned(4))); \
+    uint8_t _DE_UNIQUE(_s_, __LINE__)[(CAPACITY) * de_entity_stride((PAYLOAD))] __attribute__((aligned(4))); \
     de_manager_init((MGR), _DE_UNIQUE(_i_, __LINE__), _DE_UNIQUE(_s_, __LINE__), (CAPACITY), (PAYLOAD))
 
 /**
  * Structured storage declaration.
- * Use with DE_MANAGER_ARGS() when calling de_manager_init().
+ * Use with de_manager_args() when calling de_manager_init().
  *
  * Example:
- * DE_MANAGER_STORAGE(m1st, 8, sizeof(struct MyComponent));
- * de_manager_init(&m1, DE_MANAGER_ARGS(m1st));
+ * de_manager_storage(m1st, 8, sizeof(struct MyComponent));
+ * de_manager_init(&m1, de_manager_args(m1st));
  */
-#define DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)                                         \
+#define de_manager_storage(NAME, CAPACITY, PAYLOAD_SIZE)                                         \
     struct                                                                                       \
     {                                                                                            \
         de_entity entities[(CAPACITY)];                                                          \
-        uint8_t data[(CAPACITY) * DE_ENTITY_STRIDE((PAYLOAD_SIZE))] __attribute__((aligned(4))); \
+        uint8_t data[(CAPACITY) * de_entity_stride((PAYLOAD_SIZE))] __attribute__((aligned(4))); \
         uint16_t capacity;                                                                       \
         uint16_t payload_size;                                                                   \
     } NAME = {                                                                                   \
@@ -248,7 +248,7 @@ void de_entity_move_back(de_entity);  // Move to back of active section (defer)
         .payload_size = (PAYLOAD_SIZE),                                                          \
     }
 
-#define DE_MANAGER_ARGS(NAME) \
+#define de_manager_args(NAME) \
     (NAME).entities, (NAME).data, (NAME).capacity, (NAME).payload_size
 
 /* ============================================================================
@@ -496,7 +496,7 @@ void de_manager_reset(de_manager *);
  * Entity stride calculation
  * Ensures proper alignment between consecutive entities
  */
-#define DE_ENTITY_STRIDE(PAYLOAD) _DE_ALIGN4(sizeof(struct de_entity) + (PAYLOAD))
+#define de_entity_stride(PAYLOAD) _DE_ALIGN4(sizeof(struct de_entity) + (PAYLOAD))
 
 /**
  * Macro argument count selector
@@ -683,22 +683,18 @@ void de_entity_move_back(de_entity $)
  * Performance: O(n) where n = capacity (one-time initialization)
  * 68K Optimization: Sequential pointer calculation for cache efficiency
  */
-void de_manager_init(de_manager *$, de_entity *items, void *storage, uint16_t capacity, uint16_t payload_size)
+void de_manager_init(de_manager *$, de_entity *items, void *storage, uint16_t capacity, uint16_t bytes)
 {
     $->items = items;
     $->capacity = capacity;
     $->size = 0;
     $->pause_index = 0;
 
-    uint16_t stride = DE_ENTITY_STRIDE(payload_size);
-    uint8_t *data = (uint8_t *)storage;
+    uint16_t stride = de_entity_stride(bytes);
 
     // Pre-calculate pointers for fast access
     for (uint16_t i = 0; i < capacity; ++i)
-    {
-        items[i] = (de_entity)data;
-        data += stride;
-    }
+        $->items[i] = (de_entity)((uint8_t *)storage + i * stride);
 }
 
 /**
