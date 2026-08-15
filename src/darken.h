@@ -327,7 +327,10 @@ void de_manager_reset(de_manager *);
     {                                              \
         de_entity _targets[(M)->size + 1];         \
         uint16_t _count = 0;                       \
-        ITER(M, { if (FILTER) _targets[_count++] = ENTITY; });                              \
+        ITER(M, {                                  \
+            if (FILTER)                            \
+                _targets[_count++] = ENTITY;       \
+        });                                        \
         while (_count--)                           \
             ACTION(_targets[_count]);              \
     } while (0)
@@ -337,19 +340,27 @@ void de_manager_reset(de_manager *);
  * ============================================================================ */
 
 /**
- * DE_SYSTEM_CREATE: Creates a system with static allocation
+ * DE_SYSTEM_STORAGE: Declaracion estatica de storage para sistema.
+ * Uso con DE_SYSTEM_ARGS() al llamar de_system_init().
  *
- * Parameters:
- * - SYS: System variable name
- * - CAPACITY: Maximum number of groups
- * - PARAMS: Number of parameters per group
- *
- * Example:
- * DE_SYSTEM_CREATE(physics_system, 32, 3); // 32 entities, 3 params each
+ * Ejemplo:
+ *   de_system sys;
+ *   DE_SYSTEM_STORAGE(sys_storage, 32, 3);
+ *   de_system_init(&sys, DE_SYSTEM_ARGS(sys_storage));
  */
-#define DE_SYSTEM_CREATE(SYS, CAPACITY, PARAMS)              \
-    void *_DE_UNIQUE(_sp_, __LINE__)[(CAPACITY) * (PARAMS)]; \
-    de_system_init((SYS), _DE_UNIQUE(_sp_, __LINE__), (CAPACITY), (PARAMS))
+#define DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS) \
+    struct                                        \
+    {                                             \
+        void *pool[(CAPACITY) * (PARAMS)];        \
+        uint16_t capacity;                        \
+        uint16_t params;                          \
+    } NAME = {                                    \
+        .capacity = (CAPACITY),                   \
+        .params = (PARAMS),                       \
+    }
+
+#define DE_SYSTEM_ARGS(NAME) \
+    (NAME).pool, (NAME).capacity, (NAME).params
 
 /**
  * DE_SYSTEM_ADD: Adds a group of parameters to the system

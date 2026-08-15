@@ -617,38 +617,64 @@ static void test_de_system_capacity(void)
 static void test_de_system_as_entities(void)
 {
     kprintf("-- test_de_system_as_entities --");
+
     de_manager entities, systems;
     DE_MANAGER_STORAGE(entities_storage, 2, sizeof(TestDeSystemEntity));
     de_manager_init(&entities, DE_MANAGER_ARGS(entities_storage));
     DE_MANAGER_STORAGE(systems_storage, 3, sizeof(de_system));
     de_manager_init(&systems, DE_MANAGER_ARGS(systems_storage));
+
+    /* Orden de creacion = inverso al de ejecucion (update recorre size-1 -> 0) */
     de_entity frames_entity = de_manager_new(&systems);
     de_entity movement_entity = de_manager_new(&systems);
     de_entity physics_entity = de_manager_new(&systems);
+
     de_system *frames = (de_system *)frames_entity->data;
     de_system *movement = (de_system *)movement_entity->data;
     de_system *physics = (de_system *)physics_entity->data;
-    DE_SYSTEM_CREATE(frames, 2, 1);
-    DE_SYSTEM_CREATE(movement, 2, 4);
-    DE_SYSTEM_CREATE(physics, 2, 1);
+
+    /* En lugar de DE_SYSTEM_CREATE, usa DE_SYSTEM_STORAGE + DE_SYSTEM_ARGS + de_system_init */
+    DE_SYSTEM_STORAGE(frames_storage, 2, 1);
+    de_system_init(frames, DE_SYSTEM_ARGS(frames_storage));
+
+    DE_SYSTEM_STORAGE(movement_storage, 2, 4);
+    de_system_init(movement, DE_SYSTEM_ARGS(movement_storage));
+
+    DE_SYSTEM_STORAGE(physics_storage, 2, 1);
+    de_system_init(physics, DE_SYSTEM_ARGS(physics_storage));
+
     frames_entity->state = (de_state)test_de_system_frames;
     movement_entity->state = (de_state)test_de_system_movement;
     physics_entity->state = (de_state)test_de_system_physics;
+
     de_entity e1 = de_manager_new(&entities);
     de_entity e2 = de_manager_new(&entities);
     TestDeSystemEntity *p1 = (TestDeSystemEntity *)e1->data;
     TestDeSystemEntity *p2 = (TestDeSystemEntity *)e2->data;
-    p1->x = 10; p1->y = 20; p1->vx = 2; p1->vy = 3; p1->frame = 0;
-    p2->x = 100; p2->y = 200; p2->vx = -4; p2->vy = 5; p2->frame = 10;
+
+    p1->x = 10;
+    p1->y = 20;
+    p1->vx = 2;
+    p1->vy = 3;
+    p1->frame = 0;
+    p2->x = 100;
+    p2->y = 200;
+    p2->vx = -4;
+    p2->vy = 5;
+    p2->frame = 10;
+
     e1->state = (de_state)state_noop;
     e2->state = (de_state)state_noop;
+
     DE_SYSTEM_ADD(movement, &p1->x, &p1->y, &p1->vx, &p1->vy);
     DE_SYSTEM_ADD(movement, &p2->x, &p2->y, &p2->vx, &p2->vy);
     DE_SYSTEM_ADD(physics, &p1->vy);
     DE_SYSTEM_ADD(physics, &p2->vy);
     DE_SYSTEM_ADD(frames, &p1->frame);
     DE_SYSTEM_ADD(frames, &p2->frame);
+
     de_manager_update(&systems);
+
     CHECK("de_system entities: physics modifica vy", p1->vy == 4 && p2->vy == 6);
     CHECK("de_system entities: movement procesa ambas", p1->x == 12 && p1->y == 24 && p2->x == 96 && p2->y == 206);
     CHECK("de_system entities: frames procesa ambas", p1->frame == 1 && p2->frame == 11);
