@@ -14,19 +14,19 @@ static void *update_walk(struct MyComponent *data)
     data->x += 1;
     data->y += 1;
     kprintf("Walking: (%d, %d) health=%d", data->x, data->y, data->health);
-    return (void *)DE_STATE_LOOP;
+    return DE_STATE_LOOP;
 }
 
 static void *update_idle(struct MyComponent *data)
 {
     kprintf("Idle: (%d, %d) health=%d", data->x, data->y, data->health);
-    return (void *)DE_STATE_LOOP;
+    return DE_STATE_LOOP;
 }
 
 static void *destructor(struct MyComponent *data)
 {
     kprintf("Destructor llamado para entidad en (%d, %d)", data->x, data->y);
-    return (void *)DE_STATE_DELETE;
+    return DE_STATE_DELETE;
 }
 
 void run_usage_example(void)

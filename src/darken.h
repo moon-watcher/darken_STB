@@ -99,18 +99,18 @@ struct de_system
  * Special state values used for entity control
  * Low values enable fast comparison on 68K (cmp immediate)
  */
-#define DE_STATE_DELETE ((de_state)0) // Delete entity after update
-#define DE_STATE_LOOP ((de_state)1)   // Continue with current state
-#define DE_STATE_PAUSE ((de_state)2)  // Pause entity after update
+#define DE_STATE_DELETE ((void *)0) // Delete entity after update
+#define DE_STATE_LOOP ((void *)1)   // Continue with current state
+#define DE_STATE_PAUSE ((void *)2)  // Pause entity after update
 
 /**
  * State checking macros
  * Optimized for 68K comparison operations
  */
-#define DE_STATE_IS_DELETED(S) ((S) == DE_STATE_DELETE) // Check if delete requested
-#define DE_STATE_IS_LOOP(S) ((S) == DE_STATE_LOOP)      // Check if loop requested
-#define DE_STATE_IS_PAUSED(S) ((S) == DE_STATE_PAUSE)   // Check if pause requested
-#define DE_STATE_IS_ACTIVE(S) ((S) > DE_STATE_PAUSE)    // Check if active state function
+#define DE_STATE_IS_DELETED(S) ((S) == ((de_state)0)) // Check if delete requested
+#define DE_STATE_IS_LOOP(S) ((S) == ((de_state)1))    // Check if loop requested
+#define DE_STATE_IS_PAUSED(S) ((S) == ((de_state)2))  // Check if pause requested
+#define DE_STATE_IS_ACTIVE(S) ((S) > ((de_state)2))   // Check if active state function
 
 /* ============================================================================
  * ENTITY API
@@ -613,26 +613,18 @@ de_entity de_manager_new(de_manager *$)
  */
 void de_manager_update(de_manager *$)
 {
+    uint16_t pc = $->pause_index;
     uint16_t i = $->size;
 
+    // while (i-- > pc)
     while (i-- > $->pause_index)
     {
         de_entity e = $->items[i];
         de_state s = e->state;
 
-        if (DE_STATE_IS_ACTIVE(s))
-        {
-            s = s(e->data);
-
-            if (!DE_STATE_IS_LOOP(s))
-                e->state = s;
-        }
-
-        else if (DE_STATE_IS_PAUSED(s))
-            de_entity_pause(e);
-
-        else if (DE_STATE_IS_DELETED(s))
-            de_entity_delete(e);
+             if (DE_STATE_IS_ACTIVE (s)) { s = s(e->data); if (!DE_STATE_IS_LOOP(s)) e->state = s; }
+        else if (DE_STATE_IS_PAUSED (s)) de_entity_pause(e);
+        else if (DE_STATE_IS_DELETED(s)) de_entity_delete(e);
     }
 }
 

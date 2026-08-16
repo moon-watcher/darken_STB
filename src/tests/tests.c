@@ -75,12 +75,12 @@ static void *state_walk(void *data)
     struct MyComponent *c = (struct MyComponent *)data;
     c->x += 1;
     ++g_walkCalls;
-    return (void *)DE_STATE_LOOP;
+    return DE_STATE_LOOP;
 }
 static void *state_once_then_idle(void *data)
 {
     (void)data;
-    return (void *)state_walk;
+    return state_walk;
 }
 
 static void test_update(void)
@@ -110,7 +110,7 @@ static void *state_idle_counter(void *data)
 {
     (void)data;
     ++g_idleCalls;
-    return (void *)DE_STATE_LOOP;
+    return DE_STATE_LOOP;
 }
 
 static void test_pause_resume(void)
@@ -143,12 +143,12 @@ static void *my_destructor(void *data)
 {
     (void)data;
     ++g_destructorCalls;
-    return (void *)DE_STATE_DELETE;
+    return DE_STATE_DELETE;
 }
 static void *state_noop(void *data)
 {
     (void)data;
-    return (void *)DE_STATE_LOOP;
+    return DE_STATE_LOOP;
 }
 
 static void test_delete(void)
@@ -215,7 +215,7 @@ static void *state_abort_destructor(void *data)
 {
     (void)data;
     ++g_abortDestructorCalls;
-    return (void *)DE_STATE_LOOP;
+    return DE_STATE_LOOP;
 }
 
 static void test_destructor_abort(void)
@@ -240,7 +240,7 @@ static void *state_self_kill(void *data)
 {
     (void)data;
     ++g_selfKillCalls;
-    return (void *)DE_STATE_DELETE;
+    return DE_STATE_DELETE;
 }
 
 static void test_self_delete(void)
@@ -358,13 +358,13 @@ static void *state_stress_a(void *data)
 {
     (void)data;
     ++g_stressCallsA;
-    return (void *)DE_STATE_LOOP;
+    return DE_STATE_LOOP;
 }
 static void *state_stress_b(void *data)
 {
     (void)data;
     ++g_stressCallsB;
-    return (void *)DE_STATE_LOOP;
+    return DE_STATE_LOOP;
 }
 
 static void test_mixed_stress(void)
@@ -569,7 +569,7 @@ static void *test_system_physics(void *data)
         int16_t *vy = (int16_t *)system->items[i++];
         *vy += 1;
     }
-    return (void *)DE_STATE_LOOP;
+    return DE_STATE_LOOP;
 }
 
 static void *test_system_movement(void *data)
@@ -585,7 +585,7 @@ static void *test_system_movement(void *data)
         *x += *vx;
         *y += *vy;
     }
-    return (void *)DE_STATE_LOOP;
+    return DE_STATE_LOOP;
 }
 
 static void *test_system_frames(void *data)
@@ -597,7 +597,7 @@ static void *test_system_frames(void *data)
         uint16_t *frame = (uint16_t *)system->items[i++];
         *frame += 1;
     }
-    return (void *)DE_STATE_LOOP;
+    return DE_STATE_LOOP;
 }
 
 static void test_entity_system_basic(void)
@@ -918,7 +918,7 @@ static void *state_exec_counter(void *data)
 {
     (void)data;
     ++g_execCalls;
-    return (void *)DE_STATE_LOOP;
+    return DE_STATE_LOOP;
 }
 
 static void test_entity_exec(void)
@@ -943,7 +943,7 @@ static void *state_front_back(void *data)
 {
     (void)data;
     ++g_frontBackCalls;
-    return (void *)DE_STATE_LOOP;
+    return DE_STATE_LOOP;
 }
 
 static void test_entity_move_front_back(void)
@@ -971,13 +971,13 @@ static void *state_transition_target(void *data)
 {
     struct MyComponent *c = (struct MyComponent *)data;
     c->x = 999;
-    return (void *)DE_STATE_LOOP;
+    return DE_STATE_LOOP;
 }
 
 static void *state_transition_source(void *data)
 {
     (void)data;
-    return (void *)state_transition_target;
+    return state_transition_target;
 }
 
 static void test_state_transition(void)
@@ -1155,7 +1155,12 @@ static void test_empty_system(void)
     de_system_init(&sys, pool, 1, 4);
     CHECK("empty system: size 0", sys.size == 0);
     int sum = 0;
-    DE_SYSTEM_FOREACH(&sys, int *a, int *b, int *c, int *d, { sum += *a; });
+    DE_SYSTEM_FOREACH(&sys, int *a, int *b, int *c, int *d, {
+        b = c;
+        c = d;
+        d = b;
+        sum += *a;
+    });
     CHECK("empty system: foreach no itera", sum == 0);
     CHECK("empty system: remove devuelve 0", de_system_remove(&sys, (void *)1) == 0);
 }
@@ -1165,7 +1170,7 @@ static void *state_change_via_destructor(void *data)
 {
     (void)data;
     ++g_destructorChangeCalls;
-    return (void *)state_noop;
+    return state_noop;
 }
 
 static void test_destructor_state_change(void)

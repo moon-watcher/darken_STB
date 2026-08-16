@@ -34,7 +34,7 @@ static void bench_create_destroy(void)
 static void *bench_state_fn(void *data)
 {
     (void)data;
-    return (void *)DE_STATE_LOOP;
+    return DE_STATE_LOOP;
 }
 
 static void bench_update(void)
@@ -157,7 +157,7 @@ static void bench_swap(void)
 static void *bench_noop(void *data)
 {
     (void)data;
-    return (void *)DE_STATE_LOOP;
+    return DE_STATE_LOOP;
 }
 
 static void *bench_system_state(void *data)
@@ -165,7 +165,7 @@ static void *bench_system_state(void *data)
     struct MyComponent *c = (struct MyComponent *)data;
     c->x += 1;
     c->y += 2;
-    return (void *)DE_STATE_LOOP;
+    return DE_STATE_LOOP;
 }
 
 static void bench_systems_vs_individual(void)
@@ -202,7 +202,7 @@ static void bench_memory_overhead(void)
     u16 stride32 = DE_ENTITY_STRIDE(32);
     u16 stride1 = DE_ENTITY_STRIDE(1);
     u16 stride9 = DE_ENTITY_STRIDE(9);
-    kprintf("sizeof(de_entity) base: %d bytes", sizeof(struct de_entity));
+    kprintf("sizeof(de_entity) base: %d bytes", (int)sizeof(struct de_entity));
     kprintf("stride payload=1:  %d bytes/entidad", stride1);
     kprintf("stride payload=9:  %d bytes/entidad (impar)", stride9);
     kprintf("stride payload=16: %d bytes/entidad", stride16);
@@ -211,12 +211,12 @@ static void bench_memory_overhead(void)
     DE_MANAGER_STORAGE(m32_storage, 32, sizeof(struct MyComponent));
     de_manager_init(&m32, DE_MANAGER_ARGS(m32_storage));
     u32 bytes32 = 32 * DE_ENTITY_STRIDE(sizeof(struct MyComponent));
-    kprintf("Manager 32 entidades (payload %d): %ld bytes en storage", sizeof(struct MyComponent), bytes32);
+    kprintf("Manager 32 entidades (payload %d): %ld bytes en storage", (int) sizeof(struct MyComponent), bytes32);
     de_manager m128;
     DE_MANAGER_STORAGE(m128_storage, 128, sizeof(struct MyComponent));
     de_manager_init(&m128, DE_MANAGER_ARGS(m128_storage));
     u32 bytes128 = 128 * DE_ENTITY_STRIDE(sizeof(struct MyComponent));
-    kprintf("Manager 128 entidades (payload %d): %ld bytes en storage", sizeof(struct MyComponent), bytes128);
+    kprintf("Manager 128 entidades (payload %d): %ld bytes en storage", (int) sizeof(struct MyComponent), bytes128);
     u16 overhead = DE_ENTITY_STRIDE(sizeof(struct MyComponent)) - sizeof(struct MyComponent);
     kprintf("Overhead por entidad: %d bytes (header + padding)", overhead);
     u32 ramAvailable = 64 * 1024;
