@@ -211,12 +211,12 @@ static void bench_memory_overhead(void)
     DE_MANAGER_STORAGE(m32_storage, 32, sizeof(struct MyComponent));
     de_manager_init(&m32, DE_MANAGER_ARGS(m32_storage));
     u32 bytes32 = 32 * DE_ENTITY_STRIDE(sizeof(struct MyComponent));
-    kprintf("Manager 32 entidades (payload %d): %ld bytes en storage", (int) sizeof(struct MyComponent), bytes32);
+    kprintf("Manager 32 entidades (payload %d): %ld bytes en storage", (int)sizeof(struct MyComponent), bytes32);
     de_manager m128;
     DE_MANAGER_STORAGE(m128_storage, 128, sizeof(struct MyComponent));
     de_manager_init(&m128, DE_MANAGER_ARGS(m128_storage));
     u32 bytes128 = 128 * DE_ENTITY_STRIDE(sizeof(struct MyComponent));
-    kprintf("Manager 128 entidades (payload %d): %ld bytes en storage", (int) sizeof(struct MyComponent), bytes128);
+    kprintf("Manager 128 entidades (payload %d): %ld bytes en storage", (int)sizeof(struct MyComponent), bytes128);
     u16 overhead = DE_ENTITY_STRIDE(sizeof(struct MyComponent)) - sizeof(struct MyComponent);
     kprintf("Overhead por entidad: %d bytes (header + padding)", overhead);
     u32 ramAvailable = 64 * 1024;
