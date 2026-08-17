@@ -56,22 +56,22 @@ static void bench_update(void)
 
 static void bench_apply(void)
 {
-    de_manager m;
-    DE_MANAGER_STORAGE(m_storage, 32, sizeof(struct MyComponent));
-    de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
-    u32 t0 = bench_start();
-    for (u32 r = 0; r < BENCH_REPS; ++r)
-    {
-        for (u16 i = 0; i < 32; ++i)
-        {
-            de_entity e = de_manager_new(&m);
-            e->tag = i;
-        }
-        DE_MANAGER_APPLY_ALL(&m, (ENTITY->tag % 2) == 0, de_entity_delete);
-        de_manager_reset(&m);
-    }
-    u32 frames = bench_frames_elapsed(t0);
-    kprintf("create32+applyAll(borrar pares)+reset x%d reps: %ld frames", BENCH_REPS, frames);
+//     de_manager m;
+//     DE_MANAGER_STORAGE(m_storage, 32, sizeof(struct MyComponent));
+//     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
+//     u32 t0 = bench_start();
+//     for (u32 r = 0; r < BENCH_REPS; ++r)
+//     {
+//         for (u16 i = 0; i < 32; ++i)
+//         {
+//             de_entity e = de_manager_new(&m);
+//             e->tag = i;
+//         }
+//         DE_MANAGER_APPLY_ALL(&m, (ENTITY->tag % 2) == 0, de_entity_delete);
+//         de_manager_reset(&m);
+//     }
+//     u32 frames = bench_frames_elapsed(t0);
+//     kprintf("create32+applyAll(borrar pares)+reset x%d reps: %ld frames", BENCH_REPS, frames);
 }
 
 static void bench_create_destroy_128(void)

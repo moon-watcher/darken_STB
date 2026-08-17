@@ -58,12 +58,12 @@ struct de_entity
  * Manager: Entity container and lifecycle manager
  *
  * Pool layout:
- *   [0 ... size-1]                    → active entities
- *   [size ... pause_index-1]          → free slots (unused)
- *   [pause_index ... capacity-1]      → paused entities
+ *   [0 ... pause_index-1]              → active entities
+ *   [pause_index ... size-1]           → paused entities
+ *   [size ... capacity-1]              → free slots
  *
- * - size         : number of active entities
- * - pause_index  : first index of paused area
+ * - size         : total number of entities (active + paused)
+ * - pause_index  : first index of paused area / number of active entities
  * - capacity     : total capacity of the pool
  */
 struct de_manager
@@ -120,28 +120,13 @@ struct de_system
 /**
  * Entity management functions
  */
-void *de_entity_exec(de_entity);      // Execute current state without updating it
-void *de_entity_update(de_entity);    // Update entity (call state, handle transitions)
+void de_entity_exec(de_entity);       // Execute current state without updating it
+void de_entity_update(de_entity);     // Update entity (call state, handle transitions)
 void de_entity_pause(de_entity);      // Move entity to paused section
 void de_entity_resume(de_entity);     // Move entity to active section
 void de_entity_delete(de_entity);     // Mark entity for deletion (calls destructor)
 void de_entity_move_front(de_entity); // Move to front of active section (priority)
 void de_entity_move_back(de_entity);  // Move to back of active section (defer)
-
-/* ============================================================================
- * ENTITY MACROS
- * ============================================================================ */
-
-/**
- * Refers to the entity's area in the manager's items array.
- * Useful for checking entity status.
- */
-#define DE_ENTITY_IN_ACTIVE(E) ((E)->slot < (E)->manager->size)
-#define DE_ENTITY_IN_PAUSED(E) ((E)->slot >= (E)->manager->pause_index)
-#define DE_ENTITY_IN_FREE(E) (!DE_ENTITY_IN_ACTIVE(E) && !DE_ENTITY_IN_PAUSED(E))
-
-#define _DE_ENTITY_FREE(E) _de_entity_swap(E, E->manager->items[E->manager->size--])
-#define _DE_ENTITY_PAUSE(E) _de_entity_swap(E, E->manager->items[E->manager->pause_index--])
 
 /* ============================================================================
  * MANAGER CREATION MACROS
@@ -152,8 +137,8 @@ void de_entity_move_back(de_entity);  // Move to back of active section (defer)
  * Use with DE_MANAGER_ARGS() when calling de_manager_init().
  *
  * Example:
- * DE_MANAGER_STORAGE(m_storage, 8, sizeof(struct MyComponent));
- * de_manager_init(&m, DE_MANAGER_ARGS(m_st));
+ * DE_MANAGER_STORAGE(m1st, 8, sizeof(struct MyComponent));
+ * de_manager_init(&m1, DE_MANAGER_ARGS(m1st));
  */
 #define DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)                                         \
     struct                                                                                       \
@@ -180,19 +165,16 @@ void de_entity_move_back(de_entity);  // Move to back of active section (defer)
  * de_manager_init: Initializes manager with pre-allocated storage
  * de_manager_new: Creates new entity (returns NULL if full)
  * de_manager_update: Updates all active entities
+ * de_manager_pause: Pauses all entities
+ * de_manager_resume: Resumes all entities
  * de_manager_reset: Deletes all entities
  */
 void de_manager_init(de_manager *, de_entity *, void *, uint16_t, uint16_t);
 de_entity de_manager_new(de_manager *);
 void de_manager_update(de_manager *);
+void de_manager_pause(de_manager *);
+void de_manager_resume(de_manager *);
 void de_manager_reset(de_manager *);
-
-/* ============================================================================
- * SYSTEM API
- * ============================================================================ */
-
-void de_system_init(de_system *, void **, uint16_t, uint16_t);
-uint16_t de_system_remove(de_system *, void *);
 
 /* ============================================================================
  * ITERATION MACROS
@@ -200,6 +182,7 @@ uint16_t de_system_remove(de_system *, void *);
 
 /**
  * DE_MANAGER_ITERATE: Iterates over active entities only
+ * DE_MANAGER_ITERATE_ALL: Iterates over all entities (active + paused)
  *
  * Within the CODE block:
  * - ENTITY: Available entity pointer
@@ -207,24 +190,79 @@ uint16_t de_system_remove(de_system *, void *);
  *
  * Example:
  * DE_MANAGER_ITERATE(my_manager, {
- *     if (ENTITY->tag == PLAYER_TAG)
+ *     if (ENTITY->tag == PLAYER_TAG) {
  *         update_player(ENTITY);
+ *     }
  * });
  */
+#define DE_MANAGER_ITERATE(M, CODE) _DE_MANAGER_ITERATE_ACTIVE(M, CODE)
+#define DE_MANAGER_ITERATE_ALL(M, CODE) _DE_MANAGER_ITERATE_ALL(M, CODE)
 
 /**
  * Internal iteration over active entities
  * Iterates backwards for safe deletion during iteration
  */
-#define DE_MANAGER_ITERATE(MANAGER, CODE)               \
-    do                                                  \
-    {                                                   \
-        uint16_t INDEX = (MANAGER)->size;               \
-        while (INDEX-- > 0)                             \
-        {                                               \
-            de_entity ENTITY = (MANAGER)->items[INDEX]; \
-            CODE;                                       \
-        }                                               \
+#define _DE_MANAGER_ITERATE_ACTIVE(M, CODE)       \
+    do                                            \
+    {                                             \
+        uint16_t INDEX = (M)->pause_index;        \
+        while (INDEX--)                           \
+        {                                         \
+            de_entity ENTITY = (M)->items[INDEX]; \
+            CODE;                                 \
+        }                                         \
+    } while (0)
+
+/**
+ * Internal iteration over all assigned entities (active + paused)
+ */
+#define _DE_MANAGER_ITERATE_ALL(M, CODE)          \
+    do                                            \
+    {                                             \
+        uint16_t INDEX = (M)->size;               \
+        while (INDEX--)                           \
+        {                                         \
+            de_entity ENTITY = (M)->items[INDEX]; \
+            CODE;                                 \
+        }                                         \
+    } while (0)
+
+/* ============================================================================
+ * APPLICATION MACROS (with target collection)
+ * ============================================================================ */
+
+/**
+ * DE_MANAGER_APPLY: Collect entities matching filter, then apply action
+ * DE_MANAGER_APPLY_ALL: Same but includes paused entities
+ *
+ * Parameters:
+ * - M: Manager
+ * - F: Filter condition (evaluated per entity)
+ * - A: Action to apply to collected entities
+ *
+ * Useful for operations that might invalidate iteration (like batch deletion)
+ *
+ * Example:
+ * DE_MANAGER_APPLY(my_manager, ENTITY->health <= 0, delete_entity(ENTITY));
+ */
+#define DE_MANAGER_APPLY(M, F, A) _DE_MANAGER_APPLY(DE_MANAGER_ITERATE, M, F, A)
+#define DE_MANAGER_APPLY_ALL(M, F, A) _DE_MANAGER_APPLY(DE_MANAGER_ITERATE_ALL, M, F, A)
+
+/**
+ * Internal application implementation
+ * Collects matching entities first, then applies action
+ */
+#define _DE_MANAGER_APPLY(ITER, M, FILTER, ACTION) \
+    do                                             \
+    {                                              \
+        de_entity _targets[(M)->size + 1];         \
+        uint16_t _count = 0;                       \
+        ITER(M, {                                  \
+            if (FILTER)                            \
+                _targets[_count++] = ENTITY;       \
+        });                                        \
+        while (_count--)                           \
+            ACTION(_targets[_count]);              \
     } while (0)
 
 /* ============================================================================
@@ -319,20 +357,11 @@ uint16_t de_system_remove(de_system *, void *);
     })
 
 /* Variadic add implementations for 1-5 parameters */
-#define _DE_SYSTEM_ADD1(SYSTEM, A) \
-    _DE_SYSTEM_ADD(SYSTEM, 1, _p[0] = (void *)(A);)
-
-#define _DE_SYSTEM_ADD2(SYSTEM, A, B) \
-    _DE_SYSTEM_ADD(SYSTEM, 2, _p[0] = (void *)(A); _p[1] = (void *)(B);)
-
-#define _DE_SYSTEM_ADD3(SYSTEM, A, B, C) \
-    _DE_SYSTEM_ADD(SYSTEM, 3, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C);)
-
-#define _DE_SYSTEM_ADD4(SYSTEM, A, B, C, D) \
-    _DE_SYSTEM_ADD(SYSTEM, 4, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D);)
-
-#define _DE_SYSTEM_ADD5(SYSTEM, A, B, C, D, E) \
-    _DE_SYSTEM_ADD(SYSTEM, 5, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D); _p[4] = (void *)(E);)
+#define _DE_SYSTEM_ADD1(SYS, A) _DE_SYSTEM_ADD(SYS, 1, _p[0] = (void *)(A);)
+#define _DE_SYSTEM_ADD2(SYS, A, B) _DE_SYSTEM_ADD(SYS, 2, _p[0] = (void *)(A); _p[1] = (void *)(B);)
+#define _DE_SYSTEM_ADD3(SYS, A, B, C) _DE_SYSTEM_ADD(SYS, 3, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C);)
+#define _DE_SYSTEM_ADD4(SYS, A, B, C, D) _DE_SYSTEM_ADD(SYS, 4, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D);)
+#define _DE_SYSTEM_ADD5(SYS, A, B, C, D, E) _DE_SYSTEM_ADD(SYS, 5, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D); _p[4] = (void *)(E);)
 
 /**
  * Internal iterator generator
@@ -345,23 +374,12 @@ uint16_t de_system_remove(de_system *, void *);
     }
 
 /* Iterator variants for 0-5 variables */
-#define _DE_SYSTEM_ITERATOR_0(NAME, IT) \
-    _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_0, IT)
-
-#define _DE_SYSTEM_ITERATOR_1(NAME, A, IT) \
-    _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_1, A, IT)
-
-#define _DE_SYSTEM_ITERATOR_2(NAME, A, B, IT) \
-    _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_2, A, B, IT)
-
-#define _DE_SYSTEM_ITERATOR_3(NAME, A, B, C, IT) \
-    _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_3, A, B, C, IT)
-
-#define _DE_SYSTEM_ITERATOR_4(NAME, A, B, C, D, IT) \
-    _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_4, A, B, C, D, IT)
-
-#define _DE_SYSTEM_ITERATOR_5(NAME, A, B, C, D, E, IT) \
-    _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_5, A, B, C, D, E, IT)
+#define _DE_SYSTEM_ITERATOR_0(NAME, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_0, IT)
+#define _DE_SYSTEM_ITERATOR_1(NAME, A, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_1, A, IT)
+#define _DE_SYSTEM_ITERATOR_2(NAME, A, B, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_2, A, B, IT)
+#define _DE_SYSTEM_ITERATOR_3(NAME, A, B, C, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_3, A, B, C, IT)
+#define _DE_SYSTEM_ITERATOR_4(NAME, A, B, C, D, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_4, A, B, C, D, IT)
+#define _DE_SYSTEM_ITERATOR_5(NAME, A, B, C, D, E, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_5, A, B, C, D, E, IT)
 
 /**
  * Internal foreach implementation
@@ -373,33 +391,16 @@ uint16_t de_system_remove(de_system *, void *);
         IT;
 
 /* Foreach variants for 0-5 variables */
-#define _DE_SYSTEM_FOREACH_0(SYSTEM, IT) \
-    _DE_SYSTEM_FOREACH(SYSTEM, { IT; })
-
-#define _DE_SYSTEM_FOREACH_1(SYSTEM, A, IT) \
-    _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; IT; })
-
-#define _DE_SYSTEM_FOREACH_2(SYSTEM, A, B, IT) \
-    _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; IT; })
-
-#define _DE_SYSTEM_FOREACH_3(SYSTEM, A, B, C, IT) \
-    _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; IT; })
-
-#define _DE_SYSTEM_FOREACH_4(SYSTEM, A, B, C, D, IT) \
-    _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; D = items[i++]; IT; })
-
-#define _DE_SYSTEM_FOREACH_5(SYSTEM, A, B, C, D, E, IT) \
-    _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; D = items[i++]; E = items[i++]; IT; })
+#define _DE_SYSTEM_FOREACH_0(SYSTEM, IT) _DE_SYSTEM_FOREACH(SYSTEM, { IT; })
+#define _DE_SYSTEM_FOREACH_1(SYSTEM, A, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; IT; })
+#define _DE_SYSTEM_FOREACH_2(SYSTEM, A, B, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; IT; })
+#define _DE_SYSTEM_FOREACH_3(SYSTEM, A, B, C, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; IT; })
+#define _DE_SYSTEM_FOREACH_4(SYSTEM, A, B, C, D, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; D = items[i++]; IT; })
+#define _DE_SYSTEM_FOREACH_5(SYSTEM, A, B, C, D, E, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; D = items[i++]; E = items[i++]; IT; })
 
 /* ============================================================================
  * INTERNAL UTILITIES
  * ============================================================================ */
-
-/**
- * Entity stride calculation
- * Ensures proper alignment between consecutive entities
- */
-#define DE_ENTITY_STRIDE(PAYLOAD) _DE_ALIGN4(sizeof(struct de_entity) + (PAYLOAD))
 
 /**
  * 4-byte alignment macro
@@ -414,10 +415,22 @@ uint16_t de_system_remove(de_system *, void *);
 #define _DE_UNIQUE(A, B) _DE_CONCAT(A, B)
 
 /**
+ * Entity stride calculation
+ * Ensures proper alignment between consecutive entities
+ */
+#define DE_ENTITY_STRIDE(PAYLOAD) _DE_ALIGN4(sizeof(struct de_entity) + (PAYLOAD))
+
+/**
  * Macro argument count selector
  * Supports 1-7 arguments for variadic macro dispatch
  */
 #define _DE_GET_MACRO(_1, _2, _3, _4, _5, _6, _7, NAME, ...) NAME
+
+/**
+ * Public system API
+ */
+void de_system_init(de_system *, void **, uint16_t, uint16_t);
+uint16_t de_system_remove(de_system *, void *);
 
 #endif /* DARKEN_H */
 
@@ -427,42 +440,32 @@ uint16_t de_system_remove(de_system *, void *);
 
 #ifdef DARKEN_IMPLEMENTATION
 
-/* ====================================
- * ENTITY IMPLEMENTATION
- * ==================================== */
-
 /**
  * Executes the entity's current state without updating it.
  * Useful for initialization or manual execution scenarios.
  */
-void *de_entity_exec(de_entity $)
+void de_entity_exec(de_entity $)
 {
-    de_state s = $->state;
-
-    if (!DE_STATE_IS_ACTIVE(s))
-        return 0;
-
-    return s($->data);
+    if (DE_STATE_IS_ACTIVE($->state))
+        $->state($->data);
 }
 
 /**
  * Updates a single entity.
  * Calls the state function and handles state transitions.
  */
-void *de_entity_update(de_entity $)
+void de_entity_update(de_entity $)
 {
     de_state s = $->state;
 
-    if (!DE_STATE_IS_ACTIVE(s))
-        return 0;
+    if (DE_STATE_IS_ACTIVE(s))
+    {
+        s = s($->data);
 
-    s = s($->data);
-
-    // Only write back if state actually changed
-    if (!DE_STATE_IS_LOOP(s))
-        $->state = s;
-
-    return s;
+        // Only write back if state actually changed
+        if (!DE_STATE_IS_LOOP(s))
+            $->state = s;
+    }
 }
 
 /**
@@ -474,6 +477,7 @@ static void _de_entity_swap(de_entity a, de_entity b)
     uint16_t i = a->slot;
     uint16_t j = b->slot;
 
+    // Swap in array
     m->items[i] = b;
     b->slot = i;
     m->items[j] = a;
@@ -482,39 +486,36 @@ static void _de_entity_swap(de_entity a, de_entity b)
 
 /**
  * Pauses an entity by moving it to the paused section.
+ *
  * Requires at least one free slot to perform the move.
+ * Two swaps O(1).
  */
 void de_entity_pause(de_entity $)
 {
-    return
-    ;
-    if (!DE_ENTITY_IN_ACTIVE($))
+    de_manager *m = $->manager;
+
+    if ($->slot >= m->pause_index)
         return;
 
-    de_manager *m = $->manager;
-    _DE_ENTITY_FREE($);  // 1. Remove from active area: swap with last active, decrement size
-    _DE_ENTITY_PAUSE($); // 2. Insert into paused area: swap with last free, decrement pause_index
+    _de_entity_swap($, m->items[m->pause_index - 1]);
+    --m->pause_index;
 }
 
 /**
  * Resumes an entity by moving it to the active section.
+ *
  * Requires at least one free slot to perform the move.
+ * Two swaps O(1).
  */
 void de_entity_resume(de_entity $)
 {
     de_manager *m = $->manager;
 
-    // Only paused entities can be resumed, and we need a free slot
-    if ($->slot < m->pause_index || m->pause_index >= m->capacity)
+    if ($->slot < m->pause_index || $->slot >= m->size)
         return;
 
-    // 1. Remove from paused area: swap with first paused, increment pause_index
     _de_entity_swap($, m->items[m->pause_index]);
-    m->pause_index++;
-
-    // 2. Insert into active area: swap with first free, increment size
-    _de_entity_swap($, m->items[m->size]);
-    m->size++;
+    ++m->pause_index;
 }
 
 /**
@@ -529,15 +530,29 @@ void de_entity_resume(de_entity $)
  */
 void de_entity_delete(de_entity $)
 {
-    if (!DE_ENTITY_IN_ACTIVE($))
+    de_manager *m = $->manager;
+
+    if ($->slot >= m->size)
         return;
 
-    $->state = $->destructor ? $->destructor($->data) : DE_STATE_DELETE;
+    $->state = DE_STATE_DELETE;
+
+    if ($->destructor)
+        $->state = $->destructor($->data);
 
     if (!DE_STATE_IS_DELETED($->state))
         return;
 
-    _DE_ENTITY_FREE($);
+    if ($->slot < m->pause_index)
+    {
+        _de_entity_swap($, m->items[m->pause_index - 1]);
+        --m->pause_index;
+    }
+
+    --m->size;
+
+    if ($->slot != m->size)
+        _de_entity_swap($, m->items[m->size]);
 }
 
 /**
@@ -548,8 +563,8 @@ void de_entity_move_front(de_entity $)
 {
     de_manager *m = $->manager;
 
-    if ($->slot < m->size && $->slot != m->size - 1)
-        _de_entity_swap($, m->items[m->size - 1]);
+    if ($->slot < m->pause_index && $->slot != m->pause_index - 1)
+        _de_entity_swap($, m->items[m->pause_index - 1]);
 }
 
 /**
@@ -560,13 +575,9 @@ void de_entity_move_back(de_entity $)
 {
     de_manager *m = $->manager;
 
-    if ($->slot < m->size && $->slot != 0)
+    if ($->slot < m->pause_index && $->slot != 0)
         _de_entity_swap($, m->items[0]);
 }
-
-/* ====================================
- * MANAGER IMPLEMENTATION
- * ==================================== */
 
 /**
  * Initializes an entity manager.
@@ -580,8 +591,8 @@ void de_manager_init(de_manager *$, de_entity *items, void *storage, uint16_t ca
 {
     $->items = items;
     $->capacity = capacity;
-    $->size = 0;               // No active entities
-    $->pause_index = capacity; // No paused entities; entire pool is free
+    $->size = 0;        // No assigned entities
+    $->pause_index = 0; // All slots are free
 
     uint16_t stride = DE_ENTITY_STRIDE(bytes);
 
@@ -592,20 +603,38 @@ void de_manager_init(de_manager *$, de_entity *items, void *storage, uint16_t ca
 
 /**
  * Creates a new entity in the manager.
- * Returns 0 if manager is full (no free slots).
+ * Returns NULL if manager is full (no free slots).
+ *
+ * O(1) direct assignment.
  */
 de_entity de_manager_new(de_manager *$)
 {
-    // Need at least one free slot between size and pause_index
-    if ($->pause_index <= $->size)
+    if ($->size >= $->capacity)
         return 0;
 
     de_entity e = $->items[$->size];
+
     e->manager = $;
-    e->slot = $->size++;
+    e->slot = $->size;
     e->state = DE_STATE_DELETE;
     e->destructor = 0;
     e->tag = 0;
+
+    ++$->size;
+
+    /*
+     * New entities are active. If paused entities exist, move the
+     * first paused entity to the free slot and make this slot active.
+     */
+    if ($->pause_index < $->size)
+    {
+        _de_entity_swap(e, $->items[$->pause_index]);
+        ++$->pause_index;
+    }
+    else
+    {
+        ++$->pause_index;
+    }
 
     return e;
 }
@@ -624,48 +653,67 @@ de_entity de_manager_new(de_manager *$)
  */
 void de_manager_update(de_manager *$)
 {
-    uint16_t i = $->size;
-    de_entity *items = $->items;
+    uint16_t pc = $->pause_index;
 
-    while (i--)
+    while (pc--)
     {
-        de_entity e = items[i];
+        de_entity e = $->items[pc];
         de_state s = e->state;
 
         if (DE_STATE_IS_ACTIVE(s))
         {
             s = s(e->data);
+
             if (!DE_STATE_IS_LOOP(s))
                 e->state = s;
         }
-
         else if (DE_STATE_IS_PAUSED(s))
             de_entity_pause(e);
-
         else if (DE_STATE_IS_DELETED(s))
             de_entity_delete(e);
     }
 }
 
 /**
- * Deletes active entities in the manager.
- * Calls destructors for all active entities.
+ * Pauses all entities.
+ * Moves all active entities to paused area.
+ * O(1): just adjust indices.
+ */
+void de_manager_pause(de_manager *$)
+{
+    $->pause_index = 0;
+}
+
+/**
+ * Resumes all entities.
+ * Moves all paused entities to active area.
+ * O(n): compaction required to keep active area contiguous.
+ */
+void de_manager_resume(de_manager *$)
+{
+    $->pause_index = $->size;
+}
+
+/**
+ * Deletes all entities in the manager.
+ * Calls destructors for all active and paused entities.
+ * O(n).
  */
 void de_manager_reset(de_manager *$)
 {
-    DE_MANAGER_ITERATE($, {
-        ENTITY->state = DE_STATE_DELETE;
-        if (ENTITY->destructor)
-            ENTITY->destructor(ENTITY->data);
-    });
+    for (uint16_t i = 0; i < $->size; ++i)
+    {
+        de_entity e = $->items[i];
+
+        e->state = DE_STATE_DELETE;
+
+        if (e->destructor)
+            e->state = e->destructor(e->data);
+    }
 
     $->size = 0;
-    $->pause_index = $->capacity;
+    $->pause_index = 0;
 }
-
-/* ====================================
- * SYSTEM IMPLEMENTATION
- * ==================================== */
 
 /**
  * Initializes a data system.
@@ -676,7 +724,7 @@ void de_system_init(de_system *$, void **storage, uint16_t capacity_groups, uint
     $->pool = storage;
     $->size = 0;
     $->capacity = capacity_groups * params;
-    $->params = params ?: 1;
+    $->params = params;
 }
 
 /**
@@ -691,6 +739,9 @@ void de_system_init(de_system *$, void **storage, uint16_t capacity_groups, uint
 uint16_t de_system_remove(de_system *$, void *first)
 {
     uint16_t params = $->params;
+
+    if (!params)
+        return 0;
 
     for (uint16_t i = 0; i < $->size; i += params)
         if ($->pool[i] == first)
