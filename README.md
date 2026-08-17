@@ -9,7 +9,7 @@ manager->items[]
 ┌──────────────────────┬──────────────────────┬──────────────────────┐
 │       ACTIVE         │         FREE         │        PAUSED        │
 │ [0, active_count)    │ [active_count,       │ [paused_start,       │
-│                      │  paused_start)       │  capacity)            │
+│                      │  paused_start)       │  capacity)           │
 └──────────────────────┴──────────────────────┴──────────────────────┘
                          ↑                    ↑
                     active_count         paused_start
