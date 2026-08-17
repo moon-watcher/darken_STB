@@ -19,14 +19,30 @@
  * ============================================================================ */
 
 /**
- * Macro argument count selector
- * Supports 1-7 arguments for variadic macro dispatch
+ * Counts the number of data parameters for DE_SYSTEM_ADD.
+ * The first argument (system pointer) is not counted.
+ * Returns a value from 1 to 5.
  */
-#define _DE_GET_MACRO(_1, _2, _3, _4, _5, _6, _7, NAME, ...) NAME
+#define _DE_ADD_NARGS(...) _DE_ADD_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1, 0)
+#define _DE_ADD_NARGS_I(_1, _2, _3, _4, _5, _6, N, ...) N
+
+/**
+ * Counts the number of data variables for DE_SYSTEM_FOREACH / DE_SYSTEM_ITERATOR.
+ * The first argument (system pointer) and the last argument (code block) are not counted.
+ * Returns a value from 0 to 5.
+ */
+#define _DE_FOREACH_NARGS(...) _DE_FOREACH_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1, 0, -1)
+#define _DE_FOREACH_NARGS_I(_1, _2, _3, _4, _5, _6, _7, N, ...) N
+
+/* Token concatenation */
+#define _DE_CONCAT_INNER(A, B) A##B
+#define _DE_CONCAT(A, B) _DE_CONCAT_INNER(A, B)
 
 /**
  * 4-byte alignment macro
- * Critical for 68K performance (bus alignment)
+ * Critical for 68K performance (bus alignment).
+ * Note: On platforms with larger alignment requirements,
+ *       adjust this to use _Alignof(struct de_entity).
  */
 #define _DE_ALIGN4(X) (((X) + 3U) & ~3U)
 
@@ -35,7 +51,9 @@
  * ============================================================================ */
 
 // State function pointer type
-// Takes entity data pointer, returns next state or control code
+// Takes entity data pointer, returns next state or control code.
+// WARNING: Storing function pointers in void* is not strictly ISO C,
+//          but works on most 68K compilers. Use with caution.
 typedef void *(*de_state)(void *);
 
 // Forward declarations for type safety
@@ -125,7 +143,7 @@ struct de_manager
 struct de_system
 {
     void **pool;       // Data storage array
-    uint16_t capacity; // Maximum capacity in groups
+    uint16_t capacity; // Maximum capacity in groups (multiplied by params)
     uint16_t size;     // Current size in groups (not individual elements)
     uint16_t params;   // Number of elements per group
 };
@@ -206,9 +224,8 @@ void de_entity_move_back(de_entity);       // Move to back of active section (de
  * - ITEMS:  Entity list
  * - ENTITY: Available entity pointer
  *
- * Safety rule (both macros): deleting/pausing/resuming the entity currently
- * being visited (ENTITY) is safe. Mutating a DIFFERENT entity mid-loop is NOT
- * guaranteed safe
+ * Safety rule: deleting/pausing/resuming the entity currently being visited
+ * (ENTITY) is safe. Mutating a DIFFERENT entity mid-loop is NOT guaranteed safe.
  *
  * Example:
  *    DE_MANAGER_ITERATE(my_manager, {
@@ -247,10 +264,10 @@ void de_manager_reset(de_manager *);
  * ============================================================================ */
 
 /**
- * Declaracion estatica de storage para sistema.
- * Uso con DE_SYSTEM_ARGS() al llamar de_system_init().
+ * Static storage declaration for a system.
+ * Use with DE_SYSTEM_ARGS() when calling de_system_init().
  *
- * Ejemplo:
+ * Example:
  *    de_system sys;
  *    DE_SYSTEM_STORAGE(sys_storage, 32, 3);
  *    de_system_init(&sys, DE_SYSTEM_ARGS(sys_storage));
@@ -270,19 +287,19 @@ void de_manager_reset(de_manager *);
     (NAME).pool, (NAME).capacity, (NAME).params
 
 /**
- * Adds a group of parameters to the system
- * Supports 1-5 parameters (variable arguments)
- * Returns 1 on success, 0 if system is full
+ * Adds a group of parameters to the system.
+ * Supports 1-5 data parameters (system pointer is always first).
+ * Returns 1 on success, 0 if system is full or parameter count mismatch.
  *
  * Example:
  *    DE_SYSTEM_ADD(physics_system, entity_ptr, &velocity, &position);
  */
 #define DE_SYSTEM_ADD(...) \
-    _DE_GET_MACRO(__VA_ARGS__, _, _DE_SYSTEM_ADD5, _DE_SYSTEM_ADD4, _DE_SYSTEM_ADD3, _DE_SYSTEM_ADD2, _DE_SYSTEM_ADD1, unused)(__VA_ARGS__)
+    _DE_CONCAT(_DE_SYSTEM_ADD_, _DE_ADD_NARGS(__VA_ARGS__))(__VA_ARGS__)
 
 /**
- * Iterates over system data
- * Supports 0-5 variables per iteration
+ * Iterates over system data.
+ * Supports 0-5 data variables per iteration (system pointer always first).
  *
  * Example:
  *    DE_SYSTEM_FOREACH(physics_system, entity, velocity, position, {
@@ -290,11 +307,11 @@ void de_manager_reset(de_manager *);
  *    });
  */
 #define DE_SYSTEM_FOREACH(...) \
-    _DE_GET_MACRO(__VA_ARGS__, _DE_SYSTEM_FOREACH_5, _DE_SYSTEM_FOREACH_4, _DE_SYSTEM_FOREACH_3, _DE_SYSTEM_FOREACH_2, _DE_SYSTEM_FOREACH_1, _DE_SYSTEM_FOREACH_0)(__VA_ARGS__)
+    _DE_CONCAT(_DE_SYSTEM_FOREACH_, _DE_FOREACH_NARGS(__VA_ARGS__))(__VA_ARGS__)
 
 /**
- * DE_SYSTEM_ITERATOR: Creates an iterator function from a foreach pattern
- * The generated function returns DE_STATE_LOOP for use as entity state
+ * DE_SYSTEM_ITERATOR: Creates an iterator function from a foreach pattern.
+ * The generated function returns DE_STATE_LOOP for use as entity state.
  *
  * Example:
  *    DE_SYSTEM_ITERATOR(physics_update, entity, velocity, position, {
@@ -304,64 +321,72 @@ void de_manager_reset(de_manager *);
  * // Now physics_update can be used as an entity state function
  */
 #define DE_SYSTEM_ITERATOR(...) \
-    _DE_GET_MACRO(__VA_ARGS__, _DE_SYSTEM_ITERATOR_5, _DE_SYSTEM_ITERATOR_4, _DE_SYSTEM_ITERATOR_3, _DE_SYSTEM_ITERATOR_2, _DE_SYSTEM_ITERATOR_1, _DE_SYSTEM_ITERATOR_0)(__VA_ARGS__)
+    _DE_CONCAT(_DE_SYSTEM_ITERATOR_, _DE_FOREACH_NARGS(__VA_ARGS__))(__VA_ARGS__)
 
 void de_system_init(de_system *, void **, uint16_t, uint16_t);
 uint16_t de_system_remove(de_system *, void *);
 
-/**
- * Internal system add implementation
- */
-#define _DE_SYSTEM_ADD(SYS, N, ...)          \
-    ({                                       \
-        de_system *_s = (SYS);               \
-        uint16_t _ok = 0;                    \
-        if (_s->size + (N) <= _s->capacity)  \
-        {                                    \
-            void **_p = &_s->pool[_s->size]; \
-            __VA_ARGS__                      \
-            _s->size += (N);                 \
-            _ok = 1;                         \
-        }                                    \
-        _ok;                                 \
+/* ============================================================================
+ * INTERNAL MACRO IMPLEMENTATIONS
+ * ============================================================================ */
+
+/* Internal system add implementation. Checks param count and capacity. */
+#define _DE_SYSTEM_ADD(SYS, N, ...)                              \
+    ({                                                           \
+        de_system *_s = (SYS);                                   \
+        uint16_t _ok = 0;                                        \
+        if ((N) == _s->params && _s->size + (N) <= _s->capacity) \
+        {                                                        \
+            void **_p = &_s->pool[_s->size];                     \
+            __VA_ARGS__                                          \
+            _s->size += (N);                                     \
+            _ok = 1;                                             \
+        }                                                        \
+        _ok;                                                     \
     })
 
-/* Variadic add implementations for 1-5 parameters */
-#define _DE_SYSTEM_ADD1(SYS, A) _DE_SYSTEM_ADD(SYS, 1, _p[0] = (void *)(A);)
-#define _DE_SYSTEM_ADD2(SYS, A, B) _DE_SYSTEM_ADD(SYS, 2, _p[0] = (void *)(A); _p[1] = (void *)(B);)
-#define _DE_SYSTEM_ADD3(SYS, A, B, C) _DE_SYSTEM_ADD(SYS, 3, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C);)
-#define _DE_SYSTEM_ADD4(SYS, A, B, C, D) _DE_SYSTEM_ADD(SYS, 4, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D);)
-#define _DE_SYSTEM_ADD5(SYS, A, B, C, D, E) _DE_SYSTEM_ADD(SYS, 5, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D); _p[4] = (void *)(E);)
+/* Add variants for 1-5 data parameters */
+#define _DE_SYSTEM_ADD_1(SYS, A) _DE_SYSTEM_ADD(SYS, 1, _p[0] = (void *)(A);)
+#define _DE_SYSTEM_ADD_2(SYS, A, B) _DE_SYSTEM_ADD(SYS, 2, _p[0] = (void *)(A); _p[1] = (void *)(B);)
+#define _DE_SYSTEM_ADD_3(SYS, A, B, C) _DE_SYSTEM_ADD(SYS, 3, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C);)
+#define _DE_SYSTEM_ADD_4(SYS, A, B, C, D) _DE_SYSTEM_ADD(SYS, 4, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D);)
+#define _DE_SYSTEM_ADD_5(SYS, A, B, C, D, E) _DE_SYSTEM_ADD(SYS, 5, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D); _p[4] = (void *)(E);)
 
-/* Internal iterator generator */
+/* Internal foreach implementation, wrapped in do-while for safety */
+#define _DE_SYSTEM_FOREACH(SYSTEM, IT)         \
+    do                                         \
+    {                                          \
+        void **items = (SYSTEM)->pool;         \
+        uint16_t i = 0, size = (SYSTEM)->size; \
+        while (i < size)                       \
+        {                                      \
+            IT;                                \
+        }                                      \
+    } while (0)
+
+/* Foreach variants for 0-5 data variables */
+#define _DE_SYSTEM_FOREACH_0(SYSTEM, IT) _DE_SYSTEM_FOREACH(SYSTEM, { i += (SYSTEM)->params; IT; })
+#define _DE_SYSTEM_FOREACH_1(SYSTEM, A, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; IT; })
+#define _DE_SYSTEM_FOREACH_2(SYSTEM, A, B, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; IT; })
+#define _DE_SYSTEM_FOREACH_3(SYSTEM, A, B, C, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; IT; })
+#define _DE_SYSTEM_FOREACH_4(SYSTEM, A, B, C, D, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; D = items[i++]; IT; })
+#define _DE_SYSTEM_FOREACH_5(SYSTEM, A, B, C, D, E, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; D = items[i++]; E = items[i++]; IT; })
+
+/* Internal iterator generator: calls the corresponding foreach macro. */
 #define _DE_SYSTEM_ITERATOR(NAME, FOREACH, ...) \
     void *NAME(de_system *system)               \
     {                                           \
         FOREACH(system, __VA_ARGS__);           \
-        return (void *)DE_STATE_LOOP;           \
+        return DE_STATE_LOOP;                   \
     }
 
-/* Iterator variants for 0-5 variables */
+/* Iterator variants for 0-5 data variables */
 #define _DE_SYSTEM_ITERATOR_0(NAME, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_0, IT)
 #define _DE_SYSTEM_ITERATOR_1(NAME, A, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_1, A, IT)
 #define _DE_SYSTEM_ITERATOR_2(NAME, A, B, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_2, A, B, IT)
 #define _DE_SYSTEM_ITERATOR_3(NAME, A, B, C, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_3, A, B, C, IT)
 #define _DE_SYSTEM_ITERATOR_4(NAME, A, B, C, D, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_4, A, B, C, D, IT)
 #define _DE_SYSTEM_ITERATOR_5(NAME, A, B, C, D, E, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_5, A, B, C, D, E, IT)
-
-/* Internal foreach implementation optimized for sequential access */
-#define _DE_SYSTEM_FOREACH(SYSTEM, IT)                     \
-    void **items = (SYSTEM)->pool;                         \
-    for (uint16_t i = 0, size = (SYSTEM)->size; i < size;) \
-        IT;
-
-/* Foreach variants for 0-5 variables */
-#define _DE_SYSTEM_FOREACH_0(SYSTEM, IT) _DE_SYSTEM_FOREACH(SYSTEM, { IT; })
-#define _DE_SYSTEM_FOREACH_1(SYSTEM, A, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; IT; })
-#define _DE_SYSTEM_FOREACH_2(SYSTEM, A, B, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; IT; })
-#define _DE_SYSTEM_FOREACH_3(SYSTEM, A, B, C, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; IT; })
-#define _DE_SYSTEM_FOREACH_4(SYSTEM, A, B, C, D, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; D = items[i++]; IT; })
-#define _DE_SYSTEM_FOREACH_5(SYSTEM, A, B, C, D, E, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = items[i++]; B = items[i++]; C = items[i++]; D = items[i++]; E = items[i++]; IT; })
 
 #endif /* DARKEN_H */
 
@@ -388,6 +413,7 @@ void *de_entity_exec(de_entity $)
 /**
  * Updates a single entity.
  * Calls the state function and handles state transitions.
+ * Preserves special states (DELETE, LOOP, PAUSE) if they are already set.
  */
 void *de_entity_update(de_entity $)
 {
@@ -401,6 +427,7 @@ void *de_entity_update(de_entity $)
 
 /**
  * Swaps two entities in the manager's array.
+ * Both entities must belong to the same manager.
  */
 void de_entity_swap(de_entity a, de_entity b)
 {
@@ -625,6 +652,9 @@ void de_manager_update(de_manager *$)
 void de_manager_reset(de_manager *$)
 {
     DE_MANAGER_ITERATE($, de_entity_delete(ENTITY));
+
+    $->active_count = 0;
+    $->paused_start = $->capacity;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
