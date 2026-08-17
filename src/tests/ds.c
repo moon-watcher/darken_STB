@@ -367,7 +367,7 @@ TEST(test_manager_iterate_macro) {
     de_entity_pause(e1);
 
     int count = 0;
-    DE_MANAGER_ITERATE(&test_mgr, {
+    DE_MANAGER_FOREACH(&test_mgr, {
         count++;
         CHECK(ENTITY != 0);
     });
@@ -491,7 +491,7 @@ static void bench_manager_iterate(void) {
     uint32_t t0 = get_time_us();
 
     for (int i = 0; i < ITER; i++) {
-        DE_MANAGER_ITERATE(&bench_mgr, {
+        DE_MANAGER_FOREACH(&bench_mgr, {
             count++;
         });
     }

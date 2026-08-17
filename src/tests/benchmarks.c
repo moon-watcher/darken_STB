@@ -68,7 +68,7 @@ static void bench_apply(void)
             e->tag = i;
         }
         // DE_MANAGER_APPLY(&m, (ENTITY->tag % 2) == 0, de_entity_delete);
-        DE_MANAGER_ITERATE(&m, {
+        DE_MANAGER_FOREACH(&m, {
             if (ENTITY->tag % 2 == 0)
                 de_entity_delete(ENTITY);
         });

@@ -105,7 +105,7 @@ struct de_entity
  *
  * - Active zone [0, active_count):
  *     Entities updated every frame by de_manager_update(). Iterable with
- *     DE_MANAGER_ITERATE. Freely created (de_manager_new) and deleted.
+ *     DE_MANAGER_FOREACH. Freely created (de_manager_new) and deleted.
  *
  * - Free zone [active_count, paused_start):
  *     Slots not currently in use by anyone. This is where de_manager_new()
@@ -114,7 +114,7 @@ struct de_entity
  *
  * - Paused zone [paused_start, capacity):
  *     Entities parked out of the update loop. de_manager_update() never
- *     touches them and DE_MANAGER_ITERATE never visits them. Crucially,
+ *     touches them and DE_MANAGER_FOREACH never visits them. Crucially,
  *     de_manager_new() never hands out a slot from this zone, so a paused
  *     entity's slot (and therefore its entity->data pointer) stays valid
  *     and untouched until it's explicitly resumed or deleted. This is what
@@ -180,14 +180,13 @@ struct de_system
 /**
  * Entity management functions
  */
-void *de_entity_exec(de_entity);           // Execute current state without updating it
-void *de_entity_update(de_entity);         // Update entity (call state, handle transitions)
-void de_entity_swap(de_entity, de_entity); // Swap entities in array
-void de_entity_pause(de_entity);           // Park entity in the paused zone
-void de_entity_resume(de_entity);          // Bring entity back to the active zone
-void de_entity_delete(de_entity);          // Mark entity for deletion (calls destructor); works from either zone
-void de_entity_move_front(de_entity);      // Move to front of active section (priority)
-void de_entity_move_back(de_entity);       // Move to back of active section (defer)
+void *de_entity_exec(de_entity);      // Execute current state without updating it
+void *de_entity_update(de_entity);    // Update entity (call state, handle transitions)
+void de_entity_pause(de_entity);      // Park entity in the paused zone
+void de_entity_resume(de_entity);     // Bring entity back to the active zone
+void de_entity_delete(de_entity);     // Mark entity for deletion (calls destructor); works from either zone
+void de_entity_move_front(de_entity); // Move to front of active section (priority)
+void de_entity_move_back(de_entity);  // Move to back of active section (defer)
 
 /* ============================================================================
  * MANAGER API
@@ -228,12 +227,12 @@ void de_entity_move_back(de_entity);       // Move to back of active section (de
  * (ENTITY) is safe. Mutating a DIFFERENT entity mid-loop is NOT guaranteed safe.
  *
  * Example:
- *    DE_MANAGER_ITERATE(my_manager, {
+ *    DE_MANAGER_FOREACH(my_manager, {
  *        if (ENTITY->tag == PLAYER_TAG)
  *            update_player(ENTITY);
  *    });
  */
-#define DE_MANAGER_ITERATE(M, CODE)          \
+#define DE_MANAGER_FOREACH(M, CODE)          \
     do                                       \
     {                                        \
         uint16_t INDEX = (M)->active_count;  \
@@ -252,7 +251,7 @@ void de_entity_move_back(de_entity);       // Move to back of active section (de
  *                    with everything free (size = 0, paused_start = capacity).
  * de_manager_new:    Creates new entity from the free zone (returns NULL if full).
  * de_manager_update: Updates all active entities (paused ones are never touched).
- * de_manager_reset:  Deletes every entity, active AND paused.
+ * de_manager_reset:  Deletes active entities in the manager.
  */
 void de_manager_init(de_manager *, de_entity *, void *, uint16_t, uint16_t);
 de_entity de_manager_new(de_manager *);
@@ -397,6 +396,23 @@ uint16_t de_system_remove(de_system *, void *);
 #ifdef DARKEN_IMPLEMENTATION
 
 /**
+ * Swaps two entities in the manager's array.
+ * Both entities must belong to the same manager.
+ */
+static void _de_entity_swap(de_entity a, de_entity b)
+{
+    de_manager *m = a->manager;
+    uint16_t i = a->slot;
+    uint16_t j = b->slot;
+
+    // Swap in array
+    m->items[i] = b;
+    b->slot = i;
+    m->items[j] = a;
+    a->slot = j;
+}
+
+/**
  * Executes the entity's current state without updating it.
  * Useful for initialization or manual execution scenarios.
  */
@@ -426,23 +442,6 @@ void *de_entity_update(de_entity $)
 }
 
 /**
- * Swaps two entities in the manager's array.
- * Both entities must belong to the same manager.
- */
-void de_entity_swap(de_entity a, de_entity b)
-{
-    de_manager *m = a->manager;
-    uint16_t i = a->slot;
-    uint16_t j = b->slot;
-
-    // Swap in array
-    m->items[i] = b;
-    b->slot = i;
-    m->items[j] = a;
-    a->slot = j;
-}
-
-/**
  * Pauses an entity: moves it out of the active zone, across the free zone,
  * into the paused zone. The entity keeps its physical slot in the pool (it
  * is not freed and cannot be handed out by de_manager_new), so entity->data
@@ -460,11 +459,11 @@ void de_entity_pause(de_entity $)
 
     // Shrink active zone from the right: entity lands on the active/free boundary
     if ($->slot != --m->active_count)
-        de_entity_swap($, m->items[m->active_count]);
+        _de_entity_swap($, m->items[m->active_count]);
 
     // Grow paused zone from the left: entity lands on the free/paused boundary
     if ($->slot != --m->paused_start)
-        de_entity_swap($, m->items[m->paused_start]);
+        _de_entity_swap($, m->items[m->paused_start]);
 }
 
 /**
@@ -482,13 +481,13 @@ void de_entity_resume(de_entity $)
 
     // Shrink paused zone from the left: entity lands on the paused/free boundary
     if ($->slot != m->paused_start)
-        de_entity_swap($, m->items[m->paused_start]);
+        _de_entity_swap($, m->items[m->paused_start]);
 
     ++m->paused_start;
 
     // Grow active zone from the right: entity lands on the free/active boundary
     if ($->slot != m->active_count)
-        de_entity_swap($, m->items[m->active_count]);
+        _de_entity_swap($, m->items[m->active_count]);
 
     ++m->active_count;
 }
@@ -514,28 +513,23 @@ void de_entity_delete(de_entity $)
     if ($->slot >= m->active_count && $->slot < m->paused_start)
         return;
 
-    $->state = DE_STATE_DELETE;
-
-    // Call destructor if exists
     if ($->destructor)
-        $->state = $->destructor($->data);
-
-    // Only delete if destructor allows it
-    if (!DE_STATE_IS_DELETED($->state))
-        return;
+        $->destructor($->data);
 
     if ($->slot >= m->paused_start)
     {
         // Was paused: shrink paused zone from the left, slot rejoins the free zone
         if ($->slot != m->paused_start)
-            de_entity_swap($, m->items[m->paused_start]);
+            _de_entity_swap($, m->items[m->paused_start]);
+
         ++m->paused_start;
     }
     else
     {
         // Was active: shrink active zone from the right, slot rejoins the free zone
         if ($->slot != m->active_count - 1)
-            de_entity_swap($, m->items[m->active_count - 1]);
+            _de_entity_swap($, m->items[m->active_count - 1]);
+
         --m->active_count;
     }
 }
@@ -549,7 +543,7 @@ void de_entity_move_front(de_entity $)
     de_manager *m = $->manager;
 
     if ($->slot < m->active_count)
-        de_entity_swap($, m->items[m->active_count - 1]);
+        _de_entity_swap($, m->items[m->active_count - 1]);
 }
 
 /**
@@ -561,8 +555,10 @@ void de_entity_move_back(de_entity $)
     de_manager *m = $->manager;
 
     if ($->slot < m->active_count)
-        de_entity_swap($, m->items[0]);
+        _de_entity_swap($, m->items[0]);
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /**
  * Initializes an entity manager.
@@ -655,7 +651,7 @@ void de_manager_update(de_manager *$)
  */
 void de_manager_reset(de_manager *$)
 {
-    DE_MANAGER_ITERATE($, de_entity_delete(ENTITY));
+    DE_MANAGER_FOREACH($, de_entity_delete(ENTITY));
 
     $->active_count = 0;
     $->paused_start = $->capacity;

@@ -111,7 +111,7 @@ Darken deliberately separates its namespaces:
 | Public types/functions | `de_*` | `de_entity`, `de_manager_update()` |
 | Public macros/constants | `DE_*` | `DE_STATE_LOOP`, `DE_MANAGER_STORAGE()` |
 | Internal functions | `_de_*` | `de_entity_swap()` |
-| Internal macros | `_DE_*` | `_DE_ALIGN4`, `_DE_MANAGER_ITERATE` |
+| Internal macros | `_DE_*` | `_DE_ALIGN4`, `_DE_MANAGER_FOREACH` |
 
 This is intentional.
 
@@ -692,14 +692,14 @@ policy.
 Two public iteration macros are provided:
 
 ```c
-DE_MANAGER_ITERATE(m, { ... });
-DE_MANAGER_ITERATE(m, { ... });
+DE_MANAGER_FOREACH(m, { ... });
+DE_MANAGER_FOREACH(m, { ... });
 ```
 
 ## Active entities
 
 ```c
-DE_MANAGER_ITERATE(m, {
+DE_MANAGER_FOREACH(m, {
     /* active entities only */
 });
 ```
@@ -709,7 +709,7 @@ Only the active partition is visited.
 ## All entities
 
 ```c
-DE_MANAGER_ITERATE(m, {
+DE_MANAGER_FOREACH(m, {
     /* paused + active */
 });
 ```
@@ -728,7 +728,7 @@ uint16_t INDEX = indice_en_el_array;
 Example:
 
 ```c
-DE_MANAGER_ITERATE(&mgr, {
+DE_MANAGER_FOREACH(&mgr, {
     if (ENTITY->tag == PLAYER_TAG)
     {
         update_player(ENTITY);
@@ -1204,8 +1204,8 @@ de_manager_reset()
 DE_MANAGER_STORAGE()
 DE_MANAGER_ARGS()
 
-DE_MANAGER_ITERATE()
-DE_MANAGER_ITERATE()
+DE_MANAGER_FOREACH()
+DE_MANAGER_FOREACH()
 
 DE_MANAGER_APPLY()
 DE_MANAGER_APPLY_ALL()

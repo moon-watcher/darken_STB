@@ -1091,7 +1091,7 @@ static void test_manager_iterate_active_only(void)
     }
     de_entity_pause(m.items[1]);
     uint16_t count = 0;
-    DE_MANAGER_ITERATE(&m, { count++; });
+    DE_MANAGER_FOREACH(&m, { count++; });
     CHECK("iterate active: 3 entidades", count == 3);
 }
 
@@ -1120,7 +1120,7 @@ static void test_apply_active_only(void)
     }
     CHECK("apply active: size 1", m.active_count == 1);
     bool foundTag1 = FALSE;
-    DE_MANAGER_ITERATE(&m, { if (ENTITY->tag == 1) foundTag1 = TRUE; });
+    DE_MANAGER_FOREACH(&m, { if (ENTITY->tag == 1) foundTag1 = TRUE; });
     CHECK("apply active: tag 1 borrado", !foundTag1);
 }
 
