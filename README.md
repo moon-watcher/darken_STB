@@ -17,7 +17,14 @@ manager->items[]
 
 The entity objects themselves are stored in a contiguous byte block. Moving an entity between zones moves only its pointer in `items[]`; the entity's physical address never changes.
 
-That property is particularly useful when another subsystem keeps a raw pointer to `entity->data`.
+That property is particularly useful when another subsystem keeps a raw pointer to `entity->data`. It is one of the core invariants of Darken: **manager reordering never relocates the entity object itself**.
+
+The manager therefore has two distinct kinds of position:
+
+1. the entity's **physical address** inside the caller-provided storage block; and
+2. its **logical position** in `manager->items[]`, recorded by `entity->slot`.
+
+Only the second one changes during creation, deletion, pause/resume, or reordering.
 
 ---
 
@@ -167,7 +174,9 @@ storage
 └──────────────────────────────┘
 ```
 
-The stride is calculated once during `de_manager_init()` and reused to build the pointer table.
+The stride is calculated once during `de_manager_init()` and reused to build the pointer table. Darken aligns this stride to a 4-byte boundary with `_DE_ALIGN4()`. The alignment is an implementation detail of the target-oriented storage layout: it keeps each entity start at a predictable boundary and avoids creating irregular entity strides.
+
+On the Motorola 68000, word alignment is the important minimum requirement for word/long accesses. The 4-byte stride alignment is deliberately stronger and is used by Darken to keep entity boundaries regular.
 
 ---
 
@@ -208,6 +217,50 @@ g_storage
 ```
 
 The entity data block is aligned to 4 bytes.
+
+---
+
+# 5.1 Manager zones and invariants
+
+`manager->items[]` is maintained as three contiguous logical zones:
+
+```text
+index
+  0                         active_count              paused_start          capacity
+  │                              │                         │                    │
+  ▼                              ▼                         ▼                    ▼
+  ┌──────────────────────────────┬─────────────────────────┬────────────────────┐
+  │            ACTIVE            │          FREE           │       PAUSED       │
+  │  [0, active_count)           │ [active_count,          │ [paused_start,     │
+  │                              │  paused_start)          │  capacity)         │
+  └──────────────────────────────┴─────────────────────────┴────────────────────┘
+```
+
+### Active zone
+
+The active zone contains entities processed by `de_manager_update()`. `DE_MANAGER_FOREACH` also visits only this zone, in descending index order.
+
+New entities are taken from the first free slot and inserted at the active/free boundary.
+
+### Free zone
+
+The free zone contains pointer slots that are currently available to `de_manager_new()`. Its range is `[active_count, paused_start)`.
+
+An important consequence is that **paused entities are never recycled as free slots**. This is what preserves the physical address of a paused entity and therefore the validity of pointers into its payload.
+
+### Paused zone
+
+The paused zone contains live entities that are deliberately excluded from normal updates. Its range is `[paused_start, capacity)`.
+
+`de_manager_update()` does not execute paused entities, and `DE_MANAGER_FOREACH` does not visit them. `de_manager_new()` never allocates from this zone.
+
+### Why `slot` exists
+
+`entity->slot` is the entity's current index in `manager->items[]`. It is **not** an offset into the entity byte-storage block. When two entities are swapped, their physical memory stays where it was and only their `slot` values and pointer-array positions change.
+
+This distinction is what allows Darken to reorder entities without invalidating `entity->data` pointers.
+
+All manager counters are `uint16_t`, matching the fixed-capacity, 68000-oriented design.
 
 ---
 
@@ -323,6 +376,12 @@ de_manager_update(&g_manager);
 
 will execute it.
 
+A state callback receives only `entity->data`; it does not receive the `de_entity *` itself. The callback's return value becomes the entity's next state unless it returns `DE_STATE_LOOP`. `DE_STATE_LOOP` explicitly means **keep the current state function**.
+
+`DE_STATE_PAUSE` and `DE_STATE_DELETE` are not performed immediately by the state callback. They are stored as the entity's state and are acted upon by a subsequent `de_manager_update()`. This separation is important because the manager is traversing its active pointer array while the callback is running.
+
+If an entity has no active state, `de_entity_exec()` does not call anything and returns `DE_STATE_DELETE` (which is `NULL`); `de_entity_update()` instead preserves and returns the entity's current non-active state. In normal manager operation, a newly created entity starts with `DE_STATE_DELETE`, so it must be assigned an active state before it can update.
+
 ---
 
 # 8. State control values
@@ -397,6 +456,37 @@ de_entity_move_back()
 ```
 
 The manager's update loop is designed so that pausing or deleting an entity does not require re-reading `active_count` during the traversal.
+
+The traversal starts with a snapshot of the active-zone size:
+
+```c
+uint16_t i = manager->active_count;
+while (i--)
+{
+    /* process items[i] */
+}
+```
+
+This is deliberate. Both `de_entity_pause()` and `de_entity_delete()` shrink the active zone from its right edge. During a backwards traversal, that right edge consists of indices that have already been visited. Consequently, an entity moved out of the active zone cannot cause the loop to revisit an unprocessed entity or require a live `active_count` reload.
+
+The state-processing sequence is:
+
+```text
+active entity
+      │
+      ▼
+ execute state(data)
+      │
+      ├── DE_STATE_LOOP   → keep current state
+      ├── another state   → store new state
+      ├── DE_STATE_PAUSE  → store pause request
+      └── DE_STATE_DELETE → store deletion request
+                                │
+                                ▼
+                       next manager update
+                                │
+                         pause/delete
+```
 
 ---
 
@@ -485,6 +575,10 @@ Resume it with:
 de_entity_resume(entity);
 ```
 
+Pause and resume are constant-time pointer-array operations. Pausing shrinks the active zone from the right, fills the entity's old active slot with the entity that occupied the active-zone edge, then grows the paused zone from the left and places the paused entity at the new paused boundary. Resume performs the inverse movement: it removes the entity from the paused boundary, advances `paused_start`, and inserts the resumed entity at the active/free boundary.
+
+The entity's byte storage is never copied. Only `manager->items[]` and the affected entities' `slot` fields change.
+
 ---
 
 # 12. Why the three-zone design matters
@@ -549,6 +643,12 @@ entity->destructor = my_destructor;
 it is called before the entity is removed.
 
 The destructor's return value is ignored. It cannot cancel deletion.
+
+Deletion first checks whether the entity is already in the free zone. If it is live, its destructor is called and the entity is then removed from whichever live zone contains it. The implementation swaps it with the element adjacent to the free zone and expands the free zone by one slot.
+
+For an active entity, the active zone shrinks from the right. For a paused entity, the paused zone shrinks from the left. In both cases the operation is O(1) and the entity's physical storage is not moved.
+
+After deletion, the old `de_entity *` must be treated as invalid for normal use: its storage may be handed to `de_manager_new()` again.
 
 Example:
 
@@ -658,7 +758,11 @@ pool[]
 └────┴────┴────┴────┴────┴────┴────┴────┴────┘
 ```
 
-`size` and `capacity` are measured in pointer slots, while `params` defines the group width.
+`size` and `capacity` are measured in pointer slots, while `params` defines the group width. Thus, if `params == 3`, a system containing four groups has `size == 12`, not `size == 4`.
+
+`end` points one element past the last used pointer. `DE_SYSTEM_ADD` writes new pointers at `end`, then advances both `size` and `end` by the number of pointers added. The pool therefore remains densely packed from `pool` through `end`.
+
+The system does not own the pointed-to objects. It stores only pointers. The lifetime of the entities/components represented by those pointers remains the caller's responsibility.
 
 ---
 
@@ -822,6 +926,22 @@ void *physics_update(de_system *system)
 Important: this function takes `de_system *`, while `de_state` takes `void *`. Therefore the generated function pointer is **not type-compatible with `de_state` under strict ISO C**.
 
 On the intended GCC/SGDK target the macro can be useful where the ABI and calling convention are known, but it should not be treated as a portable function-pointer conversion.
+
+---
+
+# 21.1 Macro argument limits and generated code
+
+The convenience macros deliberately support a small fixed number of parameters:
+
+| Macro | Supported data variables/pointers |
+|---|---:|
+| `DE_SYSTEM_ADD` | 1–5 |
+| `DE_SYSTEM_FOREACH` | 0–5 |
+| `DE_SYSTEM_ITERATOR` | 0–5 |
+
+The `_DE_*` macros used to count arguments and select implementations are internal details. They exist solely to provide the public variadic API and should not be called directly.
+
+The generated system code is intentionally simple: it walks `pool[]` in groups of `params` pointers and assigns the requested convenience variables from the current group.
 
 ---
 
@@ -1068,6 +1188,8 @@ Darken's design favors the target CPU in several ways:
 - simple loops;
 - packed system arrays;
 - 4-byte entity stride alignment.
+
+The 4-byte alignment is applied to the **entity stride**, not merely to the beginning of the storage block. This means every entity begins at a predictable 4-byte boundary even when the payload size itself is not a multiple of four.
 
 The implementation does not claim that every operation is universally optimal for every compiler configuration. The intended target is GCC/SGDK on the Motorola 68000.
 
