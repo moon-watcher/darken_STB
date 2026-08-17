@@ -67,6 +67,16 @@ Therefore Darken is **not intended to be strictly ISO C portable**.
 
 The `de_state` interface also represents state callback pointers and special control values through `void *`. This is intentional for the target environment and should be treated as a compiler/ABI-specific interface.
 
+### Internal preprocessor helpers
+
+The header contains `_DE_*` macros used only to implement the public convenience macros. In particular:
+
+- `_DE_ADD_NARGS` counts the data arguments supplied to `DE_SYSTEM_ADD`; the system pointer is excluded, so the supported range is 1–5 data pointers.
+- `_DE_FOREACH_NARGS` performs the equivalent selection for `DE_SYSTEM_FOREACH` and `DE_SYSTEM_ITERATOR`; the system pointer and final code block are excluded, so the supported range is 0–5 data variables.
+- `_DE_CONCAT` performs token concatenation so the public variadic macro can select `_DE_SYSTEM_ADD_1` … `_DE_SYSTEM_ADD_5`, or the corresponding foreach/iterator implementation.
+
+These helpers are implementation details. Application code should use the `DE_*` macros rather than calling `_DE_*` directly.
+
 ---
 
 # 2. Single-header usage
@@ -138,6 +148,14 @@ struct de_entity
 
 # 4. Entity memory layout
 
+The logical entity layout is:
+
+```text
+[state][destructor][manager][slot][tag][user data...]
+```
+
+`slot` is the entity's current logical index in `manager->items[]`; it is **not** an offset into the entity storage block. Manager operations update `slot` whenever an entity pointer changes position in the manager array.
+
 For a payload of `PAYLOAD` bytes, the stride is:
 
 ```c
@@ -149,6 +167,10 @@ which is equivalent to:
 ```text
 align4(sizeof(struct de_entity) + PAYLOAD)
 ```
+
+The internal `_DE_ALIGN4()` helper rounds the byte count upward to the next 4-byte boundary. The intent is to keep every entity at a predictable stride and provide longword-aligned entity starts. The 68000 itself requires word alignment for word/long accesses; the 4-byte stride is therefore a deliberate layout choice rather than a requirement that every payload be exactly a multiple of four bytes.
+
+The stride is calculated once by `de_manager_init()` and then reused while it precomputes the entity pointers. Darken does not recalculate an entity address during normal manager operations.
 
 The storage therefore looks like:
 
@@ -181,6 +203,28 @@ On the Motorola 68000, word alignment is the important minimum requirement for w
 ---
 
 # 5. Manager storage
+
+`DE_MANAGER_STORAGE()` packages the two caller-owned storage arrays and the values needed to initialize a manager:
+
+```c
+DE_MANAGER_STORAGE(storage, 64, sizeof(MyComponent));
+
+de_manager manager;
+de_manager_init(&manager, DE_MANAGER_ARGS(storage));
+```
+
+Conceptually the generated object contains:
+
+```text
+entities[CAPACITY]  -> pointer array used by de_manager
+data[...]           -> contiguous entity byte storage
+capacity             -> stored capacity
+payload_size         -> payload size supplied to DE_ENTITY_STRIDE()
+```
+
+The `entities[]` array and the `data[]` block are separate. `entities[]` contains pointers; `data[]` contains the actual entity objects. `de_manager_init()` walks `data[]` using the calculated stride and fills `entities[]` with those addresses.
+
+The storage object must remain alive and at the same address for the entire lifetime of the manager. Darken does not copy it or allocate replacement storage.
 
 The easiest way to reserve manager storage is:
 
@@ -318,6 +362,10 @@ If zeroed data is required, initialize it explicitly.
 
 # 7. Entity state machine
 
+The state callback receives `entity->data` rather than the entity pointer itself. It returns either another executable state function or one of the three reserved control values. This keeps the state callback interface small and makes the entity payload the natural state-local context.
+
+`de_entity_exec()` invokes the current executable state without modifying `entity->state`. `de_entity_update()` invokes the current executable state and stores the returned transition unless the return value is `DE_STATE_LOOP`. `de_manager_update()` performs the same state invocation while additionally interpreting `DE_STATE_PAUSE` and `DE_STATE_DELETE` as manager operations.
+
 A state callback has this form:
 
 ```c
@@ -385,6 +433,8 @@ If an entity has no active state, `de_entity_exec()` does not call anything and 
 ---
 
 # 8. State control values
+
+The reserved values are deliberately represented as pointer-sized values because `de_state` is a `void *` callback type. A state callback therefore has two possible categories of return value: an executable function pointer or one of the special control values below. This interface uses GNU/target ABI assumptions and is not intended as strict ISO C function-pointer portability.
 
 Darken defines three special values:
 
@@ -491,6 +541,8 @@ active entity
 ---
 
 # 10. Update ordering controls
+
+Darken's active traversal is backwards. Therefore the highest active index is visited first and index zero is visited last. This is why `de_entity_move_front()` and `de_entity_move_back()` have names that refer to the active array rather than to update priority in the ordinary left-to-right sense.
 
 ## `de_entity_move_front()`
 
@@ -620,6 +672,10 @@ Therefore external pointers into entity payloads remain valid across pause/resum
 
 # 13. Deletion
 
+`de_entity_delete()` accepts an entity from either the active or paused zone. If the entity is already in the free zone, the operation is a no-op. If a destructor exists, Darken calls it with `entity->data` before the entity's slot is returned to the free zone. The current implementation does **not** use the destructor's return value to cancel deletion; deletion proceeds after the callback returns.
+
+For an active entity, the last active slot is swapped into the deleted entity's position and `active_count` is decremented. For a paused entity, the first paused slot is swapped into its position and `paused_start` is incremented. In both cases the freed slot becomes part of the free zone.
+
 Delete explicitly:
 
 ```c
@@ -692,6 +748,8 @@ Darken does not assign semantics to them.
 ---
 
 # 15. Iterating entities
+
+`DE_MANAGER_FOREACH` iterates only the active zone and does so in descending index order. Inside its code block the generated names are `INDEX`, `ITEMS`, and `ENTITY`. Operations on the entity currently being visited are compatible with the manager's swap-based organization, but mutating a **different** entity during the same traversal is not a general safety guarantee: such mutations can change positions that the traversal has not yet consumed.
 
 Use:
 
@@ -768,6 +826,14 @@ The system does not own the pointed-to objects. It stores only pointers. The lif
 
 # 17. System storage
 
+A `de_system` is a flat pointer pool. Its storage is arranged in groups of `params` pointers, allowing one logical group to represent several related data references for one entity or one processing item. For `params = 3`, the layout is:
+
+```text
+[e0.a][e0.b][e0.c][e1.a][e1.b][e1.c][e2.a][e2.b][e2.c]...
+```
+
+The `capacity` field stores the total number of pointer slots (`capacity_groups * params`), while `size` stores the number of pointer slots currently in use and is therefore always a multiple of `params`. `end` points one element past the last used pointer.
+
 Declare static system storage:
 
 ```c
@@ -798,6 +864,8 @@ No heap allocation is performed.
 ---
 
 # 18. Adding system groups
+
+`DE_SYSTEM_ADD` accepts the system pointer first and then 1–5 data pointers. The macro writes those pointers consecutively at `system->end`, advances both `size` and `end`, and returns non-zero on success. If there is insufficient capacity for the complete group, it writes nothing and returns zero.
 
 Use:
 
@@ -857,6 +925,14 @@ The variables supplied to the macro are assigned from the current group's pointe
 
 # 20. Removing system groups
 
+`de_system_init()` receives the number of logical groups and the number of pointers per group. It initializes `pool` and `end` to the beginning of the caller-owned storage, sets `size` to zero, and stores the pointer-slot capacity as:
+
+```text
+capacity = capacity_groups × params
+```
+
+`size` is expressed in **pointer slots**, not logical groups. A system with 10 groups and 3 parameters has `capacity == 30` and, when full, `size == 30`. The number of occupied logical groups is therefore `size / params`. `end` always points one group-aware step beyond the currently occupied pointer slots.
+
 Remove a group by matching its first pointer:
 
 ```c
@@ -892,6 +968,8 @@ Do not depend on stable system-group ordering after removal.
 ---
 
 # 21. System iterator generator
+
+`DE_SYSTEM_ITERATOR` turns a `DE_SYSTEM_FOREACH`-style body into a function whose signature accepts `de_system *`. The generated function executes the complete system traversal and returns `DE_STATE_LOOP`, which allows the generated iterator to be installed directly as an entity state callback.
 
 `DE_SYSTEM_ITERATOR` generates a function that executes a system foreach pattern and returns:
 
@@ -1085,6 +1163,47 @@ void movement_update(void)
 
 # 24. Entity manager lifecycle
 
+The manager lifecycle follows a fixed sequence.
+
+### `de_manager_init()`
+
+Initialization stores the caller-provided `items` array and entity storage pointer, sets `active_count` to zero, sets `paused_start` to `capacity`, calculates the aligned entity stride, and precomputes one entity pointer for every storage slot. The resulting manager starts empty: every slot belongs to the free zone.
+
+The initialization pass is O(capacity), but it is performed once. Normal entity creation does not need to calculate an entity address.
+
+### `de_manager_new()`
+
+Creation takes the pointer at `items[active_count]`, advances `active_count`, assigns the manager and slot, and initializes the new entity's state, destructor, and tag to their default values. It returns `NULL` when the free zone is empty:
+
+```text
+active_count >= paused_start
+```
+
+The payload is deliberately **not initialized** by `de_manager_new()`. If the application requires zeroed or initialized component data, it must perform that initialization itself.
+
+### `de_manager_update()`
+
+The active zone is traversed backwards using a snapshot of `active_count`. The callback is executed for active states; `DE_STATE_PAUSE` and `DE_STATE_DELETE` are handled as control states. Paused entities are outside the traversal entirely.
+
+### `de_manager_reset()`
+
+Reset removes active entities and then paused entities, invoking their destructors through the normal deletion path. Only after both live zones are empty does it restore:
+
+```c
+active_count = 0;
+paused_start = capacity;
+```
+
+This distinction matters: simply restoring the counters would make paused entities unreachable without running their destructors.
+
+`de_manager_init()` starts with an entirely free manager: `active_count == 0` and `paused_start == capacity`. It also precomputes the physical address of every entity from the caller-provided storage block and records each initial `slot`.
+
+`de_manager_new()` takes the first pointer in the free zone, moves the active boundary by one, resets the new entity's state/destructor/tag fields, and returns it. The payload bytes are **not initialized** by Darken; callers must initialize `entity->data` when required.
+
+`de_manager_update()` walks the active zone backwards. It invokes executable states and stores returned states except `DE_STATE_LOOP`; pending `DE_STATE_PAUSE` and `DE_STATE_DELETE` values are handled as manager operations. Paused entities are never traversed by the update loop.
+
+`de_manager_reset()` deletes both active and paused entities, respecting their destructors, and finally restores `active_count == 0` and `paused_start == capacity`.
+
 A typical lifecycle is:
 
 ```text
@@ -1112,6 +1231,10 @@ A state callback can therefore act as a lightweight state machine.
 
 # 25. Complexity
 
+The manager operations are designed around constant-time pointer rearrangement. `de_manager_new()`, pause, resume, entity swap, move-front, move-back, and deletion do not move entity bytes; they adjust boundaries and/or a constant number of entries in `items[]`.
+
+`de_manager_init()` is O(capacity) because it precomputes one entity pointer per storage slot. `de_manager_update()` is O(active_count) per call, excluding the cost of user state callbacks. `de_system_remove()` is O(number of groups * params) in the worst case because it searches for the first pointer and may copy one complete group.
+
 For the manager:
 
 | Operation | Complexity |
@@ -1138,6 +1261,10 @@ For systems:
 ---
 
 # 26. Memory model
+
+Darken deliberately separates the **pointer table** from the **entity byte storage**. `manager->items[]` is the mutable logical index; the caller-owned storage block is the immutable physical home of each entity until the manager itself is discarded.
+
+This is the central memory invariant behind the library's pause/resume and reordering behavior. Reordering changes `items[]` and `entity->slot`; it does not copy or relocate `[state][destructor][manager][slot][tag][data...]`.
 
 Darken deliberately separates pointer metadata from entity storage:
 
@@ -1176,6 +1303,10 @@ Darken only does the first.
 ---
 
 # 27. 68000-oriented design
+
+The manager's counters are 16-bit, entity strides are precomputed, and the hot update path uses a simple backwards pointer-array traversal. The three-zone design avoids compaction of the entity payload block and makes pause/resume/delete operate on a small number of pointer and index updates.
+
+The header also aligns the entity storage and stride to four bytes. On a 68000, word alignment is the fundamental requirement for word/long accesses; the stronger 4-byte stride boundary keeps entity starts regular and predictable.
 
 Darken's design favors the target CPU in several ways:
 
@@ -1381,20 +1512,3 @@ The entity owns its state and payload.
 The system owns packed lists of pointers.
 
 That separation keeps the core small while allowing the game code to decide how entities and systems interact.
-
----
-
-# 32. Version notes
-
-This documentation describes the Darken 2.0 API contained in `darken.h`.
-
-The implementation intentionally uses the `de_*` / `DE_*` naming scheme:
-
-```text
-Public functions/types  de_*
-Public macros           DE_*
-Internal functions      _de_*
-Internal macros         _DE_*
-```
-
-For the authoritative behavior, always treat the implementation in `darken.h` as the source of truth.
