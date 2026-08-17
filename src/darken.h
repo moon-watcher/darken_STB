@@ -54,10 +54,16 @@
  * TYPE DEFINITIONS
  * ============================================================================ */
 
-// State function pointer type
-// Takes entity data pointer, returns next state or control code.
-// WARNING: Storing function pointers in void* is not strictly ISO C,
-//          but works on most 68K compilers. Use with caution.
+/**
+ * Entity state/destructor callback type.
+ *
+ * Receives entity->data and returns either another state callback or one of
+ * the DE_STATE_* control values.
+ *
+ * GNU C/SGDK note: Darken represents both function pointers and control
+ * values through void*. This is an intentional implementation choice for
+ * the 68000/SGDK target and is not a strictly portable ISO C interface.
+ */
 typedef void *(*de_state)(void *);
 
 // Forward declarations for type safety
@@ -99,25 +105,29 @@ struct de_entity
 };
 
 /**
- * Manager: Entity container and lifecycle manager
+ * Manager: Entity container and lifecycle manager.
  *
- * Maintains entities in a contiguous array split into three zones:
+ * Maintains the pointer array in three logical zones:
  *
  * Array Layout:
  * [ active entities ][   free slots   ][ paused entities ]
  * 0             active_count      paused_start        capacity
  *
+ * The entity objects themselves live in the caller-provided storage block;
+ * manager->items contains pointers to those fixed addresses.
+ *
  * - Active zone [0, active_count):
- *     Entities updated every frame by de_manager_update(). Iterable with
+ *     Entity pointers updated every frame by de_manager_update(). Iterable with
  *     DE_MANAGER_FOREACH. Freely created (de_manager_new) and deleted.
  *
  * - Free zone [active_count, paused_start):
- *     Slots not currently in use by anyone. This is where de_manager_new()
+ *     Pointer slots not currently assigned to an entity. This is where
+ *     de_manager_new()
  *     takes its next entity from, and where an active entity's slot goes
  *     right after it's deleted.
  *
  * - Paused zone [paused_start, capacity):
- *     Entities parked out of the update loop. de_manager_update() never
+ *     Entity pointers parked out of the update loop. de_manager_update() never
  *     touches them and DE_MANAGER_FOREACH never visits them. Crucially,
  *     de_manager_new() never hands out a slot from this zone, so a paused
  *     entity's slot (and therefore its entity->data pointer) stays valid
@@ -135,11 +145,10 @@ struct de_manager
 };
 
 /**
- * System: Generic data pool for component storage
+ * System: Flat packed pool of data pointers.
  *
- * Provides a flat array for storing component data. The pool is organized
- * in groups of 'params' elements, allowing systems to process multiple
- * related data items per entity.
+ * The pool is organized in groups of 'params' pointers. Each group can hold
+ * the pointers associated with one processed item/entity.
  *
  * Pool Layout (params=3):
  * [e0.a][e0.b][e0.c][e1.a][e1.b][e1.c][e2.a][e2.b][e2.c]...
@@ -148,8 +157,8 @@ struct de_system
 {
     void **pool;       // Data storage array
     void **end;        // One past the last element in use
-    uint16_t capacity; // Maximum capacity in groups (multiplied by params)
-    uint16_t size;     // Current size in groups (not individual elements)
+    uint16_t capacity; // Total pointer slots in the pool (groups * params)
+    uint16_t size;     // Used pointer slots (always a multiple of params)
     uint16_t params;   // Number of elements per group
 };
 
@@ -197,7 +206,7 @@ void *de_entity_exec(de_entity);
  * DE_STATE_PAUSE / DE_STATE_DELETE are stored as pending transitions and are
  * processed by the next de_manager_update().
  *
- * If the entity is not active, its state is left untouched.
+ * If the entity is not active, its state is left untouched and returned.
  */
 void *de_entity_update(de_entity);
 
@@ -222,24 +231,24 @@ void de_entity_resume(de_entity);
 /**
  * Request deletion of an entity from either the active or paused zone.
  *
- * The destructor, when present, is called before deletion. Returning
- * DE_STATE_DELETE confirms deletion. Any other return value cancels deletion
- * and restores the entity's previous state.
+ * The destructor, when present, is called before the entity is removed.
+ * Its return value is ignored; destructors cannot cancel deletion.
  */
 void de_entity_delete(de_entity);
 
 /**
- * Move an active entity to the first position in the active array.
+ * Move an active entity to the highest active index.
  *
- * Because Darken updates/iterates backwards, this defers the entity until
- * the end of the current traversal.
+ * Because Darken updates/iterates backwards, this makes the entity run earlier
+ * in the next traversal.
  */
 void de_entity_move_front(de_entity);
 
 /**
- * Move an active entity to the last position in the active array.
+ * Move an active entity to index 0.
  *
- * Because Darken updates/iterates backwards, this prioritizes the entity.
+ * Because Darken updates/iterates backwards, this makes the entity run later
+ * in the next traversal.
  */
 void de_entity_move_back(de_entity);
 
@@ -302,11 +311,10 @@ void de_entity_move_back(de_entity);
 /**
  * Manager management functions
  *
- * de_manager_init:   Initializes manager with pre-allocated storage. Starts
- *                    with everything free (size = 0, paused_start = capacity).
- * de_manager_new:    Creates new entity from the free zone (returns NULL if full).
- * de_manager_update: Updates all active entities (paused ones are never touched).
- * de_manager_reset:  Deletes active entities in the manager.
+ * de_manager_init:   Initializes a manager using caller-provided storage.
+ * de_manager_new:    Creates an entity from the free zone (returns NULL if full).
+ * de_manager_update: Updates active entities and processes pending transitions.
+ * de_manager_reset:  Deletes all active and paused entities.
  */
 void de_manager_init(de_manager *, de_entity *, void *, uint16_t, uint16_t);
 
@@ -329,10 +337,8 @@ de_entity de_manager_new(de_manager *);
 void de_manager_update(de_manager *);
 
 /**
- * Delete every active and paused entity.
- *
- * Destructors are respected. A destructor that cancels deletion can therefore
- * leave an entity alive.
+ * Delete every active and paused entity and restore the manager to its initial
+ * empty state. Destructors are called for every entity that is deleted.
  */
 void de_manager_reset(de_manager *);
 
@@ -364,8 +370,8 @@ void de_manager_reset(de_manager *);
     (NAME).pool, (NAME).capacity, (NAME).params
 
 /**
- * Adds a group of parameters to the system.
- * Supports 1-5 data parameters (system pointer is always first).
+ * Adds one parameter group to the system.
+ * Supports 1-5 data pointers (the system pointer is always the first macro argument).
  * Returns 1 on success, 0 if system is full.
  *
  * Example:
@@ -375,8 +381,8 @@ void de_manager_reset(de_manager *);
     _DE_CONCAT(_DE_SYSTEM_ADD_, _DE_ADD_NARGS(__VA_ARGS__))(__VA_ARGS__)
 
 /**
- * Iterates over system data.
- * Supports 0-5 data variables per iteration (system pointer always first).
+ * Iterates over the system's parameter groups.
+ * Supports 0-5 output variables per iteration; the system pointer is always the first macro argument.
  *
  * Example:
  *    DE_SYSTEM_FOREACH(physics_system, entity, velocity, position, {
@@ -387,8 +393,9 @@ void de_manager_reset(de_manager *);
     _DE_CONCAT(_DE_SYSTEM_FOREACH_, _DE_FOREACH_NARGS(__VA_ARGS__))(__VA_ARGS__)
 
 /**
- * DE_SYSTEM_ITERATOR: Creates an iterator function from a foreach pattern.
- * The generated function returns DE_STATE_LOOP for use as entity state.
+ * DE_SYSTEM_ITERATOR: Creates a function that runs a system foreach pattern
+ * and returns DE_STATE_LOOP. The generated function receives a de_system *;
+ * it is not type-compatible with de_state(void *) under strict ISO C.
  *
  * Example:
  *    DE_SYSTEM_ITERATOR(physics_update, entity, velocity, position, {
@@ -479,7 +486,7 @@ uint16_t de_system_remove(de_system *, void *);
  * Swaps two entities in the manager's array.
  * Both entities must belong to the same manager.
  */
-static void _de_entity_swap(de_entity a, de_entity b)
+void de_entity_swap(de_entity a, de_entity b)
 {
     de_manager *m = a->manager;
     uint16_t i = a->slot;
@@ -522,8 +529,8 @@ void *de_entity_update(de_entity $)
 }
 
 /**
- * Pauses an entity: moves it out of the active zone, across the free zone,
- * into the paused zone. The entity keeps its physical slot in the pool (it
+ * Pauses an entity: moves its pointer from the active zone into the paused
+ * zone. The entity keeps its physical storage address (it
  * is not freed and cannot be handed out by de_manager_new), so entity->data
  * stays valid and any external references to it (e.g. from a de_system)
  * remain safe until it's resumed or explicitly deleted.
@@ -555,8 +562,8 @@ void de_entity_pause(de_entity $)
 }
 
 /**
- * Resumes an entity: moves it out of the paused zone, across the free zone,
- * back into the active zone. Mirror of de_entity_pause.
+ * Resumes an entity: moves its pointer from the paused zone back into the
+ * active zone. Mirror of de_entity_pause.
  *
  * No-op if the entity is not currently paused.
  */
@@ -590,12 +597,11 @@ void de_entity_resume(de_entity $)
  * slot rejoins the free zone (available again for de_manager_new).
  *
  * Algorithm:
- * 1. Early exit if the slot is already free (not active, not paused)
- * 2. Set state to delete
- * 3. Call destructor if present (can override deletion by returning
- *    anything other than DE_STATE_DELETE)
- * 4. If deletion is confirmed: shrink whichever zone (active or paused)
- *    the entity currently belongs to, from the edge adjacent to the free zone
+ * 1. Exit if the entity is already in the free zone.
+ * 2. Call the destructor, if present.
+ * 3. Remove the entity from its zone by swapping with the zone edge adjacent
+ *    to the free zone.
+ * 4. Grow the free zone by one slot.
  */
 void de_entity_delete(de_entity $)
 {
@@ -612,7 +618,7 @@ void de_entity_delete(de_entity $)
     {
         // Was paused: shrink paused zone from the left, slot rejoins the free zone
         if ($->slot != m->paused_start)
-            _de_entity_swap($, m->items[m->paused_start]);
+            de_entity_swap($, m->items[m->paused_start]);
 
         ++m->paused_start;
     }
@@ -620,43 +626,43 @@ void de_entity_delete(de_entity $)
     {
         // Was active: shrink active zone from the right, slot rejoins the free zone
         if ($->slot != m->active_count - 1)
-            _de_entity_swap($, m->items[m->active_count - 1]);
+            de_entity_swap($, m->items[m->active_count - 1]);
 
         --m->active_count;
     }
 }
 
 /**
- * Moves entity to front of active section.
- * Useful for prioritizing entity updates. Since the manager updates
- * entities backward, the front is the highest active index.
+ * Moves an active entity to the highest active index.
+ * Because the manager updates backwards, this makes the entity run earlier
+ * in the next traversal. No-op for paused/free entities.
  */
 void de_entity_move_front(de_entity $)
 {
     de_manager *m = $->manager;
 
     if ($->slot < m->active_count && $->slot != m->active_count - 1)
-        _de_entity_swap($, m->items[m->active_count - 1]);
+        de_entity_swap($, m->items[m->active_count - 1]);
 }
 
 /**
- * Moves entity to back of active section.
- * Useful for deferring entity updates. Since the manager updates
- * entities backward, the back is index 0.
+ * Moves an active entity to index 0.
+ * Because the manager updates backwards, this makes the entity run later
+ * in the next traversal. No-op for paused/free entities.
  */
 void de_entity_move_back(de_entity $)
 {
     de_manager *m = $->manager;
 
     if ($->slot < m->active_count && $->slot != 0)
-        _de_entity_swap($, m->items[0]);
+        de_entity_swap($, m->items[0]);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /**
  * Initializes an entity manager.
- * Everything starts free: size = 0, paused_start = capacity.
+ * Everything starts free: active_count = 0, paused_start = capacity.
  *
  * Algorithm:
  * 1. Store basic manager data
@@ -706,7 +712,8 @@ de_entity de_manager_new(de_manager *$)
 
 /**
  * Updates all active entities. Paused entities are never touched.
- * Also processes pending pauses and deletions triggered by state functions.
+ * State callbacks may return a new state, DE_STATE_PAUSE, or DE_STATE_DELETE;
+ * those transitions are stored and applied by the following manager update.
  *
  * Algorithm:
  * 1. Iterate backwards through the active zone [0, active_count)
@@ -745,7 +752,8 @@ void de_manager_update(de_manager *$)
 }
 
 /**
- * Deletes active entities in the manager.
+ * Deletes all active entities in the manager and restores all
+ * manager zones to their initial empty state.
  */
 void de_manager_reset(de_manager *$)
 {
@@ -759,7 +767,8 @@ void de_manager_reset(de_manager *$)
 
 /**
  * Initializes a data system.
- * Prepares pool for sequential access.
+ * 'capacity_groups' is the number of parameter groups the pool can hold;
+ * 'params' is the number of pointers in each group.
  */
 void de_system_init(de_system *$, void **storage, uint16_t capacity_groups, uint16_t params)
 {
@@ -771,8 +780,9 @@ void de_system_init(de_system *$, void **storage, uint16_t capacity_groups, uint
 }
 
 /**
- * Removes a group from the system.
- * Returns 1 if removed, 0 if not found.
+ * Removes a group from the system by matching its first pointer.
+ * Returns 1 if removed, 0 if not found. The last group is moved into the
+ * removed group's position to keep the pool packed.
  *
  * Algorithm:
  * 1. Find group by first element
