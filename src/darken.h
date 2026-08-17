@@ -61,8 +61,8 @@
  * the DE_STATE_* control values.
  *
  * GNU C/SGDK note: Darken represents both function pointers and control
- * values through void*. This is an intentional implementation choice for
- * the 68000/SGDK target and is not a strictly portable ISO C interface.
+ * values through void*. This is an intentional implementation choice and
+ * is not a strictly portable ISO C interface.
  */
 typedef void *(*de_state)(void *);
 
@@ -398,7 +398,7 @@ void de_manager_reset(de_manager *);
  * it is not type-compatible with de_state(void *) under strict ISO C.
  *
  * Example:
- *    DE_SYSTEM_ITERATOR(physics_update, entity, velocity, position, {
+ *    DE_SYSTEM_ITERATOR(physics_update, velocity, position, {
  *        entity->x += velocity->dx;
  *        entity->y += velocity->dy;
  *    });

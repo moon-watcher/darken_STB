@@ -6,13 +6,14 @@ Darken is deliberately not a traditional heap-based ECS. Its manager uses caller
 
 ```text
 manager->items[]
-┌──────────────────────┬──────────────────────┬──────────────────────┐
-│       ACTIVE         │         FREE         │        PAUSED        │
-│ [0, active_count)    │ [active_count,       │ [paused_start,       │
-│                      │  paused_start)       │  capacity)            │
-└──────────────────────┴──────────────────────┴──────────────────────┘
-                         ↑                    ↑
-                    active_count         paused_start
+┌──────────────────────────────┬──────────────────────────────┬──────────────────────────────┐
+│                              │                              │                              │
+│            ACTIVE            │             FREE             │           PAUSED             │
+│      [0, active_count]       │ [active_count, paused_start] │   [paused_start, capacity]   │
+│                              │                              │                              │
+└──────────────────────────────┴──────────────────────────────┴──────────────────────────────┘
+                               ↑                              ↑
+                          active_count                   paused_start
 ```
 
 The entity objects themselves are stored in a contiguous byte block. Moving an entity between zones moves only its pointer in `items[]`; the entity's physical address never changes.
@@ -335,25 +336,18 @@ The payload is **not initialized**.
 For example:
 
 ```c
-typedef struct
-{
-    int16_t x;
-    int16_t y;
-    int16_t vx;
-    int16_t vy;
-} PlayerData;
+struct Position { int16_t x, y; };
 
 de_entity player = de_manager_new(&g_manager);
 
-if (player)
-{
-    PlayerData *p = (PlayerData *)player->data;
+player->state      = player_walk; // other player state
+player->destructor = 0;           // no destructor
+player->tag        = 2;           // 1: enemy; 2: player; 4: bullet 
 
-    p->x = 100;
-    p->y = 80;
-    p->vx = 1;
-    p->vy = 0;
-}
+struct Position *data = (struct Position *) player->data;
+
+data->x = 100; 
+data->y = 80;
 ```
 
 If zeroed data is required, initialize it explicitly.
@@ -406,7 +400,7 @@ static void *player_update(void *data)
 
     p->x += p->vx;
 
-    return player_update;
+    return player_jump;
 }
 ```
 
@@ -446,24 +440,21 @@ DE_STATE_PAUSE
 
 Their meaning is:
 
-| Value | Meaning |
-|---|---|
-| `DE_STATE_DELETE` | Request deletion |
-| `DE_STATE_LOOP` | Keep the current state |
-| `DE_STATE_PAUSE` | Request pausing |
+| Value             | Meaning                |
+| ----------------- | ---------------------- |
+| `DE_STATE_DELETE` | Request deletion       |
+| `DE_STATE_LOOP`   | Keep the current state |
+| `DE_STATE_PAUSE`  | Request pausing        |
 
 A normal state callback returns another `de_state` function.
 
 Example:
 
 ```c
-static void *alive_state(void *data)
-{
-    PlayerData *p = data;
+static void *alive_state(PlayerData *data) {
+    data->x += data->vx;
 
-    p->x += p->vx;
-
-    if (p->x < 0)
+    if (data->x < 0)
         return DE_STATE_DELETE;
 
     return DE_STATE_LOOP;
@@ -709,12 +700,8 @@ After deletion, the old `de_entity *` must be treated as invalid for normal use:
 Example:
 
 ```c
-static void *enemy_destroy(void *data)
-{
-    EnemyData *enemy = data;
-
-    release_enemy_resources(enemy);
-
+void *enemy_destroy(struct Enemy *data) {
+    release_enemy_resources(data);
     return DE_STATE_DELETE;
 }
 ```
@@ -980,11 +967,10 @@ DE_STATE_LOOP
 Example:
 
 ```c
-DE_SYSTEM_ITERATOR(
-    physics_update,
-    entity,
-    velocity,
-    position,
+DE_SYSTEM_ITERATOR(physics_update_f,
+    de_entity *entity,
+    struct Velocity *velocity,
+    struct Position *position,
     {
         update_physics(entity, velocity, position);
     }
@@ -994,8 +980,7 @@ DE_SYSTEM_ITERATOR(
 The generated function has the conceptual form:
 
 ```c
-void *physics_update(de_system *system)
-{
+void *physics_update(de_system *system) {
     /* foreach body */
     return DE_STATE_LOOP;
 }
@@ -1011,11 +996,11 @@ On the intended GCC/SGDK target the macro can be useful where the ABI and callin
 
 The convenience macros deliberately support a small fixed number of parameters:
 
-| Macro | Supported data variables/pointers |
-|---|---:|
-| `DE_SYSTEM_ADD` | 1–5 |
-| `DE_SYSTEM_FOREACH` | 0–5 |
-| `DE_SYSTEM_ITERATOR` | 0–5 |
+| Macro                | Supported data variables/pointers |
+| -------------------- | --------------------------------: |
+| `DE_SYSTEM_ADD`      |                               1–5 |
+| `DE_SYSTEM_FOREACH`  |                               0–5 |
+| `DE_SYSTEM_ITERATOR` |                               0–5 |
 
 The `_DE_*` macros used to count arguments and select implementations are internal details. They exist solely to provide the public variadic API and should not be called directly.
 
@@ -1028,69 +1013,41 @@ The generated system code is intentionally simple: it walks `pool[]` in groups o
 ```c
 #include "darken.h"
 
-typedef struct
-{
-    int16_t x;
-    int16_t y;
-    int16_t vx;
-    int16_t vy;
-} Player;
+struct Player {
+    int16_t x, y;
+    int16_t vx, vy;
+};
 
-static void *player_update(void *data)
-{
-    Player *p = data;
-
-    p->x += p->vx;
-    p->y += p->vy;
+void *player_update(struct Player *data) {
+    data->x += data->vx;
+    data->y += data->vy;
 
     return DE_STATE_LOOP;
 }
 
-static void *enemy_update(void *data)
-{
-    Player *p = data;
+void *enemy_update(struct Player *data) {
+    data->x -= data->vx;
 
-    p->x -= p->vx;
-
-    if (p->x < 0)
-        return DE_STATE_DELETE;
-
-    return DE_STATE_LOOP;
+    return (data->x < 0) ? DE_STATE_DELETE : DE_STATE_LOOP;
 }
 
-DE_MANAGER_STORAGE(
-    g_entity_storage,
-    64,
-    sizeof(Player)
-);
+DE_MANAGER_STORAGE(g_entity_storage, 64, sizeof(struct Player) );
 
-static de_manager g_manager;
+de_manager g_manager;
 
-void game_init(void)
-{
-    de_manager_init(
-        &g_manager,
-        DE_MANAGER_ARGS(g_entity_storage)
-    );
+void game_init(void) {
+    de_manager_init(&g_manager, DE_MANAGER_ARGS(g_entity_storage) );
 
     de_entity player = de_manager_new(&g_manager);
+    player->tag = 1; // whatever
+    player->state = player_update;
 
-    if (player)
-    {
-        Player *p = (Player *)player->data;
-
-        p->x = 100;
-        p->y = 80;
-        p->vx = 1;
-        p->vy = 0;
-
-        player->tag = 1;
-        player->state = player_update;
-    }
+    struct Player *data = (struct Player *) player->data;
+    data->x = 100; data->y = 80;
+    data->vx = 1; data->vy = 0;
 }
 
-void game_update(void)
-{
+void game_update(void)  {
     de_manager_update(&g_manager);
 }
 ```
@@ -1100,63 +1057,25 @@ void game_update(void)
 # 23. Complete system example
 
 ```c
-typedef struct
-{
-    int16_t x;
-    int16_t y;
-} Position;
 
-typedef struct
-{
-    int16_t x;
-    int16_t y;
-} Velocity;
-
-DE_SYSTEM_STORAGE(
-    g_movement_storage,
-    64,
-    3
+DE_SYSTEM_ITERATOR(sys_movement_f,
+    struct Position *pos,
+    struct Velocity *vel,
+    {
+        pos->x += vel->x;
+        pos->y += vel->y;
+    }
 );
 
-static de_system g_movement;
+de_system sys_movement;
 
-void movement_init(void)
-{
-    de_system_init(
-        &g_movement,
-        DE_SYSTEM_ARGS(g_movement_storage)
-    );
-}
+DE_SYSTEM_STORAGE(storage, 64, 2);
+de_system_init(&sys_movement, DE_SYSTEM_ARGS(storage));
 
-void movement_add(
-    de_entity entity,
-    Position *position,
-    Velocity *velocity
-)
-{
-    DE_SYSTEM_ADD(
-        &g_movement,
-        entity,
-        position,
-        velocity
-    );
-}
+struct Position { int16_t x, y; } position;
+struct Velocity { int16_t vx, vy; } velocity;
 
-void movement_update(void)
-{
-    DE_SYSTEM_FOREACH(
-        &g_movement,
-        entity,
-        position,
-        velocity,
-        {
-            (void)entity;
-
-            position->x += velocity->x;
-            position->y += velocity->y;
-        }
-    );
-}
+DE_SYSTEM_ADD(&sys_movement, &position, &velocity);
 ```
 
 ---
@@ -1237,26 +1156,26 @@ The manager operations are designed around constant-time pointer rearrangement. 
 
 For the manager:
 
-| Operation | Complexity |
-|---|---:|
-| `de_manager_new` | O(1) |
-| `de_entity_swap` | O(1) |
-| `de_entity_pause` | O(1) |
-| `de_entity_resume` | O(1) |
-| `de_entity_delete` | O(1) |
-| `de_entity_move_front` | O(1) |
-| `de_entity_move_back` | O(1) |
-| `de_manager_update` | O(active entities) |
-| `de_manager_reset` | O(active + paused entities) |
+| Operation              |                  Complexity |
+| ---------------------- | --------------------------: |
+| `de_manager_new`       |                        O(1) |
+| `de_entity_swap`       |                        O(1) |
+| `de_entity_pause`      |                        O(1) |
+| `de_entity_resume`     |                        O(1) |
+| `de_entity_delete`     |                        O(1) |
+| `de_entity_move_front` |                        O(1) |
+| `de_entity_move_back`  |                        O(1) |
+| `de_manager_update`    |          O(active entities) |
+| `de_manager_reset`     | O(active + paused entities) |
 
 For systems:
 
-| Operation | Complexity |
-|---|---:|
-| `DE_SYSTEM_ADD` | O(1) |
-| `DE_SYSTEM_FOREACH` | O(groups) |
-| `de_system_remove` | O(groups) |
-| removal compaction | O(params) |
+| Operation           | Complexity |
+| ------------------- | ---------: |
+| `DE_SYSTEM_ADD`     |       O(1) |
+| `DE_SYSTEM_FOREACH` |  O(groups) |
+| `de_system_remove`  |  O(groups) |
+| removal compaction  |  O(params) |
 
 ---
 
