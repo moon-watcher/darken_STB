@@ -7,6 +7,10 @@
  * Internal macros:        _DE_*
  *
  * Full documentation: README.md
+ *
+ * GNU C / SGDK note:
+ * This header uses GNU C extensions (__attribute__ and statement expressions)
+ * because Darken targets GCC/SGDK and the Motorola 68000.
  */
 
 #ifndef DARKEN_H
@@ -39,10 +43,10 @@
 #define _DE_CONCAT(A, B) _DE_CONCAT_INNER(A, B)
 
 /**
- * 4-byte alignment macro
- * Critical for 68K performance (bus alignment).
- * Note: On platforms with larger alignment requirements,
- *       adjust this to use _Alignof(struct de_entity).
+ * Align a byte count to a 4-byte boundary.
+ *
+ * The Motorola 68000 requires word alignment for word/long accesses.
+ * Longword alignment keeps entity strides predictable and efficient.
  */
 #define _DE_ALIGN4(X) (((X) + 3U) & ~3U)
 
@@ -179,15 +183,65 @@ struct de_system
 #define DE_ENTITY_STRIDE(PAYLOAD) _DE_ALIGN4(sizeof(struct de_entity) + (PAYLOAD))
 
 /**
- * Entity management functions
+ * Execute the current state without storing its return value into state.
+ *
+ * Returns the state function result, or DE_STATE_DELETE when the entity has
+ * no executable state.
  */
-void *de_entity_exec(de_entity);      // Execute current state without updating it
-void *de_entity_update(de_entity);    // Update entity (call state, handle transitions)
-void de_entity_pause(de_entity);      // Park entity in the paused zone
-void de_entity_resume(de_entity);     // Bring entity back to the active zone
-void de_entity_delete(de_entity);     // Mark entity for deletion (calls destructor); works from either zone
-void de_entity_move_front(de_entity); // Move to front of active section (priority)
-void de_entity_move_back(de_entity);  // Move to back of active section (defer)
+void *de_entity_exec(de_entity);
+
+/**
+ * Execute the current active state and store a returned transition.
+ *
+ * DE_STATE_LOOP leaves the current state unchanged.
+ * DE_STATE_PAUSE / DE_STATE_DELETE are stored as pending transitions and are
+ * processed by the next de_manager_update().
+ *
+ * If the entity is not active, its state is left untouched.
+ */
+void *de_entity_update(de_entity);
+
+/**
+ * Swap two entities belonging to the same manager.
+ *
+ * This only swaps pointers in manager->items[]; entity memory never moves.
+ */
+void de_entity_swap(de_entity, de_entity);
+
+/**
+ * Move an active entity to the end of the active zone so it is visited first
+ * by the backwards DE_MANAGER_ITERATE()/de_manager_update() traversal.
+ */
+void de_entity_pause(de_entity);
+
+/**
+ * Resume a paused entity and place it into the active zone.
+ */
+void de_entity_resume(de_entity);
+
+/**
+ * Request deletion of an entity from either the active or paused zone.
+ *
+ * The destructor, when present, is called before deletion. Returning
+ * DE_STATE_DELETE confirms deletion. Any other return value cancels deletion
+ * and restores the entity's previous state.
+ */
+void de_entity_delete(de_entity);
+
+/**
+ * Move an active entity to the first position in the active array.
+ *
+ * Because Darken updates/iterates backwards, this defers the entity until
+ * the end of the current traversal.
+ */
+void de_entity_move_front(de_entity);
+
+/**
+ * Move an active entity to the last position in the active array.
+ *
+ * Because Darken updates/iterates backwards, this prioritizes the entity.
+ */
+void de_entity_move_back(de_entity);
 
 /* ============================================================================
  * MANAGER API
@@ -255,8 +309,31 @@ void de_entity_move_back(de_entity);  // Move to back of active section (defer)
  * de_manager_reset:  Deletes active entities in the manager.
  */
 void de_manager_init(de_manager *, de_entity *, void *, uint16_t, uint16_t);
+
+/**
+ * Create an entity from the free zone.
+ *
+ * Returns NULL when no free slot exists.
+ *
+ * Entity data is NOT initialized.
+ */
 de_entity de_manager_new(de_manager *);
+
+/**
+ * Update all active entities.
+ *
+ * Paused entities are never touched.
+ * State transitions returned by an active state are applied as pending
+ * transitions and handled on the next manager update.
+ */
 void de_manager_update(de_manager *);
+
+/**
+ * Delete every active and paused entity.
+ *
+ * Destructors are respected. A destructor that cancels deletion can therefore
+ * leave an entity alive.
+ */
 void de_manager_reset(de_manager *);
 
 /* ============================================================================
@@ -269,8 +346,8 @@ void de_manager_reset(de_manager *);
  *
  * Example:
  *    de_system sys;
- *    DE_SYSTEM_STORAGE(sys_storage, 32, 3);
- *    de_system_init(&sys, DE_SYSTEM_ARGS(sys_storage));
+ *    DE_SYSTEM_STORAGE(storage, 32, 3);
+ *    de_system_init(&sys, DE_SYSTEM_ARGS(storage));
  */
 #define DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS) \
     struct                                        \
