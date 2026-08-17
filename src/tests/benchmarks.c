@@ -67,7 +67,11 @@ static void bench_apply(void)
             de_entity e = de_manager_new(&m);
             e->tag = i;
         }
-        DE_MANAGER_APPLY_ALL(&m, (ENTITY->tag % 2) == 0, de_entity_delete);
+        // DE_MANAGER_APPLY(&m, (ENTITY->tag % 2) == 0, de_entity_delete);
+        DE_MANAGER_ITERATE(&m, {
+            if (ENTITY->tag % 2 == 0)
+                de_entity_delete(ENTITY);
+        });
         de_manager_reset(&m);
     }
     u32 frames = bench_frames_elapsed(t0);

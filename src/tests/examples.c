@@ -63,16 +63,20 @@ void run_usage_example(void)
     e3->tag = 3;
     kprintf("--- Frame 1 ---");
     de_manager_update(&g_manager);
-    DE_MANAGER_APPLY_ALL(&g_manager, ENTITY->tag == 2, de_entity_pause);
+    DE_MANAGER_ITERATE(&g_manager, if (ENTITY->tag == 2) de_entity_pause(ENTITY));
+    // DE_MANAGER_APPLY(&g_manager, ENTITY->tag == 2, de_entity_pause);
+    // DE_MANAGER_APPLY_PAUSED(&g_manager, ENTITY->tag == 2, de_entity_pause);
     kprintf("Pausada entidad tag 2");
     kprintf("--- Frame 2 ---");
     de_manager_update(&g_manager);
-    DE_MANAGER_APPLY_ALL(&g_manager, ENTITY->tag == 1, de_entity_delete);
+    DE_MANAGER_ITERATE(&g_manager, if (ENTITY->tag == 1) de_entity_pause(ENTITY));
+    // DE_MANAGER_APPLY(&g_manager, ENTITY->tag == 1, de_entity_delete);
+    // DE_MANAGER_APPLY_PAUSED(&g_manager, ENTITY->tag == 1, de_entity_delete);
     kprintf("--- Frame 3 ---");
     de_manager_update(&g_manager);
     kprintf("--- Reset ---");
     de_manager_reset(&g_manager);
-    kprintf("Tamano final g_manager: %d", g_manager.size);
-    kprintf("Tamano final g_manager2: %d", g_manager2.size);
+    kprintf("Tamano final g_manager: %d", g_manager.active_count);
+    kprintf("Tamano final g_manager2: %d", g_manager2.active_count);
     kprintf("=====================================");
 }

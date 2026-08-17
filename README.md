@@ -110,7 +110,7 @@ Darken deliberately separates its namespaces:
 |---|---|---|
 | Public types/functions | `de_*` | `de_entity`, `de_manager_update()` |
 | Public macros/constants | `DE_*` | `DE_STATE_LOOP`, `DE_MANAGER_STORAGE()` |
-| Internal functions | `_de_*` | `_de_entity_swap()` |
+| Internal functions | `_de_*` | `de_entity_swap()` |
 | Internal macros | `_DE_*` | `_DE_ALIGN4`, `_DE_MANAGER_ITERATE` |
 
 This is intentional.
@@ -174,7 +174,7 @@ The manager divides its entity pointer array into two regions:
 ```text
 [ paused entities ][ active entities ]
                    ^
-              pause_index
+              paused_start
 ```
 
 Only the active region is processed by the normal manager update.
@@ -354,7 +354,7 @@ struct de_manager
     de_entity *items;
     uint16_t size;
     uint16_t capacity;
-    uint16_t pause_index;
+    uint16_t paused_start;
 };
 ```
 
@@ -368,7 +368,7 @@ index 0
 |      PAUSED       |        ACTIVE         |
 +-------------------+-----------------------+
                     ^
-               pause_index
+               paused_start
                                       ^
                                       |
                                      size
@@ -377,13 +377,13 @@ index 0
 The active entities are therefore:
 
 ```text
-items[pause_index ... size - 1]
+items[paused_start ... size - 1]
 ```
 
 The paused entities are:
 
 ```text
-items[0 ... pause_index - 1]
+items[0 ... paused_start - 1]
 ```
 
 The relative order inside either partition is **not guaranteed** after
@@ -418,7 +418,7 @@ Initialization:
 - stores the pointer array;
 - stores capacity;
 - resets `size` to zero;
-- resets `pause_index` to zero;
+- resets `paused_start` to zero;
 - calculates the entity stride;
 - precomputes the address of every entity slot.
 
@@ -510,7 +510,7 @@ if (e)
 
 # Pause and resume
 
-The manager uses `pause_index` to maintain the active/paused partition.
+The manager uses `paused_start` to maintain the active/paused partition.
 
 ## `de_entity_pause(e)`
 
@@ -522,7 +522,7 @@ Moves `e` to the paused partition:
 ```
 
 The operation is O(1): it swaps entity pointers and adjusts
-`pause_index`.
+`paused_start`.
 
 ## `de_entity_resume(e)`
 
@@ -539,7 +539,7 @@ Again, this is O(1).
 Pauses all entities:
 
 ```c
-m->pause_index = m->size;
+m->paused_start = m->size;
 ```
 
 O(1).
@@ -549,7 +549,7 @@ O(1).
 Activates all entities:
 
 ```c
-m->pause_index = 0;
+m->paused_start = 0;
 ```
 
 O(1).
@@ -693,7 +693,7 @@ Two public iteration macros are provided:
 
 ```c
 DE_MANAGER_ITERATE(m, { ... });
-DE_MANAGER_ITERATE_ALL(m, { ... });
+DE_MANAGER_ITERATE(m, { ... });
 ```
 
 ## Active entities
@@ -709,7 +709,7 @@ Only the active partition is visited.
 ## All entities
 
 ```c
-DE_MANAGER_ITERATE_ALL(m, {
+DE_MANAGER_ITERATE(m, {
     /* paused + active */
 });
 ```
@@ -1205,7 +1205,7 @@ DE_MANAGER_STORAGE()
 DE_MANAGER_ARGS()
 
 DE_MANAGER_ITERATE()
-DE_MANAGER_ITERATE_ALL()
+DE_MANAGER_ITERATE()
 
 DE_MANAGER_APPLY()
 DE_MANAGER_APPLY_ALL()
