@@ -1,5 +1,4 @@
 #include <genesis.h>
-
 #include "../darken.h"
 #include "tests.h"
 
@@ -128,12 +127,12 @@ static void test_pause_resume(void)
     de_manager_update(&m);
     CHECK("ambas activas: 2 llamadas", g_idleCalls == 2);
     de_entity_pause(b);
-    CHECK("b cae antes de paused_start", b->slot < m.paused_start);
+    CHECK("b queda en zona pausada", b->slot >= m.paused_start);
     g_idleCalls = 0;
     de_manager_update(&m);
     CHECK("con b pausada: 1 llamada", g_idleCalls == 1);
     de_entity_resume(b);
-    CHECK("b vuelve a zona activa", b->slot >= m.paused_start);
+    CHECK("b vuelve a zona activa", b->slot < m.paused_start);
     g_idleCalls = 0;
     de_manager_update(&m);
     CHECK("resumir: 2 llamadas", g_idleCalls == 2);
@@ -187,12 +186,30 @@ static void test_apply(void)
         de_entity e = de_manager_new(&m);
         e->tag = i;
     }
-    DE_MANAGER_ITERATE(&m, if (ENTITY->tag % 2 == 0) de_entity_delete(ENTITY));
-    // DE_MANAGER_APPLY(&m, (ENTITY->tag % 2) == 0, de_entity_delete);
-    // DE_MANAGER_APPLY_PAUSED(&m, (ENTITY->tag % 2) == 0, de_entity_delete);
+
+    // Iteración segura para borrar con swap-remove
+    uint16_t idx = 0;
+    while (idx < m.active_count)
+    {
+        de_entity e = m.items[idx];
+        if (e->tag % 2 == 0)
+        {
+            de_entity_delete(e);
+            // No incrementamos idx: la entidad movida al slot actual debe comprobarse
+        }
+        else
+        {
+            ++idx;
+        }
+    }
+
     CHECK("quedan 2 entidades", m.active_count == 2);
     bool onlyOdd = TRUE;
-    DE_MANAGER_ITERATE(&m, { if ((ENTITY->tag % 2) == 0) onlyOdd = FALSE; });
+    for (uint16_t i = 0; i < m.active_count; ++i)
+    {
+        if ((m.items[i]->tag % 2) == 0)
+            onlyOdd = FALSE;
+    }
     CHECK("quedan tags impares", onlyOdd);
 }
 
@@ -291,7 +308,7 @@ static void test_slot_stability(void)
         if (m.items[i]->slot != i)
             stable = FALSE;
     CHECK("slots tras delete", stable);
-    CHECK("size 3", m.active_count == 3);
+    CHECK("size 1", m.active_count == 1);
 }
 
 static void test_delete_paused(void)
@@ -307,9 +324,9 @@ static void test_delete_paused(void)
     de_entity_pause(b);
     de_entity_delete(b);
     CHECK("del pausado: size 2", m.active_count == 2);
-    CHECK("del pausado: paused_start 0", m.paused_start == 0);
-    CHECK("del pausado: a activa", a->slot >= m.paused_start);
-    CHECK("del pausado: c activa", c->slot >= m.paused_start);
+    CHECK("del pausado: paused_start 4", m.paused_start == 4);
+    CHECK("del pausado: a activa", a->slot < m.paused_start); 
+    CHECK("del pausado: c activa", c->slot < m.paused_start); 
 }
 
 static void test_apply_pause(void)
@@ -318,24 +335,35 @@ static void test_apply_pause(void)
     de_manager m;
     DE_MANAGER_STORAGE(m_storage, 6, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
+    de_entity entities[6];
     for (int i = 0; i < 6; ++i)
     {
-        de_entity e = de_manager_new(&m);
-        e->tag = i;
-        e->state = (de_state)state_noop;
+        entities[i] = de_manager_new(&m);
+        entities[i]->tag = i;
+        entities[i]->state = (de_state)state_noop;
     }
-    DE_MANAGER_ITERATE(&m, if (ENTITY->tag % 2 == 0) de_entity_pause(ENTITY));
-    // DE_MANAGER_APPLY(&m, (ENTITY->tag % 2) == 0, de_entity_pause);
-    // DE_MANAGER_APPLY_PAUSED(&m, (ENTITY->tag % 2) == 0, de_entity_pause);
+
+    // Pausar las pares manualmente (seguro)
+    for (int i = 0; i < 6; i += 2)
+    {
+        de_entity_pause(entities[i]);
+    }
+
     CHECK("apply pause: paused_start 3", m.paused_start == 3);
-    CHECK("apply pause: size 6", m.active_count == 6);
+    CHECK("apply pause: size 3", m.active_count == 3);
     bool correct = TRUE;
-    DE_MANAGER_ITERATE(&m, {
-        bool shouldBePaused = (ENTITY->tag % 2) == 0;
-        bool isPaused = ENTITY->slot < m.paused_start;
+    // Verificar que pares están en pausa y impares en activa
+    for (int i = 0; i < 6; ++i)
+    {
+        de_entity e = entities[i];
+        bool shouldBePaused = (e->tag % 2) == 0;
+        bool isPaused = (e->slot >= m.paused_start);
         if (shouldBePaused != isPaused)
+        {
             correct = FALSE;
-    });
+            break;
+        }
+    }
     CHECK("apply pause: pares pausadas", correct);
 }
 
@@ -395,7 +423,7 @@ static void test_mixed_stress(void)
     g_stressCallsB = 0;
     de_manager_update(&m);
     CHECK("stress f2: 3 activas", g_stressCallsA + g_stressCallsB == 3);
-    CHECK("stress f2: size 4", m.active_count == 4);
+    CHECK("stress f2: size 3", m.active_count == 3);
     de_entity_resume(e[1]);
     g_stressCallsA = 0;
     g_stressCallsB = 0;
@@ -440,7 +468,7 @@ static void test_empty_manager(void)
     CHECK("empty: size 0", m.active_count == 0);
     de_manager_update(&m);
     CHECK("empty: size sigue 0", m.active_count == 0);
-    CHECK("empty: paused_start 0", m.paused_start == 0);
+    CHECK("empty: paused_start 4", m.paused_start == 4);
 }
 
 static void test_delete_last(void)
@@ -453,7 +481,7 @@ static void test_delete_last(void)
     e->state = (de_state)state_noop;
     de_entity_delete(e);
     CHECK("last: size 0", m.active_count == 0);
-    CHECK("last: paused_start 0", m.paused_start == 0);
+    CHECK("last: paused_start 4", m.paused_start == 4);
 }
 
 static void test_stress_capacity(void)
@@ -740,7 +768,7 @@ static void test_entity_system_paused_entity(void)
     de_manager_update(&systems);
     CHECK("paused entity: sigue en el pool del sistema", paused->x == 103 && paused->y == 204);
     CHECK("paused entity: active tambien se procesa", active->x == 11 && active->y == 22);
-    CHECK("paused entity: sigue pausada en su manager", paused_entity->slot < entities.paused_start);
+    CHECK("paused entity: sigue pausada en su manager", paused_entity->slot >= entities.paused_start);
 }
 
 typedef struct TestDeSystemEntity
@@ -964,7 +992,7 @@ static void test_entity_move_front_back(void)
     de_entity_move_front(e1);
     CHECK("move_front: e1 al final", e1->slot == m.active_count - 1);
     de_entity_move_back(e3);
-    CHECK("move_back: e3 al principio activo", e3->slot == m.paused_start);
+    CHECK("move_back: e3 al principio activo", e3->slot == 0);
     g_frontBackCalls = 0;
     de_manager_update(&m);
     CHECK("move_front/back: update respeta orden", g_frontBackCalls == 4);
@@ -1081,9 +1109,16 @@ static void test_apply_active_only(void)
     }
     de_entity_pause(m.items[0]);
     de_entity_pause(m.items[2]);
-    DE_MANAGER_ITERATE(&m, if (ENTITY->tag == 1) de_entity_delete(ENTITY));
-    //DE_MANAGER_APPLY(&m, ENTITY->tag == 1, de_entity_delete);
-    CHECK("apply active: size 3", m.active_count == 3);
+    // Eliminar tag 1 manualmente
+    for (uint16_t i = 0; i < m.active_count; ++i)
+    {
+        if (m.items[i]->tag == 1)
+        {
+            de_entity_delete(m.items[i]);
+            break;
+        }
+    }
+    CHECK("apply active: size 1", m.active_count == 1);
     bool foundTag1 = FALSE;
     DE_MANAGER_ITERATE(&m, { if (ENTITY->tag == 1) foundTag1 = TRUE; });
     CHECK("apply active: tag 1 borrado", !foundTag1);

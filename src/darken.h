@@ -582,9 +582,13 @@ void de_manager_init(de_manager *$, de_entity *items, void *storage, uint16_t ca
 
     uint16_t stride = DE_ENTITY_STRIDE(bytes);
 
-    // Pre-calculate pointers for fast access
     for (uint16_t i = 0; i < capacity; ++i)
+    {
+        // Pre-calculate pointers for fast access
         $->items[i] = (de_entity)((uint8_t *)storage + i * stride);
+        $->items[i]->slot = i;
+        $->items[i]->manager = $;
+    }
 }
 
 /**

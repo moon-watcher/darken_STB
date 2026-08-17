@@ -13,6 +13,7 @@ int main(void)
     run_usage_example();
     run_all_tests();
     run_benchmarks();
+    run_ds_test();
 
     return 0;
 }
