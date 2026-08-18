@@ -28,7 +28,7 @@
 typedef void *(*de_state)(void *);
 
 typedef struct de_entity *de_entity;
-typedef struct de_manager de_manager;
+typedef struct de_manager *de_manager;
 typedef struct de_system de_system;
 
 /* ============================================================================
@@ -55,7 +55,7 @@ struct de_entity
 {
     de_state state;
     de_state destructor;
-    de_manager *manager;
+    de_manager manager;
     uint16_t slot;
     uint16_t tag;
     uint8_t data[];
@@ -151,10 +151,10 @@ void de_entity_move_back(de_entity);
 #define DE_MANAGER_ARGS(NAME) _DE_MANAGER_ARGS(NAME)
 #define DE_MANAGER_FOREACH(M, CODE) _DE_MANAGER_FOREACH(M, CODE)
 
-void de_manager_init(de_manager *, de_entity *, void *, uint16_t, uint16_t);
-de_entity de_manager_new(de_manager *);
-void de_manager_update(de_manager *);
-void de_manager_reset(de_manager *);
+void de_manager_init(de_manager , de_entity *, void *, uint16_t, uint16_t);
+de_entity de_manager_new(de_manager );
+void de_manager_update(de_manager );
+void de_manager_reset(de_manager );
 
 /* ============================================================================
  * SYSTEM API
@@ -295,7 +295,7 @@ uint16_t de_system_remove(de_system *, void *);
 
 static void _de_entity_swap(de_entity a, de_entity b)
 {
-    de_manager *manager = a->manager;
+    de_manager manager = a->manager;
     uint16_t i = a->slot;
     uint16_t j = b->slot;
 
@@ -327,7 +327,7 @@ void *de_entity_update(de_entity $)
 
 void de_entity_pause(de_entity $)
 {
-    de_manager *manager = $->manager;
+    de_manager manager = $->manager;
     uint16_t slot = $->slot;
 
     if (slot >= manager->active_count)
@@ -351,7 +351,7 @@ void de_entity_pause(de_entity $)
 
 void de_entity_resume(de_entity $)
 {
-    de_manager *manager = $->manager;
+    de_manager manager = $->manager;
     uint16_t slot = $->slot;
 
     if (slot < manager->paused_start)
@@ -375,7 +375,7 @@ void de_entity_resume(de_entity $)
 
 void de_entity_delete(de_entity $)
 {
-    de_manager *manager = $->manager;
+    de_manager manager = $->manager;
     uint16_t slot = $->slot;
 
     // Already free: nothing to do
@@ -405,7 +405,7 @@ void de_entity_delete(de_entity $)
 
 void de_entity_move_front(de_entity $)
 {
-    de_manager *manager = $->manager;
+    de_manager manager = $->manager;
     uint16_t slot = $->slot;
 
     if (slot < manager->active_count && slot != manager->active_count - 1)
@@ -414,7 +414,7 @@ void de_entity_move_front(de_entity $)
 
 void de_entity_move_back(de_entity $)
 {
-    de_manager *manager = $->manager;
+    de_manager manager = $->manager;
     uint16_t slot = $->slot;
 
     if (slot < manager->active_count && slot != 0)
@@ -423,7 +423,7 @@ void de_entity_move_back(de_entity $)
 
 //
 
-void de_manager_init(de_manager *$, de_entity *pool, void *param_storage, uint16_t capacity, uint16_t bytes)
+void de_manager_init(de_manager $, de_entity *pool, void *param_storage, uint16_t capacity, uint16_t bytes)
 {
     $->pool = pool;
     $->capacity = capacity;
@@ -445,7 +445,7 @@ void de_manager_init(de_manager *$, de_entity *pool, void *param_storage, uint16
     }
 }
 
-de_entity de_manager_new(de_manager *$)
+de_entity de_manager_new(de_manager $)
 {
     if ($->active_count >= $->paused_start)
         return 0;
@@ -460,7 +460,7 @@ de_entity de_manager_new(de_manager *$)
     return entity;
 }
 
-void de_manager_update(de_manager *$)
+void de_manager_update(de_manager $)
 {
     uint16_t i = $->active_count;
     de_entity *pool = $->pool;
@@ -486,7 +486,7 @@ void de_manager_update(de_manager *$)
     }
 }
 
-void de_manager_reset(de_manager *$)
+void de_manager_reset(de_manager $)
 {
     DE_MANAGER_FOREACH($, de_entity_delete(ENTITY));
 

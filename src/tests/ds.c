@@ -90,7 +90,7 @@ static void *state_delete_after_1(void *data) {
 
 #define TEST_MGR_CAPACITY 32
 DE_MANAGER_STORAGE(test_mgr_storage, TEST_MGR_CAPACITY, sizeof(TestData));
-static de_manager test_mgr;
+static struct de_manager test_mgr;
 
 #define TEST_SYS_CAPACITY 32
 #define TEST_SYS_PARAMS 2
@@ -382,7 +382,7 @@ TEST(test_manager_iterate_macro) {
 
 #define BENCH_MGR_CAPACITY 128
 DE_MANAGER_STORAGE(bench_mgr_storage, BENCH_MGR_CAPACITY, sizeof(TestData));
-static de_manager bench_mgr;
+static struct de_manager bench_mgr;
 
 #define BENCH_SYS_CAPACITY 128
 #define BENCH_SYS_PARAMS 2

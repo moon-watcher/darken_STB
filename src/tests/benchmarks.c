@@ -17,7 +17,7 @@ static u32 bench_frames_elapsed(u32 start) { return g_frameCounter - start; }
 
 static void bench_create_destroy(void)
 {
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 32, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     u32 t0 = bench_start();
@@ -39,7 +39,7 @@ static void *bench_state_fn(void *data)
 
 static void bench_update(void)
 {
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 32, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     for (u16 i = 0; i < 32; ++i)
@@ -56,7 +56,7 @@ static void bench_update(void)
 
 static void bench_apply(void)
 {
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 32, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     u32 t0 = bench_start();
@@ -80,7 +80,7 @@ static void bench_apply(void)
 
 static void bench_create_destroy_128(void)
 {
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 128, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     u32 t0 = bench_start();
@@ -96,7 +96,7 @@ static void bench_create_destroy_128(void)
 
 static void bench_create_destroy_256(void)
 {
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 256, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     u32 t0 = bench_start();
@@ -112,7 +112,7 @@ static void bench_create_destroy_256(void)
 
 static void bench_update_128(void)
 {
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 128, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     for (u16 i = 0; i < 128; ++i)
@@ -129,7 +129,7 @@ static void bench_update_128(void)
 
 static void bench_update_256(void)
 {
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 256, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     for (u16 i = 0; i < 256; ++i)
@@ -146,7 +146,7 @@ static void bench_update_256(void)
 
 static void bench_swap(void)
 {
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 2, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity a = de_manager_new(&m);
@@ -175,7 +175,7 @@ static void *bench_system_state(void *data)
 static void bench_systems_vs_individual(void)
 {
     kprintf("========== BENCHMARK SISTEMAS ==========");
-    de_manager m_ind;
+    struct de_manager m_ind;
     DE_MANAGER_STORAGE(m_ind_storage, 32, sizeof(struct MyComponent));
     de_manager_init(&m_ind, DE_MANAGER_ARGS(m_ind_storage));
     for (u16 i = 0; i < 32; ++i)
@@ -188,7 +188,7 @@ static void bench_systems_vs_individual(void)
         de_manager_update(&m_ind);
     u32 frames_ind = bench_frames_elapsed(t0);
     kprintf("update INDIVIDUAL (32 ent x%d reps): %ld frames", BENCH_REPS, frames_ind);
-    de_manager m_sys;
+    struct de_manager m_sys;
     DE_MANAGER_STORAGE(m_sys_storage, 32, sizeof(struct MyComponent));
     de_manager_init(&m_sys, DE_MANAGER_ARGS(m_sys_storage));
     for (u16 i = 0; i < 32; ++i)
@@ -211,12 +211,12 @@ static void bench_memory_overhead(void)
     kprintf("stride payload=9:  %d bytes/entidad (impar)", stride9);
     kprintf("stride payload=16: %d bytes/entidad", stride16);
     kprintf("stride payload=32: %d bytes/entidad", stride32);
-    de_manager m32;
+    struct de_manager m32;
     DE_MANAGER_STORAGE(m32_storage, 32, sizeof(struct MyComponent));
     de_manager_init(&m32, DE_MANAGER_ARGS(m32_storage));
     u32 bytes32 = 32 * _DE_ENTITY_STRIDE(sizeof(struct MyComponent));
     kprintf("Manager 32 entidades (payload %d): %ld bytes en storage", (int)sizeof(struct MyComponent), bytes32);
-    de_manager m128;
+    struct de_manager m128;
     DE_MANAGER_STORAGE(m128_storage, 128, sizeof(struct MyComponent));
     de_manager_init(&m128, DE_MANAGER_ARGS(m128_storage));
     u32 bytes128 = 128 * _DE_ENTITY_STRIDE(sizeof(struct MyComponent));

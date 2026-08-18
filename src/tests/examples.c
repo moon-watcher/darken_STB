@@ -32,7 +32,7 @@ static void *destructor(struct MyComponent *data)
 void run_usage_example(void)
 {
     kprintf("========== EJEMPLO DE USO ==========");
-    de_manager g_manager, g_manager2;
+    struct de_manager g_manager, g_manager2;
     DE_MANAGER_STORAGE(g_manager_storage, 10, sizeof(struct MyComponent));
     de_manager_init(&g_manager, DE_MANAGER_ARGS(g_manager_storage));
     DE_MANAGER_STORAGE(g_manager2_storage, 20, sizeof(struct MyComponent) + 73);

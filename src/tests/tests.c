@@ -25,7 +25,7 @@ static u16 g_testsRun = 0, g_testsPassed = 0;
         }                                 \
     } while (0)
 
-static bool all_slots_aligned(de_manager *mgr)
+static bool all_slots_aligned(de_manager mgr)
 {
     for (uint16_t i = 0; i < mgr->capacity; ++i)
         if (((u32)mgr->pool[i]) & 3)
@@ -36,7 +36,7 @@ static bool all_slots_aligned(de_manager *mgr)
 static void test_alignment(void)
 {
     kprintf("-- test_alignment --");
-    de_manager m1, m2, m3;
+    struct de_manager m1, m2, m3;
     DE_MANAGER_STORAGE(m1_storage, 8, sizeof(struct MyComponent));
     de_manager_init(&m1, DE_MANAGER_ARGS(m1_storage));
     DE_MANAGER_STORAGE(m2_storage, 8, sizeof(struct MyComponent) + 73);
@@ -51,7 +51,7 @@ static void test_alignment(void)
 static void test_creation(void)
 {
     kprintf("-- test_creation --");
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 3, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     CHECK("manager empieza con size 0", m.active_count == 0);
@@ -87,7 +87,7 @@ static void test_update(void)
 {
     kprintf("-- test_update --");
     g_walkCalls = 0;
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 2, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity e = de_manager_new(&m);
@@ -117,7 +117,7 @@ static void test_pause_resume(void)
 {
     kprintf("-- test_pause_resume --");
     g_idleCalls = 0;
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 4, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity a = de_manager_new(&m);
@@ -155,7 +155,7 @@ static void test_delete(void)
 {
     kprintf("-- test_delete --");
     g_destructorCalls = 0;
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 4, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity a = de_manager_new(&m);
@@ -178,7 +178,7 @@ static void test_delete(void)
 static void test_apply(void)
 {
     kprintf("-- test_apply --");
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 5, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     for (int i = 0; i < 5; ++i)
@@ -217,7 +217,7 @@ static void test_reset(void)
 {
     kprintf("-- test_reset --");
     g_destructorCalls = 0;
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 6, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     for (int i = 0; i < 6; ++i)
@@ -242,7 +242,7 @@ static void test_destructor_abort(void)
 {
     kprintf("-- test_destructor_abort --");
     g_abortDestructorCalls = 0;
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 2, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity e = de_manager_new(&m);
@@ -267,7 +267,7 @@ static void test_self_delete(void)
 {
     kprintf("-- test_self_delete --");
     g_selfKillCalls = 0;
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 3, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity a = de_manager_new(&m);
@@ -286,7 +286,7 @@ static void test_self_delete(void)
 static void test_slot_stability(void)
 {
     kprintf("-- test_slot_stability --");
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 4, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity e0 = de_manager_new(&m);
@@ -314,7 +314,7 @@ static void test_slot_stability(void)
 static void test_delete_paused(void)
 {
     kprintf("-- test_delete_paused --");
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 4, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity a = de_manager_new(&m);
@@ -332,7 +332,7 @@ static void test_delete_paused(void)
 static void test_apply_pause(void)
 {
     kprintf("-- test_apply_pause --");
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 6, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity entities[6];
@@ -370,7 +370,7 @@ static void test_apply_pause(void)
 static void test_reuse(void)
 {
     kprintf("-- test_reuse --");
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 3, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity e0 = de_manager_new(&m);
@@ -405,7 +405,7 @@ static void test_mixed_stress(void)
     kprintf("-- test_mixed_stress --");
     g_stressCallsA = 0;
     g_stressCallsB = 0;
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 5, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity e[5];
@@ -439,7 +439,7 @@ static void test_mixed_stress(void)
 static void test_data_integrity(void)
 {
     kprintf("-- test_data_integrity --");
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 3, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity a = de_manager_new(&m);
@@ -462,7 +462,7 @@ static void test_data_integrity(void)
 static void test_empty_manager(void)
 {
     kprintf("-- test_empty_manager --");
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 4, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     CHECK("empty: size 0", m.active_count == 0);
@@ -474,7 +474,7 @@ static void test_empty_manager(void)
 static void test_delete_last(void)
 {
     kprintf("-- test_delete_last --");
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 4, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity e = de_manager_new(&m);
@@ -487,7 +487,7 @@ static void test_delete_last(void)
 static void test_stress_capacity(void)
 {
     kprintf("-- test_stress_capacity --");
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 50, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity ents[50];
@@ -520,7 +520,7 @@ static void test_stress_capacity(void)
 static void test_stress_many_entities(void)
 {
     kprintf("-- test_stress_many_entities --");
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 20, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity e[20];
@@ -551,7 +551,7 @@ static void test_stress_many_entities(void)
 static void test_stress_fragmentation(void)
 {
     kprintf("-- test_stress_fragmentation --");
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 20, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity e[20];
@@ -634,7 +634,7 @@ static void *test_system_frames(void *data)
 static void test_entity_system_basic(void)
 {
     kprintf("-- test_entity_system_basic --");
-    de_manager entities, systems;
+    struct de_manager entities, systems;
     DE_MANAGER_STORAGE(entities_storage, 3, sizeof(TestSystemEntity));
     de_manager_init(&entities, DE_MANAGER_ARGS(entities_storage));
     DE_MANAGER_STORAGE(systems_storage, 3, sizeof(TestBatchSystem));
@@ -694,7 +694,7 @@ static void test_entity_system_basic(void)
 static void test_entity_system_shared_data(void)
 {
     kprintf("-- test_entity_system_shared_data --");
-    de_manager entities, systems;
+    struct de_manager entities, systems;
     DE_MANAGER_STORAGE(entities_storage, 2, sizeof(TestSystemEntity));
     de_manager_init(&entities, DE_MANAGER_ARGS(entities_storage));
     DE_MANAGER_STORAGE(systems_storage, 2, sizeof(TestBatchSystem));
@@ -731,7 +731,7 @@ static void test_entity_system_shared_data(void)
 static void test_entity_system_paused_entity(void)
 {
     kprintf("-- test_entity_system_paused_entity --");
-    de_manager entities, systems;
+    struct de_manager entities, systems;
     DE_MANAGER_STORAGE(entities_storage, 2, sizeof(TestSystemEntity));
     de_manager_init(&entities, DE_MANAGER_ARGS(entities_storage));
     DE_MANAGER_STORAGE(systems_storage, 1, sizeof(TestBatchSystem));
@@ -853,7 +853,7 @@ static void test_de_system_as_entities(void)
 {
     kprintf("-- test_de_system_as_entities --");
 
-    de_manager entities, systems;
+    struct de_manager entities, systems;
     DE_MANAGER_STORAGE(entities_storage, 2, sizeof(TestDeSystemEntity));
     de_manager_init(&entities, DE_MANAGER_ARGS(entities_storage));
     DE_MANAGER_STORAGE(systems_storage, 3, sizeof(de_system));
@@ -918,7 +918,7 @@ static void test_de_system_as_entities(void)
 static void test_de_system_shared_payload(void)
 {
     kprintf("-- test_de_system_shared_payload --");
-    de_manager entities, systems;
+    struct de_manager entities, systems;
     DE_MANAGER_STORAGE(entities_storage, 1, sizeof(TestDeSystemEntity));
     de_manager_init(&entities, DE_MANAGER_ARGS(entities_storage));
     DE_MANAGER_STORAGE(systems_storage, 2, sizeof(de_system));
@@ -956,7 +956,7 @@ static void test_entity_exec(void)
 {
     kprintf("-- test_entity_exec --");
     g_execCalls = 0;
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 2, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity e = de_manager_new(&m);
@@ -981,7 +981,7 @@ static void test_entity_move_front_back(void)
 {
     kprintf("-- test_entity_move_front_back --");
     g_frontBackCalls = 0;
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 4, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity e0 = de_manager_new(&m);
@@ -1014,7 +1014,7 @@ static void *state_transition_source(void *data)
 static void test_state_transition(void)
 {
     kprintf("-- test_state_transition --");
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 1, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity e = de_manager_new(&m);
@@ -1031,7 +1031,7 @@ static void test_delete_twice(void)
 {
     kprintf("-- test_delete_twice --");
     g_destructorCalls = 0;
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 2, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity e = de_manager_new(&m);
@@ -1047,7 +1047,7 @@ static void test_delete_twice(void)
 static void test_pause_already_paused(void)
 {
     kprintf("-- test_pause_already_paused --");
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 2, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity a = de_manager_new(&m);
@@ -1064,7 +1064,7 @@ static void test_pause_already_paused(void)
 static void test_resume_already_active(void)
 {
     kprintf("-- test_resume_already_active --");
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 2, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity a = de_manager_new(&m);
@@ -1080,7 +1080,7 @@ static void test_resume_already_active(void)
 static void test_manager_iterate_active_only(void)
 {
     kprintf("-- test_manager_iterate_active_only --");
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 4, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     for (int i = 0; i < 4; ++i)
@@ -1098,7 +1098,7 @@ static void test_manager_iterate_active_only(void)
 static void test_apply_active_only(void)
 {
     kprintf("-- test_apply_active_only --");
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 4, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     for (int i = 0; i < 4; ++i)
@@ -1216,7 +1216,7 @@ static void test_destructor_state_change(void)
 {
     kprintf("-- test_destructor_state_change --");
     g_destructorChangeCalls = 0;
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 1, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity e = de_manager_new(&m);
@@ -1232,7 +1232,7 @@ static void test_entity_update_direct(void)
 {
     kprintf("-- test_entity_update_direct --");
     g_walkCalls = 0;
-    de_manager m;
+    struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 1, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
     de_entity e = de_manager_new(&m);
