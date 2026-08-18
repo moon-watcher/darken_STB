@@ -217,10 +217,10 @@ de_manager_init(&manager, DE_MANAGER_ARGS(storage));
 Conceptually the generated object contains:
 
 ```text
-entities[CAPACITY]  -> pointer array used by de_manager
-data[...]           -> contiguous entity byte storage
-capacity             -> stored capacity
-payload_size         -> payload size supplied to DE_ENTITY_STRIDE()
+entities[CAPACITY] -> pointer array used by de_manager
+data[...]          -> contiguous entity byte storage
+capacity           -> stored capacity
+payload_size       -> payload size supplied to DE_ENTITY_STRIDE()
 ```
 
 The `entities[]` array and the `data[]` block are separate. `entities[]` contains pointers; `data[]` contains the actual entity objects. `de_manager_init()` walks `data[]` using the calculated stride and fills `entities[]` with those addresses.
@@ -237,11 +237,7 @@ Then initialize the manager:
 
 ```c
 de_manager g_manager;
-
-de_manager_init(
-    &g_manager,
-    DE_MANAGER_ARGS(g_storage)
-);
+de_manager_init(&g_manager, DE_MANAGER_ARGS(g_storage));
 ```
 
 `DE_MANAGER_STORAGE()` creates:
@@ -394,12 +390,10 @@ A state normally returns another state callback:
 Example:
 
 ```c
-static void *player_update(void *data)
-{
-    PlayerData *p = data;
+void *player_update(struct PlayerData *data) {
+    data->x += data->vx;
 
-    p->x += p->vx;
-
+    // next state
     return player_jump;
 }
 ```
@@ -451,7 +445,7 @@ A normal state callback returns another `de_state` function.
 Example:
 
 ```c
-static void *alive_state(PlayerData *data) {
+void *alive_state(struct PlayerData *data) {
     data->x += data->vx;
 
     if (data->x < 0)
