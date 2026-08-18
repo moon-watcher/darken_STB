@@ -19,29 +19,6 @@
 
 #include <stdint.h>
 
-/* ============================================================================
- * INTERNAL UTILITIES
- * ============================================================================ */
-
-#define _DE_ADD_NARGS(...) _DE_ADD_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1, 0)
-#define _DE_ADD_NARGS_I(_1, _2, _3, _4, _5, _6, N, ...) N
-#define _DE_FOREACH_NARGS(...) _DE_FOREACH_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1, 0, -1)
-#define _DE_FOREACH_NARGS_I(_1, _2, _3, _4, _5, _6, _7, N, ...) N
-#define _DE_CONCAT_INNER(A, B) A##B
-#define _DE_CONCAT(A, B) _DE_CONCAT_INNER(A, B)
-
-/**
- * Align a byte count to a 4-byte boundary.
- *
- * The Motorola 68000 requires word alignment for word/long accesses.
- * Longword alignment keeps entity strides predictable and efficient.
- */
-#define _DE_ALIGN4(X) (((X) + 3U) & ~3U)
-
-/* ============================================================================
- * TYPE DEFINITIONS
- * ============================================================================ */
-
 /**
  * Entity state/destructor callback type.
  *
@@ -173,14 +150,50 @@ void de_entity_move_back(de_entity);
  * MANAGER API
  * ============================================================================ */
 
-/**
- * Structured storage declaration.
- * Use with DE_MANAGER_ARGS() when calling de_manager_init().
+#define DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE) _DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)
+#define DE_MANAGER_ARGS(NAME) _DE_MANAGER_ARGS(NAME)
+#define DE_MANAGER_FOREACH(M, CODE) _DE_MANAGER_FOREACH(M, CODE)
+
+void de_manager_init(de_manager *, de_entity *, void *, uint16_t, uint16_t);
+de_entity de_manager_new(de_manager *);
+void de_manager_update(de_manager *);
+void de_manager_reset(de_manager *);
+
+/* ============================================================================
+ * SYSTEM API
+ * ============================================================================ */
+
+#define DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS) _DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS)
+#define DE_SYSTEM_ARGS(NAME) _DE_SYSTEM_ARGS(NAME)
+#define DE_SYSTEM_ADD(...) _DE_CONCAT(_DE_SYSTEM_ADD_, _DE_ADD_NARGS(__VA_ARGS__))(__VA_ARGS__)
+#define DE_SYSTEM_FOREACH(...) _DE_CONCAT(_DE_SYSTEM_FOREACH_, _DE_FOREACH_NARGS(__VA_ARGS__))(__VA_ARGS__)
+#define DE_SYSTEM_ITERATOR(...) _DE_CONCAT(_DE_SYSTEM_ITERATOR_, _DE_FOREACH_NARGS(__VA_ARGS__))(__VA_ARGS__)
+
+void de_system_init(de_system *, void **, uint16_t, uint16_t);
+uint16_t de_system_remove(de_system *, void *);
+
+/* ============================================================================
+ * INTERNAL MACRO IMPLEMENTATIONS
+ * ============================================================================ */
+
+ /**
+ * Align a byte count to a 4-byte boundary.
+ *
+ * The Motorola 68000 requires word alignment for word/long accesses.
+ * Longword alignment keeps entity strides predictable and efficient.
  */
-#define DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)                                         \
+#define _DE_ALIGN4(X) (((X) + 3U) & ~3U)
+#define _DE_ADD_NARGS(...) _DE_ADD_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1, 0)
+#define _DE_ADD_NARGS_I(_1, _2, _3, _4, _5, _6, N, ...) N
+#define _DE_FOREACH_NARGS(...) _DE_FOREACH_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1, 0, -1)
+#define _DE_FOREACH_NARGS_I(_1, _2, _3, _4, _5, _6, _7, N, ...) N
+#define _DE_CONCAT_INNER(A, B) A##B
+#define _DE_CONCAT(A, B) _DE_CONCAT_INNER(A, B)
+
+#define _DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)                                        \
     struct                                                                                       \
     {                                                                                            \
-        de_entity entities[(CAPACITY)];                                                          \
+        de_entity pool[(CAPACITY)];                                                              \
         uint8_t data[(CAPACITY) * DE_ENTITY_STRIDE((PAYLOAD_SIZE))] __attribute__((aligned(4))); \
         uint16_t capacity;                                                                       \
         uint16_t payload_size;                                                                   \
@@ -189,21 +202,10 @@ void de_entity_move_back(de_entity);
         .payload_size = (PAYLOAD_SIZE),                                                          \
     }
 
-#define DE_MANAGER_ARGS(NAME) \
-    (NAME).entities, (NAME).data, (NAME).capacity, (NAME).payload_size
+#define _DE_MANAGER_ARGS(NAME) \
+    (NAME).pool, (NAME).data, (NAME).capacity, (NAME).payload_size
 
-/**
- * Iterates the active zone only (backward order).
- *
- * Within the CODE block:
- * - INDEX:  Current index in iteration
- * - POOL:  Entity list
- * - ENTITY: Available entity pointer
- *
- * Safety rule: deleting/pausing/resuming the entity currently being visited
- * (ENTITY) is safe. Mutating a DIFFERENT entity mid-loop is NOT guaranteed safe.
- */
-#define DE_MANAGER_FOREACH(M, CODE)         \
+#define _DE_MANAGER_FOREACH(M, CODE)        \
     do                                      \
     {                                       \
         uint16_t INDEX = (M)->active_count; \
@@ -215,62 +217,19 @@ void de_entity_move_back(de_entity);
         }                                   \
     } while (0)
 
-void de_manager_init(de_manager *, de_entity *, void *, uint16_t, uint16_t);
-de_entity de_manager_new(de_manager *);
-void de_manager_update(de_manager *);
-void de_manager_reset(de_manager *);
-
-/* ============================================================================
- * SYSTEM API
- * ============================================================================ */
-
-/**
- * Static storage declaration for a system.
- * Use with DE_SYSTEM_ARGS() when calling de_system_init().
- */
-#define DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS) \
-    struct                                        \
-    {                                             \
-        void *pool[(CAPACITY) * (PARAMS)];        \
-        uint16_t capacity;                        \
-        uint16_t params;                          \
-    } NAME = {                                    \
-        .capacity = (CAPACITY),                   \
-        .params = (PARAMS),                       \
+#define _DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS) \
+    struct                                         \
+    {                                              \
+        void *pool[(CAPACITY) * (PARAMS)];         \
+        uint16_t capacity;                         \
+        uint16_t params;                           \
+    } NAME = {                                     \
+        .capacity = (CAPACITY),                    \
+        .params = (PARAMS),                        \
     }
 
-#define DE_SYSTEM_ARGS(NAME) \
+#define _DE_SYSTEM_ARGS(NAME) \
     (NAME).pool, (NAME).capacity, (NAME).params
-
-/**
- * Adds one parameter group to the system.
- * Supports 1-5 data pointers (the system pointer is always the first macro argument).
- * Returns 1 on success, 0 if system is full.
- */
-#define DE_SYSTEM_ADD(...) \
-    _DE_CONCAT(_DE_SYSTEM_ADD_, _DE_ADD_NARGS(__VA_ARGS__))(__VA_ARGS__)
-
-/**
- * Iterates over the system's parameter groups.
- * Supports 0-5 output variables per iteration; the system pointer is always the first macro argument.
- */
-#define DE_SYSTEM_FOREACH(...) \
-    _DE_CONCAT(_DE_SYSTEM_FOREACH_, _DE_FOREACH_NARGS(__VA_ARGS__))(__VA_ARGS__)
-
-/**
- * DE_SYSTEM_ITERATOR: Creates a function that runs a system foreach pattern
- * and returns DE_STATE_LOOP. The generated function receives a de_system *;
- * it is not type-compatible with de_state(void *) under strict ISO C.
- */
-#define DE_SYSTEM_ITERATOR(...) \
-    _DE_CONCAT(_DE_SYSTEM_ITERATOR_, _DE_FOREACH_NARGS(__VA_ARGS__))(__VA_ARGS__)
-
-void de_system_init(de_system *, void **, uint16_t, uint16_t);
-uint16_t de_system_remove(de_system *, void *);
-
-/* ============================================================================
- * INTERNAL MACRO IMPLEMENTATIONS
- * ============================================================================ */
 
 #define _DE_SYSTEM_ADD(SYS, N, ...)         \
     ({                                      \
@@ -287,14 +246,12 @@ uint16_t de_system_remove(de_system *, void *);
         _ok;                                \
     })
 
-// Add variants for 1-5 data parameters
 #define _DE_SYSTEM_ADD_1(SYS, A) _DE_SYSTEM_ADD(SYS, 1, _p[0] = (void *)(A);)
 #define _DE_SYSTEM_ADD_2(SYS, A, B) _DE_SYSTEM_ADD(SYS, 2, _p[0] = (void *)(A); _p[1] = (void *)(B);)
 #define _DE_SYSTEM_ADD_3(SYS, A, B, C) _DE_SYSTEM_ADD(SYS, 3, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C);)
 #define _DE_SYSTEM_ADD_4(SYS, A, B, C, D) _DE_SYSTEM_ADD(SYS, 4, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D);)
 #define _DE_SYSTEM_ADD_5(SYS, A, B, C, D, E) _DE_SYSTEM_ADD(SYS, 5, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D); _p[4] = (void *)(E);)
 
-// Internal foreach implementation, wrapped in do-while for safety
 #define _DE_SYSTEM_FOREACH(SYSTEM, IT) \
     do                                 \
     {                                  \
@@ -307,7 +264,6 @@ uint16_t de_system_remove(de_system *, void *);
         }                              \
     } while (0)
 
-// Foreach variants for 0-5 data variables
 #define _DE_SYSTEM_FOREACH_0(SYSTEM, IT) _DE_SYSTEM_FOREACH(SYSTEM, { IT; })
 #define _DE_SYSTEM_FOREACH_1(SYSTEM, A, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; IT; })
 #define _DE_SYSTEM_FOREACH_2(SYSTEM, A, B, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; IT; })
@@ -315,7 +271,6 @@ uint16_t de_system_remove(de_system *, void *);
 #define _DE_SYSTEM_FOREACH_4(SYSTEM, A, B, C, D, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; C = pool[2]; D = pool[3]; IT; })
 #define _DE_SYSTEM_FOREACH_5(SYSTEM, A, B, C, D, E, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; C = pool[2]; D = pool[3]; E = pool[4]; IT; })
 
-// Internal iterator generator: calls the corresponding foreach macro.
 #define _DE_SYSTEM_ITERATOR(NAME, FOREACH, ...) \
     void *NAME(de_system *system)               \
     {                                           \
@@ -323,7 +278,6 @@ uint16_t de_system_remove(de_system *, void *);
         return DE_STATE_LOOP;                   \
     }
 
-// Iterator variants for 0-5 data variables
 #define _DE_SYSTEM_ITERATOR_0(NAME, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_0, IT)
 #define _DE_SYSTEM_ITERATOR_1(NAME, A, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_1, A, IT)
 #define _DE_SYSTEM_ITERATOR_2(NAME, A, B, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_2, A, B, IT)
@@ -341,133 +295,132 @@ uint16_t de_system_remove(de_system *, void *);
 
 static void _de_entity_swap(de_entity a, de_entity b)
 {
-    de_manager *m = a->manager;
+    de_manager *manager = a->manager;
     uint16_t i = a->slot;
     uint16_t j = b->slot;
 
-    // Swap in array
-    m->pool[i] = b;
+    manager->pool[i] = b;
     b->slot = i;
-    m->pool[j] = a;
+    manager->pool[j] = a;
     a->slot = j;
 }
 
 void *de_entity_exec(de_entity $)
 {
-    de_state s = $->state;
+    de_state state = $->state;
 
-    if (!DE_STATE_IS_ACTIVE(s))
+    if (!DE_STATE_IS_ACTIVE(state))
         return 0;
 
-    return s($->data);
+    return state($->data);
 }
 
 void *de_entity_update(de_entity $)
 {
-    de_state s = de_entity_exec($);
+    de_state state = de_entity_exec($);
 
-    if (!DE_STATE_IS_LOOP(s))
-        $->state = s;
+    if (!DE_STATE_IS_LOOP(state))
+        $->state = state;
 
-    return s;
+    return state;
 }
 
 void de_entity_pause(de_entity $)
 {
-    de_manager *m = $->manager;
+    de_manager *manager = $->manager;
     uint16_t slot = $->slot;
 
-    if (slot >= m->active_count)
+    if (slot >= manager->active_count)
         return;
 
     // Shrink active zone from the right and fill the vacated slot
-    --m->active_count;
+    --manager->active_count;
 
-    if (slot != m->active_count)
+    if (slot != manager->active_count)
     {
-        de_entity e = m->pool[m->active_count];
-        m->pool[slot] = e;
-        e->slot = slot;
+        de_entity entity = manager->pool[manager->active_count];
+        manager->pool[slot] = entity;
+        entity->slot = slot;
     }
 
     // Grow paused zone from the left and place entity at the new boundary
-    --m->paused_start;
-    m->pool[m->paused_start] = $;
-    $->slot = m->paused_start;
+    --manager->paused_start;
+    manager->pool[manager->paused_start] = $;
+    $->slot = manager->paused_start;
 }
 
 void de_entity_resume(de_entity $)
 {
-    de_manager *m = $->manager;
+    de_manager *manager = $->manager;
     uint16_t slot = $->slot;
 
-    if (slot < m->paused_start)
+    if (slot < manager->paused_start)
         return;
 
     // Shrink paused zone from the left and fill the vacated slot
-    if (slot != m->paused_start)
+    if (slot != manager->paused_start)
     {
-        de_entity e = m->pool[m->paused_start];
-        m->pool[slot] = e;
-        e->slot = slot;
+        de_entity entity = manager->pool[manager->paused_start];
+        manager->pool[slot] = entity;
+        entity->slot = slot;
     }
 
-    ++m->paused_start;
+    ++manager->paused_start;
 
     // Grow active zone from the right and place entity at the new boundary
-    m->pool[m->active_count] = $;
-    $->slot = m->active_count;
-    ++m->active_count;
+    manager->pool[manager->active_count] = $;
+    $->slot = manager->active_count;
+    ++manager->active_count;
 }
 
 void de_entity_delete(de_entity $)
 {
-    de_manager *m = $->manager;
+    de_manager *manager = $->manager;
 
     // Already free: nothing to do
-    if ($->slot >= m->active_count && $->slot < m->paused_start)
+    if ($->slot >= manager->active_count && $->slot < manager->paused_start)
         return;
 
     if ($->destructor)
         $->destructor($->data);
 
-    if ($->slot >= m->paused_start)
+    if ($->slot >= manager->paused_start)
     {
         // Was paused: shrink paused zone from the left, slot rejoins the free zone
-        if ($->slot != m->paused_start)
-            _de_entity_swap($, m->pool[m->paused_start]);
+        if ($->slot != manager->paused_start)
+            _de_entity_swap($, manager->pool[manager->paused_start]);
 
-        ++m->paused_start;
+        ++manager->paused_start;
     }
     else
     {
         // Was active: shrink active zone from the right, slot rejoins the free zone
-        if ($->slot != m->active_count - 1)
-            _de_entity_swap($, m->pool[m->active_count - 1]);
+        if ($->slot != manager->active_count - 1)
+            _de_entity_swap($, manager->pool[manager->active_count - 1]);
 
-        --m->active_count;
+        --manager->active_count;
     }
 }
 
 void de_entity_move_front(de_entity $)
 {
-    de_manager *m = $->manager;
+    de_manager *manager = $->manager;
 
-    if ($->slot < m->active_count && $->slot != m->active_count - 1)
-        _de_entity_swap($, m->pool[m->active_count - 1]);
+    if ($->slot < manager->active_count && $->slot != manager->active_count - 1)
+        _de_entity_swap($, manager->pool[manager->active_count - 1]);
 }
 
 void de_entity_move_back(de_entity $)
 {
-    de_manager *m = $->manager;
+    de_manager *manager = $->manager;
 
-    if ($->slot < m->active_count && $->slot != 0)
-        _de_entity_swap($, m->pool[0]);
+    if ($->slot < manager->active_count && $->slot != 0)
+        _de_entity_swap($, manager->pool[0]);
 }
 
-//////////////////////////////////////////////////
+//
 
-void de_manager_init(de_manager *$, de_entity *pool, void *storage, uint16_t capacity, uint16_t bytes)
+void de_manager_init(de_manager *$, de_entity *pool, void *param_storage, uint16_t capacity, uint16_t bytes)
 {
     $->pool = pool;
     $->capacity = capacity;
@@ -475,17 +428,17 @@ void de_manager_init(de_manager *$, de_entity *pool, void *storage, uint16_t cap
     $->paused_start = capacity;
 
     uint16_t stride = DE_ENTITY_STRIDE(bytes);
-    uint8_t *p = storage;
+    uint8_t *storage = param_storage;
 
     for (uint16_t i = 0; i < capacity; ++i)
     {
-        de_entity e = (de_entity)p;
+        de_entity entity = (de_entity)storage;
 
-        pool[i] = e;
-        e->manager = $;
-        e->slot = i;
+        pool[i] = entity;
+        entity->manager = $;
+        entity->slot = i;
 
-        p += stride;
+        storage += stride;
     }
 }
 
@@ -494,14 +447,14 @@ de_entity de_manager_new(de_manager *$)
     if ($->active_count >= $->paused_start)
         return 0;
 
-    de_entity e = $->pool[$->active_count];
-    e->manager = $;
-    e->slot = $->active_count++;
-    e->state = DE_STATE_DELETE;
-    e->destructor = 0;
-    e->tag = 0;
+    de_entity entity = $->pool[$->active_count];
+    entity->manager = $;
+    entity->slot = $->active_count++;
+    entity->state = DE_STATE_DELETE;
+    entity->destructor = 0;
+    entity->tag = 0;
 
-    return e;
+    return entity;
 }
 
 void de_manager_update(de_manager *$)
@@ -511,22 +464,22 @@ void de_manager_update(de_manager *$)
 
     while (i--)
     {
-        de_entity e = pool[i];
-        de_state s = e->state;
+        de_entity entity = pool[i];
+        de_state state = entity->state;
 
-        if (DE_STATE_IS_ACTIVE(s))
+        if (DE_STATE_IS_ACTIVE(state))
         {
-            s = s(e->data);
+            state = state(entity->data);
 
-            if (!DE_STATE_IS_LOOP(s))
-                e->state = s;
+            if (!DE_STATE_IS_LOOP(state))
+                entity->state = state;
         }
 
-        else if (DE_STATE_IS_PAUSED(s))
-            de_entity_pause(e);
+        else if (DE_STATE_IS_PAUSED(state))
+            de_entity_pause(entity);
 
-        else if (DE_STATE_IS_DELETED(s))
-            de_entity_delete(e);
+        else if (DE_STATE_IS_DELETED(state))
+            de_entity_delete(entity);
     }
 }
 
@@ -538,7 +491,7 @@ void de_manager_reset(de_manager *$)
     $->paused_start = $->capacity;
 }
 
-//////////////////////////////////////////////////
+//
 
 void de_system_init(de_system *$, void **storage, uint16_t capacity_groups, uint16_t params)
 {
@@ -558,8 +511,8 @@ uint16_t de_system_remove(de_system *$, void *first)
 
             // Compact if not last group
             if (i != $->size)
-                for (uint16_t k = 0; k < $->params; ++k)
-                    $->pool[i + k] = $->pool[$->size + k];
+                for (uint16_t j = 0; j < $->params; ++j)
+                    $->pool[i + j] = $->pool[$->size + j];
 
             $->end -= $->params;
 
