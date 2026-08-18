@@ -151,10 +151,10 @@ void de_entity_move_back(de_entity);
 #define DE_MANAGER_ARGS(NAME) _DE_MANAGER_ARGS(NAME)
 #define DE_MANAGER_FOREACH(M, CODE) _DE_MANAGER_FOREACH(M, CODE)
 
-void de_manager_init(de_manager , de_entity *, void *, uint16_t, uint16_t);
-de_entity de_manager_new(de_manager );
-void de_manager_update(de_manager );
-void de_manager_reset(de_manager );
+void de_manager_init(de_manager, de_entity *, void *, uint16_t, uint16_t);
+de_entity de_manager_new(de_manager);
+void de_manager_update(de_manager);
+void de_manager_reset(de_manager);
 
 /* ============================================================================
  * SYSTEM API
@@ -190,16 +190,16 @@ uint16_t de_system_remove(de_system *, void *);
 #define _DE_CONCAT_INNER(A, B) A##B
 #define _DE_CONCAT(A, B) _DE_CONCAT_INNER(A, B)
 
-#define _DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)                                        \
-    struct                                                                                       \
-    {                                                                                            \
-        de_entity pool[(CAPACITY)];                                                              \
+#define _DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)                                         \
+    struct                                                                                        \
+    {                                                                                             \
+        de_entity pool[(CAPACITY)];                                                               \
         uint8_t data[(CAPACITY) * _DE_ENTITY_STRIDE((PAYLOAD_SIZE))] __attribute__((aligned(4))); \
-        uint16_t capacity;                                                                       \
-        uint16_t payload_size;                                                                   \
-    } NAME = {                                                                                   \
-        .capacity = (CAPACITY),                                                                  \
-        .payload_size = (PAYLOAD_SIZE),                                                          \
+        uint16_t capacity;                                                                        \
+        uint16_t payload_size;                                                                    \
+    } NAME = {                                                                                    \
+        .capacity = (CAPACITY),                                                                   \
+        .payload_size = (PAYLOAD_SIZE),                                                           \
     }
 
 #define _DE_MANAGER_ARGS(NAME) \
