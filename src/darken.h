@@ -135,9 +135,6 @@ struct de_system
  * ENTITY API
  * ============================================================================ */
 
-// Ensures proper alignment between consecutive entities
-#define DE_ENTITY_STRIDE(PAYLOAD) _DE_ALIGN4(sizeof(struct de_entity) + (PAYLOAD))
-
 void *de_entity_exec(de_entity);
 void *de_entity_update(de_entity);
 void de_entity_pause(de_entity);
@@ -176,7 +173,10 @@ uint16_t de_system_remove(de_system *, void *);
  * INTERNAL MACRO IMPLEMENTATIONS
  * ============================================================================ */
 
- /**
+// Ensures proper alignment between consecutive entities
+#define _DE_ENTITY_STRIDE(PAYLOAD) _DE_ALIGN4(sizeof(struct de_entity) + (PAYLOAD))
+
+/**
  * Align a byte count to a 4-byte boundary.
  *
  * The Motorola 68000 requires word alignment for word/long accesses.
@@ -194,7 +194,7 @@ uint16_t de_system_remove(de_system *, void *);
     struct                                                                                       \
     {                                                                                            \
         de_entity pool[(CAPACITY)];                                                              \
-        uint8_t data[(CAPACITY) * DE_ENTITY_STRIDE((PAYLOAD_SIZE))] __attribute__((aligned(4))); \
+        uint8_t data[(CAPACITY) * _DE_ENTITY_STRIDE((PAYLOAD_SIZE))] __attribute__((aligned(4))); \
         uint16_t capacity;                                                                       \
         uint16_t payload_size;                                                                   \
     } NAME = {                                                                                   \
@@ -376,18 +376,19 @@ void de_entity_resume(de_entity $)
 void de_entity_delete(de_entity $)
 {
     de_manager *manager = $->manager;
+    uint16_t slot = $->slot;
 
     // Already free: nothing to do
-    if ($->slot >= manager->active_count && $->slot < manager->paused_start)
+    if (slot >= manager->active_count && slot < manager->paused_start)
         return;
 
     if ($->destructor)
         $->destructor($->data);
 
-    if ($->slot >= manager->paused_start)
+    if (slot >= manager->paused_start)
     {
         // Was paused: shrink paused zone from the left, slot rejoins the free zone
-        if ($->slot != manager->paused_start)
+        if (slot != manager->paused_start)
             _de_entity_swap($, manager->pool[manager->paused_start]);
 
         ++manager->paused_start;
@@ -395,7 +396,7 @@ void de_entity_delete(de_entity $)
     else
     {
         // Was active: shrink active zone from the right, slot rejoins the free zone
-        if ($->slot != manager->active_count - 1)
+        if (slot != manager->active_count - 1)
             _de_entity_swap($, manager->pool[manager->active_count - 1]);
 
         --manager->active_count;
@@ -405,16 +406,18 @@ void de_entity_delete(de_entity $)
 void de_entity_move_front(de_entity $)
 {
     de_manager *manager = $->manager;
+    uint16_t slot = $->slot;
 
-    if ($->slot < manager->active_count && $->slot != manager->active_count - 1)
+    if (slot < manager->active_count && slot != manager->active_count - 1)
         _de_entity_swap($, manager->pool[manager->active_count - 1]);
 }
 
 void de_entity_move_back(de_entity $)
 {
     de_manager *manager = $->manager;
+    uint16_t slot = $->slot;
 
-    if ($->slot < manager->active_count && $->slot != 0)
+    if (slot < manager->active_count && slot != 0)
         _de_entity_swap($, manager->pool[0]);
 }
 
@@ -427,7 +430,7 @@ void de_manager_init(de_manager *$, de_entity *pool, void *param_storage, uint16
     $->active_count = 0;
     $->paused_start = capacity;
 
-    uint16_t stride = DE_ENTITY_STRIDE(bytes);
+    uint16_t stride = _DE_ENTITY_STRIDE(bytes);
     uint8_t *storage = param_storage;
 
     for (uint16_t i = 0; i < capacity; ++i)
@@ -504,17 +507,19 @@ void de_system_init(de_system *$, void **storage, uint16_t capacity_groups, uint
 
 uint16_t de_system_remove(de_system *$, void *first)
 {
-    for (uint16_t i = 0; i < $->size; i += $->params)
+    uint16_t params = $->params;
+
+    for (uint16_t i = 0; i < $->size; i += params)
         if ($->pool[i] == first)
         {
-            $->size -= $->params;
+            $->size -= params;
 
             // Compact if not last group
             if (i != $->size)
-                for (uint16_t j = 0; j < $->params; ++j)
+                for (uint16_t j = 0; j < params; ++j)
                     $->pool[i + j] = $->pool[$->size + j];
 
-            $->end -= $->params;
+            $->end -= params;
 
             return 1;
         }
