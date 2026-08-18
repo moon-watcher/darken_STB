@@ -202,10 +202,10 @@ static void bench_systems_vs_individual(void)
 static void bench_memory_overhead(void)
 {
     kprintf("========== MEMORIA ==========");
-    u16 stride16 = DE_ENTITY_STRIDE(16);
-    u16 stride32 = DE_ENTITY_STRIDE(32);
-    u16 stride1 = DE_ENTITY_STRIDE(1);
-    u16 stride9 = DE_ENTITY_STRIDE(9);
+    u16 stride16 = _DE_ENTITY_STRIDE(16);
+    u16 stride32 = _DE_ENTITY_STRIDE(32);
+    u16 stride1 = _DE_ENTITY_STRIDE(1);
+    u16 stride9 = _DE_ENTITY_STRIDE(9);
     kprintf("sizeof(de_entity) base: %d bytes", (int)sizeof(struct de_entity));
     kprintf("stride payload=1:  %d bytes/entidad", stride1);
     kprintf("stride payload=9:  %d bytes/entidad (impar)", stride9);
@@ -214,17 +214,17 @@ static void bench_memory_overhead(void)
     de_manager m32;
     DE_MANAGER_STORAGE(m32_storage, 32, sizeof(struct MyComponent));
     de_manager_init(&m32, DE_MANAGER_ARGS(m32_storage));
-    u32 bytes32 = 32 * DE_ENTITY_STRIDE(sizeof(struct MyComponent));
+    u32 bytes32 = 32 * _DE_ENTITY_STRIDE(sizeof(struct MyComponent));
     kprintf("Manager 32 entidades (payload %d): %ld bytes en storage", (int)sizeof(struct MyComponent), bytes32);
     de_manager m128;
     DE_MANAGER_STORAGE(m128_storage, 128, sizeof(struct MyComponent));
     de_manager_init(&m128, DE_MANAGER_ARGS(m128_storage));
-    u32 bytes128 = 128 * DE_ENTITY_STRIDE(sizeof(struct MyComponent));
+    u32 bytes128 = 128 * _DE_ENTITY_STRIDE(sizeof(struct MyComponent));
     kprintf("Manager 128 entidades (payload %d): %ld bytes en storage", (int)sizeof(struct MyComponent), bytes128);
-    u16 overhead = DE_ENTITY_STRIDE(sizeof(struct MyComponent)) - sizeof(struct MyComponent);
+    u16 overhead = _DE_ENTITY_STRIDE(sizeof(struct MyComponent)) - sizeof(struct MyComponent);
     kprintf("Overhead por entidad: %d bytes (header + padding)", overhead);
     u32 ramAvailable = 64 * 1024;
-    u32 entidadesEn64k = ramAvailable / DE_ENTITY_STRIDE(sizeof(struct MyComponent));
+    u32 entidadesEn64k = ramAvailable / _DE_ENTITY_STRIDE(sizeof(struct MyComponent));
     kprintf("Entidades de MyComponent que caben en 64 KB: ~%ld", entidadesEn64k);
     kprintf("==============================");
 }
