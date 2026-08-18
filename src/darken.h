@@ -29,7 +29,7 @@ typedef void *(*de_state)(void *);
 
 typedef struct de_entity *de_entity;
 typedef struct de_manager *de_manager;
-typedef struct de_system de_system;
+typedef struct de_system *de_system;
 
 /* ============================================================================
  * DATA STRUCTURES
@@ -48,7 +48,7 @@ typedef struct de_system de_system;
  * An entity's own memory address (this struct) never moves once allocated
  * by de_manager_init(). What moves between the manager's zones is only the
  * *pointer* to it inside de_manager.pool[]. This is what makes it safe for
- * a de_system (or any external code) to keep a raw pointer into entity->data
+ * a struct de_system (or any external code) to keep a raw pointer into entity->data
  * even while the entity gets paused/resumed/reordered.
  */
 struct de_entity
@@ -88,7 +88,7 @@ struct de_entity
  *     de_manager_new() never hands out a slot from this zone, so a paused
  *     entity's slot (and therefore its entity->data pointer) stays valid
  *     and untouched until it's explicitly resumed or deleted. This is what
- *     lets a de_system keep safely pointing at a paused entity's data.
+ *     lets a struct de_system keep safely pointing at a paused entity's data.
  */
 struct de_manager
 {
@@ -166,8 +166,8 @@ void de_manager_reset(de_manager);
 #define DE_SYSTEM_FOREACH(...) _DE_CONCAT(_DE_SYSTEM_FOREACH_, _DE_FOREACH_NARGS(__VA_ARGS__))(__VA_ARGS__)
 #define DE_SYSTEM_ITERATOR(...) _DE_CONCAT(_DE_SYSTEM_ITERATOR_, _DE_FOREACH_NARGS(__VA_ARGS__))(__VA_ARGS__)
 
-void de_system_init(de_system *, void **, uint16_t, uint16_t);
-uint16_t de_system_remove(de_system *, void *);
+void de_system_init(de_system, void **, uint16_t, uint16_t);
+uint16_t de_system_remove(de_system, void *);
 
 /* ============================================================================
  * INTERNAL MACRO IMPLEMENTATIONS
@@ -233,7 +233,7 @@ uint16_t de_system_remove(de_system *, void *);
 
 #define _DE_SYSTEM_ADD(SYS, N, ...)         \
     ({                                      \
-        de_system *_s = (SYS);              \
+        de_system _s = (SYS);              \
         uint16_t _ok = 0;                   \
         if (_s->size + (N) <= _s->capacity) \
         {                                   \
@@ -272,7 +272,7 @@ uint16_t de_system_remove(de_system *, void *);
 #define _DE_SYSTEM_FOREACH_5(SYSTEM, A, B, C, D, E, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; C = pool[2]; D = pool[3]; E = pool[4]; IT; })
 
 #define _DE_SYSTEM_ITERATOR(NAME, FOREACH, ...) \
-    void *NAME(de_system *system)               \
+    void *NAME(de_system system)               \
     {                                           \
         FOREACH(system, __VA_ARGS__);           \
         return DE_STATE_LOOP;                   \
@@ -496,7 +496,7 @@ void de_manager_reset(de_manager $)
 
 //
 
-void de_system_init(de_system *$, void **storage, uint16_t capacity_groups, uint16_t params)
+void de_system_init(de_system $, void **storage, uint16_t capacity_groups, uint16_t params)
 {
     $->pool = storage;
     $->end = storage;
@@ -505,7 +505,7 @@ void de_system_init(de_system *$, void **storage, uint16_t capacity_groups, uint
     $->params = params;
 }
 
-uint16_t de_system_remove(de_system *$, void *first)
+uint16_t de_system_remove(de_system $, void *first)
 {
     uint16_t params = $->params;
 

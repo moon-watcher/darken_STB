@@ -794,7 +794,7 @@ DE_SYSTEM_ITERATOR(test_de_system_frames, uint16_t *frame, {
 static void test_de_system_init_add(void)
 {
     kprintf("-- test_de_system_init_add --");
-    de_system sys;
+    struct de_system sys;
     void *pool[12];
     de_system_init(&sys, pool, 3, 4);
     CHECK("de_system init: size 0", sys.size == 0);
@@ -809,7 +809,7 @@ static void test_de_system_init_add(void)
 static void test_de_system_multiple_groups(void)
 {
     kprintf("-- test_de_system_multiple_groups --");
-    de_system sys;
+    struct de_system sys;
     void *pool[12];
     de_system_init(&sys, pool, 3, 4);
     int a1, b1, c1, d1, a2, b2, c2, d2;
@@ -823,7 +823,7 @@ static void test_de_system_multiple_groups(void)
 static void test_de_system_remove(void)
 {
     kprintf("-- test_de_system_remove --");
-    de_system sys;
+    struct de_system sys;
     void *pool[12];
     de_system_init(&sys, pool, 3, 4);
     int a1, b1, c1, d1, a2, b2, c2, d2, a3, b3, c3, d3;
@@ -839,13 +839,14 @@ static void test_de_system_remove(void)
 static void test_de_system_capacity(void)
 {
     kprintf("-- test_de_system_capacity --");
-    de_system sys;
+    struct de_system sys;
     void *pool[8];
     de_system_init(&sys, pool, 2, 4);
     int a[2], b[2], c[2], d[2];
     CHECK("de_system capacity: primer grupo", DE_SYSTEM_ADD(&sys, &a[0], &a[1], &b[0], &b[1]) == 1);
     CHECK("de_system capacity: segundo grupo", DE_SYSTEM_ADD(&sys, &b[0], &b[1], &c[0], &c[1]) == 1);
     CHECK("de_system capacity: rechaza grupo lleno", DE_SYSTEM_ADD(&sys, &c[0], &c[1], &d[0], &d[1]) == 0);
+    kprintf("de_system capacity: size: %d", sys.size);
     CHECK("de_system capacity: size no cambia", sys.size == 8);
 }
 
@@ -856,16 +857,16 @@ static void test_de_system_as_entities(void)
     struct de_manager entities, systems;
     DE_MANAGER_STORAGE(entities_storage, 2, sizeof(TestDeSystemEntity));
     de_manager_init(&entities, DE_MANAGER_ARGS(entities_storage));
-    DE_MANAGER_STORAGE(systems_storage, 3, sizeof(de_system));
+    DE_MANAGER_STORAGE(systems_storage, 3, sizeof(struct de_system));
     de_manager_init(&systems, DE_MANAGER_ARGS(systems_storage));
 
     de_entity frames_entity = de_manager_new(&systems);
     de_entity movement_entity = de_manager_new(&systems);
     de_entity physics_entity = de_manager_new(&systems);
 
-    de_system *frames = (de_system *)frames_entity->data;
-    de_system *movement = (de_system *)movement_entity->data;
-    de_system *physics = (de_system *)physics_entity->data;
+    de_system frames = (de_system)frames_entity->data;
+    de_system movement = (de_system)movement_entity->data;
+    de_system physics = (de_system)physics_entity->data;
 
     DE_SYSTEM_STORAGE(frames_storage, 2, 1);
     de_system_init(frames, DE_SYSTEM_ARGS(frames_storage));
@@ -921,11 +922,12 @@ static void test_de_system_shared_payload(void)
     struct de_manager entities, systems;
     DE_MANAGER_STORAGE(entities_storage, 1, sizeof(TestDeSystemEntity));
     de_manager_init(&entities, DE_MANAGER_ARGS(entities_storage));
-    DE_MANAGER_STORAGE(systems_storage, 2, sizeof(de_system));
+    DE_MANAGER_STORAGE(systems_storage, 2, sizeof(struct de_system));
     de_manager_init(&systems, DE_MANAGER_ARGS(systems_storage));
     void *movement_pool[4], *frames_pool[1];
     de_entity movement_entity = de_manager_new(&systems), frames_entity = de_manager_new(&systems);
-    de_system *movement = (de_system *)movement_entity->data, *frames = (de_system *)frames_entity->data;
+    de_system movement = (de_system)movement_entity->data;
+    de_system frames = (de_system)frames_entity->data;
     de_system_init(movement, movement_pool, 1, 4);
     de_system_init(frames, frames_pool, 1, 1);
     movement_entity->state = (de_state)test_de_system_movement;
@@ -1127,7 +1129,7 @@ static void test_apply_active_only(void)
 static void test_system_foreach_direct(void)
 {
     kprintf("-- test_system_foreach_direct --");
-    de_system sys;
+    struct de_system sys;
     void *pool[12];
     de_system_init(&sys, pool, 3, 4);
     int a1 = 1, b1 = 2, c1 = 3, d1 = 4;
@@ -1142,7 +1144,7 @@ static void test_system_foreach_direct(void)
 static void test_system_add_various_arity(void)
 {
     kprintf("-- test_system_add_various_arity --");
-    de_system sys1, sys2, sys3, sys5;
+    struct de_system sys1, sys2, sys3, sys5;
     void *p1[3], *p2[6], *p3[9], *p5[15];
     de_system_init(&sys1, p1, 3, 1);
     de_system_init(&sys2, p2, 3, 2);
@@ -1159,7 +1161,7 @@ static void test_system_add_various_arity(void)
 static void test_system_remove_first(void)
 {
     kprintf("-- test_system_remove_first --");
-    de_system sys;
+    struct de_system sys;
     void *pool[12];
     de_system_init(&sys, pool, 3, 4);
     int a1, b1, c1, d1, a2, b2, c2, d2, a3, b3, c3, d3;
@@ -1174,7 +1176,7 @@ static void test_system_remove_first(void)
 static void test_system_remove_last(void)
 {
     kprintf("-- test_system_remove_last --");
-    de_system sys;
+    struct de_system sys;
     void *pool[12];
     de_system_init(&sys, pool, 3, 4);
     int a1, b1, c1, d1, a2, b2, c2, d2, a3, b3, c3, d3;
@@ -1189,7 +1191,7 @@ static void test_system_remove_last(void)
 static void test_empty_system(void)
 {
     kprintf("-- test_empty_system --");
-    de_system sys;
+    struct de_system sys;
     void *pool[4];
     de_system_init(&sys, pool, 1, 4);
     CHECK("empty system: size 0", sys.size == 0);

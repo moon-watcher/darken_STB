@@ -95,7 +95,7 @@ static struct de_manager test_mgr;
 #define TEST_SYS_CAPACITY 32
 #define TEST_SYS_PARAMS 2
 DE_SYSTEM_STORAGE(test_sys_storage, TEST_SYS_CAPACITY, TEST_SYS_PARAMS);
-static de_system test_sys;
+static struct de_system test_sys;
 
 static void init_test_manager(void) {
     de_manager_init(&test_mgr, DE_MANAGER_ARGS(test_mgr_storage));
@@ -387,7 +387,7 @@ static struct de_manager bench_mgr;
 #define BENCH_SYS_CAPACITY 128
 #define BENCH_SYS_PARAMS 2
 DE_SYSTEM_STORAGE(bench_sys_storage, BENCH_SYS_CAPACITY, BENCH_SYS_PARAMS);
-static de_system bench_sys;
+static struct de_system bench_sys;
 
 static void bench_entity_new_delete(void) {
     const int ITER = 100;
@@ -406,7 +406,7 @@ static void bench_entity_new_delete(void) {
     uint32_t t1 = get_time_us();
     uint32_t total_ops = ITER * BENCH_MGR_CAPACITY;
     uint32_t us_per_op = (t1 - t0) / total_ops;
-    kprintf("entity_new+delete: %u us/op", us_per_op);
+    kprintf("entity_new+delete: %lu us/op", us_per_op);
 }
 
 static void bench_manager_update(void) {
@@ -424,7 +424,7 @@ static void bench_manager_update(void) {
     }
     uint32_t t1 = get_time_us();
     uint32_t us_per_update = (t1 - t0) / ITER;
-    kprintf("manager_update (%d entities): %u us/update", BENCH_MGR_CAPACITY, us_per_update);
+    kprintf("manager_update (%d entities): %lu us/update", BENCH_MGR_CAPACITY, us_per_update);
 }
 
 static void bench_entity_pause_resume(void) {
@@ -440,7 +440,7 @@ static void bench_entity_pause_resume(void) {
     }
     uint32_t t1 = get_time_us();
     uint32_t us_per_op = (t1 - t0) / ITER;
-    kprintf("entity_pause+resume: %u us/op", us_per_op);
+    kprintf("entity_pause+resume: %lu us/op", us_per_op);
 }
 
 static void bench_system_add_remove(void) {
@@ -456,7 +456,7 @@ static void bench_system_add_remove(void) {
     }
     uint32_t t1 = get_time_us();
     uint32_t us_per_op = (t1 - t0) / ITER;
-    kprintf("system_add+remove: %u us/op", us_per_op);
+    kprintf("system_add+remove: %lu us/op", us_per_op);
 }
 
 static void bench_system_foreach(void) {
@@ -477,7 +477,7 @@ static void bench_system_foreach(void) {
     }
     uint32_t t1 = get_time_us();
     uint32_t us_per_iter = (t1 - t0) / ITER;
-    kprintf("system_foreach (%d groups): %u us/iter", BENCH_SYS_CAPACITY, us_per_iter);
+    kprintf("system_foreach (%d groups): %lu us/iter", BENCH_SYS_CAPACITY, us_per_iter);
 }
 
 static void bench_manager_iterate(void) {
@@ -497,7 +497,7 @@ static void bench_manager_iterate(void) {
     }
     uint32_t t1 = get_time_us();
     uint32_t us_per_iter = (t1 - t0) / ITER;
-    kprintf("manager_iterate (%d entities): %u us/iter", BENCH_MGR_CAPACITY, us_per_iter);
+    kprintf("manager_iterate (%d entities): %lu us/iter", BENCH_MGR_CAPACITY, us_per_iter);
 }
 
 #endif /* DISABLE_BENCHMARKS */

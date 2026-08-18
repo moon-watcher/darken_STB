@@ -6,7 +6,7 @@
 #include "tests/examples.h"
 #include "tests/tests.h"
 #include "tests/benchmarks.h"
-
+#include "tests/ds.h"
 
 int main(void)
 {
