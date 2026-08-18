@@ -231,26 +231,26 @@ uint16_t de_system_remove(de_system, void *);
 #define _DE_SYSTEM_ARGS(NAME) \
     (NAME).pool, (NAME).capacity, (NAME).params
 
-#define _DE_SYSTEM_ADD(SYS, N, ...)         \
-    ({                                      \
-        de_system _s = (SYS);              \
-        uint16_t _ok = 0;                   \
-        if (_s->size + (N) <= _s->capacity) \
-        {                                   \
-            void **_p = _s->end;            \
-            __VA_ARGS__                     \
-            _s->size += (N);                \
-            _s->end += (N);                 \
-            _ok = 1;                        \
-        }                                   \
-        _ok;                                \
+#define _DE_SYSTEM_ADD(SYS, N, ...)                 \
+    ({                                              \
+        de_system system = (SYS);                   \
+        uint16_t ok = 0;                            \
+        if (system->size + (N) <= system->capacity) \
+        {                                           \
+            void **pool = system->end;              \
+            __VA_ARGS__                             \
+            system->size += (N);                    \
+            system->end += (N);                     \
+            ok = 1;                                 \
+        }                                           \
+        ok;                                         \
     })
 
-#define _DE_SYSTEM_ADD_1(SYS, A) _DE_SYSTEM_ADD(SYS, 1, _p[0] = (void *)(A);)
-#define _DE_SYSTEM_ADD_2(SYS, A, B) _DE_SYSTEM_ADD(SYS, 2, _p[0] = (void *)(A); _p[1] = (void *)(B);)
-#define _DE_SYSTEM_ADD_3(SYS, A, B, C) _DE_SYSTEM_ADD(SYS, 3, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C);)
-#define _DE_SYSTEM_ADD_4(SYS, A, B, C, D) _DE_SYSTEM_ADD(SYS, 4, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D);)
-#define _DE_SYSTEM_ADD_5(SYS, A, B, C, D, E) _DE_SYSTEM_ADD(SYS, 5, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D); _p[4] = (void *)(E);)
+#define _DE_SYSTEM_ADD_1(SYS, A) _DE_SYSTEM_ADD(SYS, 1, pool[0] = (void *)(A);)
+#define _DE_SYSTEM_ADD_2(SYS, A, B) _DE_SYSTEM_ADD(SYS, 2, pool[0] = (void *)(A); pool[1] = (void *)(B);)
+#define _DE_SYSTEM_ADD_3(SYS, A, B, C) _DE_SYSTEM_ADD(SYS, 3, pool[0] = (void *)(A); pool[1] = (void *)(B); pool[2] = (void *)(C);)
+#define _DE_SYSTEM_ADD_4(SYS, A, B, C, D) _DE_SYSTEM_ADD(SYS, 4, pool[0] = (void *)(A); pool[1] = (void *)(B); pool[2] = (void *)(C); pool[3] = (void *)(D);)
+#define _DE_SYSTEM_ADD_5(SYS, A, B, C, D, E) _DE_SYSTEM_ADD(SYS, 5, pool[0] = (void *)(A); pool[1] = (void *)(B); pool[2] = (void *)(C); pool[3] = (void *)(D); pool[4] = (void *)(E);)
 
 #define _DE_SYSTEM_FOREACH(SYSTEM, IT) \
     do                                 \
@@ -272,7 +272,7 @@ uint16_t de_system_remove(de_system, void *);
 #define _DE_SYSTEM_FOREACH_5(SYSTEM, A, B, C, D, E, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; C = pool[2]; D = pool[3]; E = pool[4]; IT; })
 
 #define _DE_SYSTEM_ITERATOR(NAME, FOREACH, ...) \
-    void *NAME(de_system system)               \
+    void *NAME(de_system system)                \
     {                                           \
         FOREACH(system, __VA_ARGS__);           \
         return DE_STATE_LOOP;                   \
