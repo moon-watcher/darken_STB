@@ -386,24 +386,29 @@ uint16_t de_entity_delete(de_entity $)
     if (slot >= manager->size && slot < manager->paused)
         return 0;
 
+    $->state = DE_STATE_DELETE;
+
     if ($->destructor)
-        $->destructor($->data);
+        $->state = $->destructor($->data);
 
-    if (slot >= manager->paused)
+    if (DE_STATE_IS_DELETED($->state))
     {
-        // Was paused: shrink paused zone from the left, slot rejoins the free zone
-        if (slot != manager->paused)
-            _de_entity_swap($, manager->pool[manager->paused]);
+        if (slot >= manager->paused)
+        {
+            // Was paused: shrink paused zone from the left, slot rejoins the free zone
+            if (slot != manager->paused)
+                _de_entity_swap($, manager->pool[manager->paused]);
 
-        ++manager->paused;
-    }
-    else
-    {
-        // Was active: shrink active zone from the right, slot rejoins the free zone
-        if (slot != manager->size - 1)
-            _de_entity_swap($, manager->pool[manager->size - 1]);
+            ++manager->paused;
+        }
+        else
+        {
+            // Was active: shrink active zone from the right, slot rejoins the free zone
+            if (slot != manager->size - 1)
+                _de_entity_swap($, manager->pool[manager->size - 1]);
 
-        --manager->size;
+            --manager->size;
+        }
     }
 
     return 1;
