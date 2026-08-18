@@ -240,11 +240,11 @@ TEST(test_entity_move_front_back) {
     e2->state = state_inc;
 
     de_entity_move_front(e0);
-    CHECK(test_mgr.items[test_mgr.active_count - 1] == e0);
+    CHECK(test_mgr.pool[test_mgr.active_count - 1] == e0);
     CHECK(e0->slot == test_mgr.active_count - 1);
 
     de_entity_move_back(e2);
-    CHECK(test_mgr.items[0] == e2);
+    CHECK(test_mgr.pool[0] == e2);
     CHECK(e2->slot == 0);
 }
 
@@ -400,7 +400,7 @@ static void bench_entity_new_delete(void) {
             if (e) e->state = state_inc;
         }
         for (int j = 0; j < BENCH_MGR_CAPACITY; j++) {
-            de_entity_delete(bench_mgr.items[bench_mgr.active_count - 1]);
+            de_entity_delete(bench_mgr.pool[bench_mgr.active_count - 1]);
         }
     }
     uint32_t t1 = get_time_us();

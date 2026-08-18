@@ -70,7 +70,7 @@ typedef struct de_system de_system;
  *
  * An entity's own memory address (this struct) never moves once allocated
  * by de_manager_init(). What moves between the manager's zones is only the
- * *pointer* to it inside de_manager.items[]. This is what makes it safe for
+ * *pointer* to it inside de_manager.pool[]. This is what makes it safe for
  * a de_system (or any external code) to keep a raw pointer into entity->data
  * even while the entity gets paused/resumed/reordered.
  */
@@ -94,7 +94,7 @@ struct de_entity
  * 0             active_count      paused_start        capacity
  *
  * The entity objects themselves live in the caller-provided storage block;
- * manager->items contains pointers to those fixed addresses.
+ * manager->pool contains pointers to those fixed addresses.
  *
  * - Active zone [0, active_count):
  *     Entity pointers updated every frame by de_manager_update(). Iterable with
@@ -115,7 +115,7 @@ struct de_entity
  */
 struct de_manager
 {
-    de_entity *items;
+    de_entity *pool;
     uint16_t capacity;
     uint16_t active_count;
     uint16_t paused_start;
@@ -197,22 +197,22 @@ void de_entity_move_back(de_entity);
  *
  * Within the CODE block:
  * - INDEX:  Current index in iteration
- * - ITEMS:  Entity list
+ * - POOL:  Entity list
  * - ENTITY: Available entity pointer
  *
  * Safety rule: deleting/pausing/resuming the entity currently being visited
  * (ENTITY) is safe. Mutating a DIFFERENT entity mid-loop is NOT guaranteed safe.
  */
-#define DE_MANAGER_FOREACH(M, CODE)          \
-    do                                       \
-    {                                        \
-        uint16_t INDEX = (M)->active_count;  \
-        de_entity *ITEMS = (M)->items;       \
-        while (INDEX--)                      \
-        {                                    \
-            de_entity ENTITY = ITEMS[INDEX]; \
-            CODE;                            \
-        }                                    \
+#define DE_MANAGER_FOREACH(M, CODE)         \
+    do                                      \
+    {                                       \
+        uint16_t INDEX = (M)->active_count; \
+        de_entity *POOL = (M)->pool;        \
+        while (INDEX--)                     \
+        {                                   \
+            de_entity ENTITY = POOL[INDEX]; \
+            CODE;                           \
+        }                                   \
     } while (0)
 
 void de_manager_init(de_manager *, de_entity *, void *, uint16_t, uint16_t);
@@ -298,22 +298,22 @@ uint16_t de_system_remove(de_system *, void *);
 #define _DE_SYSTEM_FOREACH(SYSTEM, IT) \
     do                                 \
     {                                  \
-        void **items = (SYSTEM)->pool; \
+        void **pool = (SYSTEM)->pool;  \
         void **end = (SYSTEM)->end;    \
-        while (items < end)            \
+        while (pool < end)             \
         {                              \
             IT;                        \
-            items += (SYSTEM)->params; \
+            pool += (SYSTEM)->params;  \
         }                              \
     } while (0)
 
 // Foreach variants for 0-5 data variables
 #define _DE_SYSTEM_FOREACH_0(SYSTEM, IT) _DE_SYSTEM_FOREACH(SYSTEM, { IT; })
-#define _DE_SYSTEM_FOREACH_1(SYSTEM, A, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = items[0]; IT; })
-#define _DE_SYSTEM_FOREACH_2(SYSTEM, A, B, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = items[0]; B = items[1]; IT; })
-#define _DE_SYSTEM_FOREACH_3(SYSTEM, A, B, C, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = items[0]; B = items[1]; C = items[2]; IT; })
-#define _DE_SYSTEM_FOREACH_4(SYSTEM, A, B, C, D, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = items[0]; B = items[1]; C = items[2]; D = items[3]; IT; })
-#define _DE_SYSTEM_FOREACH_5(SYSTEM, A, B, C, D, E, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = items[0]; B = items[1]; C = items[2]; D = items[3]; E = items[4]; IT; })
+#define _DE_SYSTEM_FOREACH_1(SYSTEM, A, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; IT; })
+#define _DE_SYSTEM_FOREACH_2(SYSTEM, A, B, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; IT; })
+#define _DE_SYSTEM_FOREACH_3(SYSTEM, A, B, C, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; C = pool[2]; IT; })
+#define _DE_SYSTEM_FOREACH_4(SYSTEM, A, B, C, D, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; C = pool[2]; D = pool[3]; IT; })
+#define _DE_SYSTEM_FOREACH_5(SYSTEM, A, B, C, D, E, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; C = pool[2]; D = pool[3]; E = pool[4]; IT; })
 
 // Internal iterator generator: calls the corresponding foreach macro.
 #define _DE_SYSTEM_ITERATOR(NAME, FOREACH, ...) \
@@ -346,9 +346,9 @@ static void _de_entity_swap(de_entity a, de_entity b)
     uint16_t j = b->slot;
 
     // Swap in array
-    m->items[i] = b;
+    m->pool[i] = b;
     b->slot = i;
-    m->items[j] = a;
+    m->pool[j] = a;
     a->slot = j;
 }
 
@@ -385,14 +385,14 @@ void de_entity_pause(de_entity $)
 
     if (slot != m->active_count)
     {
-        de_entity e = m->items[m->active_count];
-        m->items[slot] = e;
+        de_entity e = m->pool[m->active_count];
+        m->pool[slot] = e;
         e->slot = slot;
     }
 
     // Grow paused zone from the left and place entity at the new boundary
     --m->paused_start;
-    m->items[m->paused_start] = $;
+    m->pool[m->paused_start] = $;
     $->slot = m->paused_start;
 }
 
@@ -407,15 +407,15 @@ void de_entity_resume(de_entity $)
     // Shrink paused zone from the left and fill the vacated slot
     if (slot != m->paused_start)
     {
-        de_entity e = m->items[m->paused_start];
-        m->items[slot] = e;
+        de_entity e = m->pool[m->paused_start];
+        m->pool[slot] = e;
         e->slot = slot;
     }
 
     ++m->paused_start;
 
     // Grow active zone from the right and place entity at the new boundary
-    m->items[m->active_count] = $;
+    m->pool[m->active_count] = $;
     $->slot = m->active_count;
     ++m->active_count;
 }
@@ -435,7 +435,7 @@ void de_entity_delete(de_entity $)
     {
         // Was paused: shrink paused zone from the left, slot rejoins the free zone
         if ($->slot != m->paused_start)
-            _de_entity_swap($, m->items[m->paused_start]);
+            _de_entity_swap($, m->pool[m->paused_start]);
 
         ++m->paused_start;
     }
@@ -443,7 +443,7 @@ void de_entity_delete(de_entity $)
     {
         // Was active: shrink active zone from the right, slot rejoins the free zone
         if ($->slot != m->active_count - 1)
-            _de_entity_swap($, m->items[m->active_count - 1]);
+            _de_entity_swap($, m->pool[m->active_count - 1]);
 
         --m->active_count;
     }
@@ -454,7 +454,7 @@ void de_entity_move_front(de_entity $)
     de_manager *m = $->manager;
 
     if ($->slot < m->active_count && $->slot != m->active_count - 1)
-        _de_entity_swap($, m->items[m->active_count - 1]);
+        _de_entity_swap($, m->pool[m->active_count - 1]);
 }
 
 void de_entity_move_back(de_entity $)
@@ -462,14 +462,14 @@ void de_entity_move_back(de_entity $)
     de_manager *m = $->manager;
 
     if ($->slot < m->active_count && $->slot != 0)
-        _de_entity_swap($, m->items[0]);
+        _de_entity_swap($, m->pool[0]);
 }
 
 //////////////////////////////////////////////////
 
-void de_manager_init(de_manager *$, de_entity *items, void *storage, uint16_t capacity, uint16_t bytes)
+void de_manager_init(de_manager *$, de_entity *pool, void *storage, uint16_t capacity, uint16_t bytes)
 {
-    $->items = items;
+    $->pool = pool;
     $->capacity = capacity;
     $->active_count = 0;
     $->paused_start = capacity;
@@ -481,7 +481,7 @@ void de_manager_init(de_manager *$, de_entity *items, void *storage, uint16_t ca
     {
         de_entity e = (de_entity)p;
 
-        items[i] = e;
+        pool[i] = e;
         e->manager = $;
         e->slot = i;
 
@@ -494,7 +494,7 @@ de_entity de_manager_new(de_manager *$)
     if ($->active_count >= $->paused_start)
         return 0;
 
-    de_entity e = $->items[$->active_count];
+    de_entity e = $->pool[$->active_count];
     e->manager = $;
     e->slot = $->active_count++;
     e->state = DE_STATE_DELETE;
@@ -507,11 +507,11 @@ de_entity de_manager_new(de_manager *$)
 void de_manager_update(de_manager *$)
 {
     uint16_t i = $->active_count;
-    de_entity *items = $->items;
+    de_entity *pool = $->pool;
 
     while (i--)
     {
-        de_entity e = items[i];
+        de_entity e = pool[i];
         de_state s = e->state;
 
         if (DE_STATE_IS_ACTIVE(s))

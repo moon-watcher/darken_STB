@@ -28,7 +28,7 @@ static u16 g_testsRun = 0, g_testsPassed = 0;
 static bool all_slots_aligned(de_manager *mgr)
 {
     for (uint16_t i = 0; i < mgr->capacity; ++i)
-        if (((u32)mgr->items[i]) & 3)
+        if (((u32)mgr->pool[i]) & 3)
             return FALSE;
     return TRUE;
 }
@@ -191,7 +191,7 @@ static void test_apply(void)
     uint16_t idx = 0;
     while (idx < m.active_count)
     {
-        de_entity e = m.items[idx];
+        de_entity e = m.pool[idx];
         if (e->tag % 2 == 0)
         {
             de_entity_delete(e);
@@ -207,7 +207,7 @@ static void test_apply(void)
     bool onlyOdd = TRUE;
     for (uint16_t i = 0; i < m.active_count; ++i)
     {
-        if ((m.items[i]->tag % 2) == 0)
+        if ((m.pool[i]->tag % 2) == 0)
             onlyOdd = FALSE;
     }
     CHECK("quedan tags impares", onlyOdd);
@@ -280,7 +280,7 @@ static void test_self_delete(void)
     CHECK("self-del f1: size aun 2", m.active_count == 2);
     de_manager_update(&m);
     CHECK("self-del f2: size 1", m.active_count == 1);
-    CHECK("self-del f2: queda b", m.items[0] == b);
+    CHECK("self-del f2: queda b", m.pool[0] == b);
 }
 
 static void test_slot_stability(void)
@@ -298,14 +298,14 @@ static void test_slot_stability(void)
     de_entity_pause(e3);
     bool stable = TRUE;
     for (uint16_t i = 0; i < m.active_count; ++i)
-        if (m.items[i]->slot != i)
+        if (m.pool[i]->slot != i)
             stable = FALSE;
     CHECK("slots tras pausar", stable);
     CHECK("paused_start 2", m.paused_start == 2);
     de_entity_delete(e0);
     stable = TRUE;
     for (uint16_t i = 0; i < m.active_count; ++i)
-        if (m.items[i]->slot != i)
+        if (m.pool[i]->slot != i)
             stable = FALSE;
     CHECK("slots tras delete", stable);
     CHECK("size 1", m.active_count == 1);
@@ -431,7 +431,7 @@ static void test_mixed_stress(void)
     CHECK("stress f3: 4 activas", g_stressCallsA + g_stressCallsB == 4);
     bool ok = TRUE;
     for (uint16_t i = 0; i < m.active_count; ++i)
-        if (m.items[i]->slot != i)
+        if (m.pool[i]->slot != i)
             ok = FALSE;
     CHECK("stress: slots ok", ok);
 }
@@ -509,9 +509,9 @@ static void test_stress_capacity(void)
     bool ok = TRUE;
     for (uint16_t i = 0; i < m.active_count; ++i)
     {
-        if (m.items[i]->slot != i)
+        if (m.pool[i]->slot != i)
             ok = FALSE;
-        if (m.items[i]->manager != &m)
+        if (m.pool[i]->manager != &m)
             ok = FALSE;
     }
     CHECK("slots y manager correctos", ok);
@@ -543,7 +543,7 @@ static void test_stress_many_entities(void)
     bool unique = TRUE;
     for (uint16_t i = 0; i < m.active_count; ++i)
         for (uint16_t j = i + 1; j < m.active_count; ++j)
-            if (m.items[i]->tag == m.items[j]->tag)
+            if (m.pool[i]->tag == m.pool[j]->tag)
                 unique = FALSE;
     CHECK("many: tags unicos", unique);
 }
@@ -574,7 +574,7 @@ static void test_stress_fragmentation(void)
     bool unique = TRUE;
     for (uint16_t i = 0; i < m.active_count; ++i)
         for (uint16_t j = i + 1; j < m.active_count; ++j)
-            if (m.items[i]->tag == m.items[j]->tag)
+            if (m.pool[i]->tag == m.pool[j]->tag)
                 unique = FALSE;
     CHECK("frag: tags unicos tras recreacion", unique);
 }
@@ -1089,7 +1089,7 @@ static void test_manager_iterate_active_only(void)
         e->tag = i;
         e->state = (de_state)state_noop;
     }
-    de_entity_pause(m.items[1]);
+    de_entity_pause(m.pool[1]);
     uint16_t count = 0;
     DE_MANAGER_FOREACH(&m, { count++; });
     CHECK("iterate active: 3 entidades", count == 3);
@@ -1107,14 +1107,14 @@ static void test_apply_active_only(void)
         e->tag = i;
         e->state = (de_state)state_noop;
     }
-    de_entity_pause(m.items[0]);
-    de_entity_pause(m.items[2]);
+    de_entity_pause(m.pool[0]);
+    de_entity_pause(m.pool[2]);
     // Eliminar tag 1 manualmente
     for (uint16_t i = 0; i < m.active_count; ++i)
     {
-        if (m.items[i]->tag == 1)
+        if (m.pool[i]->tag == 1)
         {
-            de_entity_delete(m.items[i]);
+            de_entity_delete(m.pool[i]);
             break;
         }
     }
