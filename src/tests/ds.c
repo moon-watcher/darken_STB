@@ -112,8 +112,8 @@ static void init_test_system(void) {
 
 TEST(test_manager_init) {
     init_test_manager();
-    CHECK(test_mgr.active_count == 0);
-    CHECK(test_mgr.paused_start == TEST_MGR_CAPACITY);
+    CHECK(test_mgr.size == 0);
+    CHECK(test_mgr.paused == TEST_MGR_CAPACITY);
 }
 
 TEST(test_entity_new) {
@@ -123,8 +123,8 @@ TEST(test_entity_new) {
     CHECK(e->slot == 0);
     CHECK(e->state == DE_STATE_DELETE);
     CHECK(e->tag == 0);
-    CHECK(e->manager == &test_mgr);
-    CHECK(test_mgr.active_count == 1);
+    CHECK(e->owner == &test_mgr);
+    CHECK(test_mgr.size == 1);
 }
 
 TEST(test_entity_new_full) {
@@ -187,18 +187,18 @@ TEST(test_entity_pause_resume) {
     de_entity e = de_manager_new(&test_mgr);
     e->state = state_inc;
 
-    uint16_t active_before = test_mgr.active_count;
-    uint16_t paused_before = test_mgr.paused_start;
+    uint16_t active_before = test_mgr.size;
+    uint16_t paused_before = test_mgr.paused;
 
     de_entity_pause(e);
-    CHECK(e->slot >= test_mgr.paused_start);
-    CHECK(test_mgr.active_count == active_before - 1);
-    CHECK(test_mgr.paused_start == paused_before - 1);
+    CHECK(e->slot >= test_mgr.paused);
+    CHECK(test_mgr.size == active_before - 1);
+    CHECK(test_mgr.paused == paused_before - 1);
 
     de_entity_resume(e);
-    CHECK(e->slot < test_mgr.active_count);
-    CHECK(test_mgr.active_count == active_before);
-    CHECK(test_mgr.paused_start == paused_before);
+    CHECK(e->slot < test_mgr.size);
+    CHECK(test_mgr.size == active_before);
+    CHECK(test_mgr.paused == paused_before);
 }
 
 TEST(test_entity_delete_active) {
@@ -207,11 +207,11 @@ TEST(test_entity_delete_active) {
     e->state = state_inc;
     e->destructor = test_destructor;
 
-    uint16_t active_before = test_mgr.active_count;
+    uint16_t active_before = test_mgr.size;
     g_destructor_calls = 0;
 
     de_entity_delete(e);
-    CHECK(test_mgr.active_count == active_before - 1);
+    CHECK(test_mgr.size == active_before - 1);
     CHECK(g_destructor_calls == 1);
 }
 
@@ -222,11 +222,11 @@ TEST(test_entity_delete_paused) {
     de_entity_pause(e);
     e->destructor = test_destructor;
 
-    uint16_t paused_start_before = test_mgr.paused_start;
+    uint16_t paused_before = test_mgr.paused;
     g_destructor_calls = 0;
 
     de_entity_delete(e);
-    CHECK(test_mgr.paused_start == paused_start_before + 1);
+    CHECK(test_mgr.paused == paused_before + 1);
     CHECK(g_destructor_calls == 1);
 }
 
@@ -240,8 +240,8 @@ TEST(test_entity_move_front_back) {
     e2->state = state_inc;
 
     de_entity_move_front(e0);
-    CHECK(test_mgr.pool[test_mgr.active_count - 1] == e0);
-    CHECK(e0->slot == test_mgr.active_count - 1);
+    CHECK(test_mgr.pool[test_mgr.size - 1] == e0);
+    CHECK(e0->slot == test_mgr.size - 1);
 
     de_entity_move_back(e2);
     CHECK(test_mgr.pool[0] == e2);
@@ -264,7 +264,7 @@ TEST(test_manager_update_basic) {
     CHECK(d0->updates == 1);
     CHECK(d1->value == 1);
     CHECK(d1->updates == 1);
-    CHECK(test_mgr.active_count == 2);
+    CHECK(test_mgr.size == 2);
 }
 
 TEST(test_manager_update_pause_and_delete) {
@@ -280,17 +280,17 @@ TEST(test_manager_update_pause_and_delete) {
 
     /* First update: states change but no transition yet */
     de_manager_update(&test_mgr);
-    CHECK(test_mgr.active_count == 2);
-    CHECK(test_mgr.paused_start == TEST_MGR_CAPACITY);
+    CHECK(test_mgr.size == 2);
+    CHECK(test_mgr.paused == TEST_MGR_CAPACITY);
     CHECK(e0->state == DE_STATE_PAUSE);
     CHECK(e1->state == DE_STATE_DELETE);
 
     /* Second update: transitions processed */
     de_manager_update(&test_mgr);
-    CHECK(test_mgr.paused_start == TEST_MGR_CAPACITY - 1);  // e0 paused
-    CHECK(test_mgr.active_count == 0);                      // e1 deleted
-    CHECK(e0->slot >= test_mgr.paused_start);               // e0 in paused zone
-    CHECK(e1->slot >= test_mgr.active_count && e1->slot < test_mgr.paused_start); // e1 in free zone
+    CHECK(test_mgr.paused == TEST_MGR_CAPACITY - 1);  // e0 paused
+    CHECK(test_mgr.size == 0);                      // e1 deleted
+    CHECK(e0->slot >= test_mgr.paused);               // e0 in paused zone
+    CHECK(e1->slot >= test_mgr.size && e1->slot < test_mgr.paused); // e1 in free zone
 }
 
 TEST(test_manager_reset) {
@@ -305,8 +305,8 @@ TEST(test_manager_reset) {
 
     g_destructor_calls = 0;
     de_manager_reset(&test_mgr);
-    CHECK(test_mgr.active_count == 0);
-    CHECK(test_mgr.paused_start == TEST_MGR_CAPACITY);
+    CHECK(test_mgr.size == 0);
+    CHECK(test_mgr.paused == TEST_MGR_CAPACITY);
     /* Only active entity's destructor is called; paused ones are ignored. */
     CHECK(g_destructor_calls == 1);
 }
@@ -400,7 +400,7 @@ static void bench_entity_new_delete(void) {
             if (e) e->state = state_inc;
         }
         for (int j = 0; j < BENCH_MGR_CAPACITY; j++) {
-            de_entity_delete(bench_mgr.pool[bench_mgr.active_count - 1]);
+            de_entity_delete(bench_mgr.pool[bench_mgr.size - 1]);
         }
     }
     uint32_t t1 = get_time_us();
