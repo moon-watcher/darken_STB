@@ -137,11 +137,11 @@ struct de_system
 
 void *de_entity_exec(de_entity);
 void *de_entity_update(de_entity);
-void de_entity_pause(de_entity);
-void de_entity_resume(de_entity);
-void de_entity_delete(de_entity);
-void de_entity_move_front(de_entity);
-void de_entity_move_back(de_entity);
+uint16_t de_entity_pause(de_entity);
+uint16_t de_entity_resume(de_entity);
+uint16_t de_entity_delete(de_entity);
+uint16_t de_entity_move_front(de_entity);
+uint16_t de_entity_move_back(de_entity);
 
 /* ============================================================================
  * MANAGER API
@@ -325,13 +325,13 @@ void *de_entity_update(de_entity $)
     return state;
 }
 
-void de_entity_pause(de_entity $)
+uint16_t de_entity_pause(de_entity $)
 {
     de_manager manager = $->owner;
     uint16_t slot = $->slot;
 
     if (slot >= manager->size)
-        return;
+        return 0;
 
     // Shrink active zone from the right and fill the vacated slot
     --manager->size;
@@ -347,15 +347,17 @@ void de_entity_pause(de_entity $)
     --manager->paused;
     manager->pool[manager->paused] = $;
     $->slot = manager->paused;
+
+    return 1;
 }
 
-void de_entity_resume(de_entity $)
+uint16_t de_entity_resume(de_entity $)
 {
     de_manager manager = $->owner;
     uint16_t slot = $->slot;
 
     if (slot < manager->paused)
-        return;
+        return 0;
 
     // Shrink paused zone from the left and fill the vacated slot
     if (slot != manager->paused)
@@ -371,16 +373,18 @@ void de_entity_resume(de_entity $)
     manager->pool[manager->size] = $;
     $->slot = manager->size;
     ++manager->size;
+
+    return 1;
 }
 
-void de_entity_delete(de_entity $)
+uint16_t de_entity_delete(de_entity $)
 {
     de_manager manager = $->owner;
     uint16_t slot = $->slot;
 
     // Already free: nothing to do
     if (slot >= manager->size && slot < manager->paused)
-        return;
+        return 0;
 
     if ($->destructor)
         $->destructor($->data);
@@ -401,24 +405,36 @@ void de_entity_delete(de_entity $)
 
         --manager->size;
     }
+
+    return 1;
 }
 
-void de_entity_move_front(de_entity $)
+uint16_t de_entity_move_front(de_entity $)
 {
     de_manager manager = $->owner;
     uint16_t slot = $->slot;
 
     if (slot < manager->size && slot != manager->size - 1)
+    {
         _de_entity_swap($, manager->pool[manager->size - 1]);
+        return 1;
+    }
+
+    return 0;
 }
 
-void de_entity_move_back(de_entity $)
+uint16_t de_entity_move_back(de_entity $)
 {
     de_manager manager = $->owner;
     uint16_t slot = $->slot;
 
     if (slot < manager->size && slot != 0)
+    {
         _de_entity_swap($, manager->pool[0]);
+        return 1;
+    }
+
+    return 0;
 }
 
 //
