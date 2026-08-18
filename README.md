@@ -9,11 +9,11 @@ manager->items[]
 ┌──────────────────────────────┬──────────────────────────────┬──────────────────────────────┐
 │                              │                              │                              │
 │            ACTIVE            │             FREE             │           PAUSED             │
-│      [0, active_count]       │ [active_count, paused_start] │   [paused_start, capacity]   │
+│      [0, active]       │ [active, paused] │   [paused, capacity]   │
 │                              │                              │                              │
 └──────────────────────────────┴──────────────────────────────┴──────────────────────────────┘
                                ↑                              ↑
-                          active_count                   paused_start
+                          active                   paused
 ```
 
 The entity objects themselves are stored in a contiguous byte block. Moving an entity between zones moves only its pointer in `items[]`; the entity's physical address never changes.
@@ -107,7 +107,7 @@ Darken has two main pieces:
 
 ```text
                  ┌──────────────────┐
-                 │   de_manager     │
+                 │   struct de_manager     │
                  │ entity lifecycle │
                  └────────┬─────────┘
                           │
@@ -136,7 +136,7 @@ struct de_entity
 {
     de_state state;
     de_state destructor;
-    de_manager *manager;
+    de_manager manager;
     uint16_t slot;
     uint16_t tag;
     uint8_t data[];
@@ -160,7 +160,7 @@ The logical entity layout is:
 For a payload of `PAYLOAD` bytes, the stride is:
 
 ```c
-DE_ENTITY_STRIDE(PAYLOAD)
+_DE_ENTITY_STRIDE(PAYLOAD)
 ```
 
 which is equivalent to:
@@ -210,8 +210,8 @@ On the Motorola 68000, word alignment is the important minimum requirement for w
 ```c
 DE_MANAGER_STORAGE(storage, 64, sizeof(MyComponent));
 
-de_manager manager;
-de_manager_init(&manager, DE_MANAGER_ARGS(storage));
+struct de_manager manager;
+de_manager_init(&manager, de_manager_args(storage));
 ```
 
 Conceptually the generated object contains:
@@ -220,7 +220,7 @@ Conceptually the generated object contains:
 entities[CAPACITY] -> pointer array used by de_manager
 data[...]          -> contiguous entity byte storage
 capacity           -> stored capacity
-payload_size       -> payload size supplied to DE_ENTITY_STRIDE()
+payload_size       -> payload size supplied to _DE_ENTITY_STRIDE()
 ```
 
 The `entities[]` array and the `data[]` block are separate. `entities[]` contains pointers; `data[]` contains the actual entity objects. `de_manager_init()` walks `data[]` using the calculated stride and fills `entities[]` with those addresses.
@@ -236,8 +236,8 @@ DE_MANAGER_STORAGE(g_storage, 64, sizeof(MyComponent));
 Then initialize the manager:
 
 ```c
-de_manager g_manager;
-de_manager_init(&g_manager, DE_MANAGER_ARGS(g_storage));
+struct de_manager g_manager;
+de_manager_init(&g_manager, de_manager_args(g_storage));
 ```
 
 `DE_MANAGER_STORAGE()` creates:
@@ -267,33 +267,33 @@ The entity data block is aligned to 4 bytes.
 
 ```text
 index
-  0                         active_count              paused_start          capacity
+  0                         active              paused          capacity
   │                              │                         │                    │
   ▼                              ▼                         ▼                    ▼
   ┌──────────────────────────────┬─────────────────────────┬────────────────────┐
   │            ACTIVE            │          FREE           │       PAUSED       │
-  │  [0, active_count)           │ [active_count,          │ [paused_start,     │
-  │                              │  paused_start)          │  capacity)         │
+  │  [0, active)           │ [active,          │ [paused,     │
+  │                              │  paused)          │  capacity)         │
   └──────────────────────────────┴─────────────────────────┴────────────────────┘
 ```
 
 ### Active zone
 
-The active zone contains entities processed by `de_manager_update()`. `DE_MANAGER_FOREACH` also visits only this zone, in descending index order.
+The active zone contains entities processed by `de_manager_update()`. `de_manager_foreach` also visits only this zone, in descending index order.
 
 New entities are taken from the first free slot and inserted at the active/free boundary.
 
 ### Free zone
 
-The free zone contains pointer slots that are currently available to `de_manager_new()`. Its range is `[active_count, paused_start)`.
+The free zone contains pointer slots that are currently available to `de_manager_new()`. Its range is `[active, paused)`.
 
 An important consequence is that **paused entities are never recycled as free slots**. This is what preserves the physical address of a paused entity and therefore the validity of pointers into its payload.
 
 ### Paused zone
 
-The paused zone contains live entities that are deliberately excluded from normal updates. Its range is `[paused_start, capacity)`.
+The paused zone contains live entities that are deliberately excluded from normal updates. Its range is `[paused, capacity)`.
 
-`de_manager_update()` does not execute paused entities, and `DE_MANAGER_FOREACH` does not visit them. `de_manager_new()` never allocates from this zone.
+`de_manager_update()` does not execute paused entities, and `de_manager_foreach` does not visit them. `de_manager_new()` never allocates from this zone.
 
 ### Why `slot` exists
 
@@ -322,7 +322,7 @@ e == NULL
 A newly created entity starts with:
 
 ```c
-e->state      = DE_STATE_DELETE;
+e->state      = de_state_delete;
 e->destructor = NULL;
 e->tag        = 0;
 ```
@@ -354,7 +354,7 @@ If zeroed data is required, initialize it explicitly.
 
 The state callback receives `entity->data` rather than the entity pointer itself. It returns either another executable state function or one of the three reserved control values. This keeps the state callback interface small and makes the entity payload the natural state-local context.
 
-`de_entity_exec()` invokes the current executable state without modifying `entity->state`. `de_entity_update()` invokes the current executable state and stores the returned transition unless the return value is `DE_STATE_LOOP`. `de_manager_update()` performs the same state invocation while additionally interpreting `DE_STATE_PAUSE` and `DE_STATE_DELETE` as manager operations.
+`de_entity_exec()` invokes the current executable state without modifying `entity->state`. `de_entity_update()` invokes the current executable state and stores the returned transition unless the return value is `DE_STATE_LOOP`. `de_manager_update()` performs the same state invocation while additionally interpreting `DE_STATE_PAUSE` and `de_state_delete` as manager operations.
 
 A state callback has this form:
 
@@ -384,7 +384,7 @@ A state normally returns another state callback:
        │
        ├───────────────► DE_STATE_PAUSE
        │
-       └───────────────► DE_STATE_DELETE
+       └───────────────► de_state_delete
 ```
 
 Example:
@@ -414,9 +414,9 @@ will execute it.
 
 A state callback receives only `entity->data`; it does not receive the `de_entity *` itself. The callback's return value becomes the entity's next state unless it returns `DE_STATE_LOOP`. `DE_STATE_LOOP` explicitly means **keep the current state function**.
 
-`DE_STATE_PAUSE` and `DE_STATE_DELETE` are not performed immediately by the state callback. They are stored as the entity's state and are acted upon by a subsequent `de_manager_update()`. This separation is important because the manager is traversing its active pointer array while the callback is running.
+`DE_STATE_PAUSE` and `de_state_delete` are not performed immediately by the state callback. They are stored as the entity's state and are acted upon by a subsequent `de_manager_update()`. This separation is important because the manager is traversing its active pointer array while the callback is running.
 
-If an entity has no active state, `de_entity_exec()` does not call anything and returns `DE_STATE_DELETE` (which is `NULL`); `de_entity_update()` instead preserves and returns the entity's current non-active state. In normal manager operation, a newly created entity starts with `DE_STATE_DELETE`, so it must be assigned an active state before it can update.
+If an entity has no active state, `de_entity_exec()` does not call anything and returns `de_state_delete` (which is `NULL`); `de_entity_update()` instead preserves and returns the entity's current non-active state. In normal manager operation, a newly created entity starts with `de_state_delete`, so it must be assigned an active state before it can update.
 
 ---
 
@@ -427,7 +427,7 @@ The reserved values are deliberately represented as pointer-sized values because
 Darken defines three special values:
 
 ```c
-DE_STATE_DELETE
+de_state_delete
 DE_STATE_LOOP
 DE_STATE_PAUSE
 ```
@@ -436,7 +436,7 @@ Their meaning is:
 
 | Value             | Meaning                |
 | ----------------- | ---------------------- |
-| `DE_STATE_DELETE` | Request deletion       |
+| `de_state_delete` | Request deletion       |
 | `DE_STATE_LOOP`   | Keep the current state |
 | `DE_STATE_PAUSE`  | Request pausing        |
 
@@ -449,7 +449,7 @@ void *alive_state(struct PlayerData *data) {
     data->x += data->vx;
 
     if (data->x < 0)
-        return DE_STATE_DELETE;
+        return de_state_delete;
 
     return DE_STATE_LOOP;
 }
@@ -457,7 +457,7 @@ void *alive_state(struct PlayerData *data) {
 
 `DE_STATE_LOOP` does not replace `entity->state`.
 
-A returned `DE_STATE_PAUSE` or `DE_STATE_DELETE` is stored as the entity's pending control state and is processed on the **next** `de_manager_update()`.
+A returned `DE_STATE_PAUSE` or `de_state_delete` is stored as the entity's pending control state and is processed on the **next** `de_manager_update()`.
 
 ---
 
@@ -490,19 +490,19 @@ de_entity_move_front()
 de_entity_move_back()
 ```
 
-The manager's update loop is designed so that pausing or deleting an entity does not require re-reading `active_count` during the traversal.
+The manager's update loop is designed so that pausing or deleting an entity does not require re-reading `active` during the traversal.
 
 The traversal starts with a snapshot of the active-zone size:
 
 ```c
-uint16_t i = manager->active_count;
+uint16_t i = manager->active;
 while (i--)
 {
     /* process items[i] */
 }
 ```
 
-This is deliberate. Both `de_entity_pause()` and `de_entity_delete()` shrink the active zone from its right edge. During a backwards traversal, that right edge consists of indices that have already been visited. Consequently, an entity moved out of the active zone cannot cause the loop to revisit an unprocessed entity or require a live `active_count` reload.
+This is deliberate. Both `de_entity_pause()` and `de_entity_delete()` shrink the active zone from its right edge. During a backwards traversal, that right edge consists of indices that have already been visited. Consequently, an entity moved out of the active zone cannot cause the loop to revisit an unprocessed entity or require a live `active` reload.
 
 The state-processing sequence is:
 
@@ -515,7 +515,7 @@ active entity
       ├── DE_STATE_LOOP   → keep current state
       ├── another state   → store new state
       ├── DE_STATE_PAUSE  → store pause request
-      └── DE_STATE_DELETE → store deletion request
+      └── de_state_delete → store deletion request
                                 │
                                 ▼
                        next manager update
@@ -602,7 +602,7 @@ de_entity_pause(entity);
 A paused entity:
 
 - is not updated;
-- is not visited by `DE_MANAGER_FOREACH`;
+- is not visited by `de_manager_foreach`;
 - is not reused by `de_manager_new`;
 - retains its storage address.
 
@@ -612,7 +612,7 @@ Resume it with:
 de_entity_resume(entity);
 ```
 
-Pause and resume are constant-time pointer-array operations. Pausing shrinks the active zone from the right, fills the entity's old active slot with the entity that occupied the active-zone edge, then grows the paused zone from the left and places the paused entity at the new paused boundary. Resume performs the inverse movement: it removes the entity from the paused boundary, advances `paused_start`, and inserts the resumed entity at the active/free boundary.
+Pause and resume are constant-time pointer-array operations. Pausing shrinks the active zone from the right, fills the entity's old active slot with the entity that occupied the active-zone edge, then grows the paused zone from the left and places the paused entity at the new paused boundary. Resume performs the inverse movement: it removes the entity from the paused boundary, advances `paused`, and inserts the resumed entity at the active/free boundary.
 
 The entity's byte storage is never copied. Only `manager->items[]` and the affected entities' `slot` fields change.
 
@@ -659,7 +659,7 @@ Therefore external pointers into entity payloads remain valid across pause/resum
 
 `de_entity_delete()` accepts an entity from either the active or paused zone. If the entity is already in the free zone, the operation is a no-op. If a destructor exists, Darken calls it with `entity->data` before the entity's slot is returned to the free zone. The current implementation does **not** use the destructor's return value to cancel deletion; deletion proceeds after the callback returns.
 
-For an active entity, the last active slot is swapped into the deleted entity's position and `active_count` is decremented. For a paused entity, the first paused slot is swapped into its position and `paused_start` is incremented. In both cases the freed slot becomes part of the free zone.
+For an active entity, the last active slot is swapped into the deleted entity's position and `active` is decremented. For a paused entity, the first paused slot is swapped into its position and `paused` is incremented. In both cases the freed slot becomes part of the free zone.
 
 Delete explicitly:
 
@@ -670,7 +670,7 @@ de_entity_delete(entity);
 or return:
 
 ```c
-return DE_STATE_DELETE;
+return de_state_delete;
 ```
 
 from the entity's state.
@@ -696,11 +696,11 @@ Example:
 ```c
 void *enemy_destroy(struct Enemy *data) {
     release_enemy_resources(data);
-    return DE_STATE_DELETE;
+    return de_state_delete;
 }
 ```
 
-The returned value is irrelevant to the deletion operation; returning `DE_STATE_DELETE` is merely conventional if the function is shared with `de_state` code.
+The returned value is irrelevant to the deletion operation; returning `de_state_delete` is merely conventional if the function is shared with `de_state` code.
 
 ---
 
@@ -730,12 +730,12 @@ Darken does not assign semantics to them.
 
 # 15. Iterating entities
 
-`DE_MANAGER_FOREACH` iterates only the active zone and does so in descending index order. Inside its code block the generated names are `INDEX`, `ITEMS`, and `ENTITY`. Operations on the entity currently being visited are compatible with the manager's swap-based organization, but mutating a **different** entity during the same traversal is not a general safety guarantee: such mutations can change positions that the traversal has not yet consumed.
+`de_manager_foreach` iterates only the active zone and does so in descending index order. Inside its code block the generated names are `INDEX`, `ITEMS`, and `ENTITY`. Operations on the entity currently being visited are compatible with the manager's swap-based organization, but mutating a **different** entity during the same traversal is not a general safety guarantee: such mutations can change positions that the traversal has not yet consumed.
 
 Use:
 
 ```c
-DE_MANAGER_FOREACH(&g_manager,
+de_manager_foreach(&g_manager,
 {
     if (ENTITY->tag == TAG_ENEMY)
         update_enemy(ENTITY);
@@ -828,7 +828,7 @@ de_system physics;
 
 de_system_init(
     &physics,
-    DE_SYSTEM_ARGS(g_physics_storage)
+    de_system_args(g_physics_storage)
 );
 ```
 
@@ -950,7 +950,7 @@ Do not depend on stable system-group ordering after removal.
 
 # 21. System iterator generator
 
-`DE_SYSTEM_ITERATOR` turns a `DE_SYSTEM_FOREACH`-style body into a function whose signature accepts `de_system *`. The generated function executes the complete system traversal and returns `DE_STATE_LOOP`, which allows the generated iterator to be installed directly as an entity state callback.
+`DE_SYSTEM_ITERATOR` turns a `DE_SYSTEM_FOREACH`-style body into a function whose signature accepts `de_system `. The generated function executes the complete system traversal and returns `DE_STATE_LOOP`, which allows the generated iterator to be installed directly as an entity state callback.
 
 `DE_SYSTEM_ITERATOR` generates a function that executes a system foreach pattern and returns:
 
@@ -974,13 +974,13 @@ DE_SYSTEM_ITERATOR(physics_update_f,
 The generated function has the conceptual form:
 
 ```c
-void *physics_update(de_system *system) {
+void *physics_update(de_system system) {
     /* foreach body */
     return DE_STATE_LOOP;
 }
 ```
 
-Important: this function takes `de_system *`, while `de_state` takes `void *`. Therefore the generated function pointer is **not type-compatible with `de_state` under strict ISO C**.
+Important: this function takes `de_system `, while `de_state` takes `void *`. Therefore the generated function pointer is **not type-compatible with `de_state` under strict ISO C**.
 
 On the intended GCC/SGDK target the macro can be useful where the ABI and calling convention are known, but it should not be treated as a portable function-pointer conversion.
 
@@ -1022,15 +1022,15 @@ void *player_update(struct Player *data) {
 void *enemy_update(struct Player *data) {
     data->x -= data->vx;
 
-    return (data->x < 0) ? DE_STATE_DELETE : DE_STATE_LOOP;
+    return (data->x < 0) ? de_state_delete : DE_STATE_LOOP;
 }
 
 DE_MANAGER_STORAGE(g_entity_storage, 64, sizeof(struct Player) );
 
-de_manager g_manager;
+struct de_manager g_manager;
 
 void game_init(void) {
-    de_manager_init(&g_manager, DE_MANAGER_ARGS(g_entity_storage) );
+    de_manager_init(&g_manager, de_manager_args(g_entity_storage) );
 
     de_entity player = de_manager_new(&g_manager);
     player->tag = 1; // whatever
@@ -1064,7 +1064,7 @@ DE_SYSTEM_ITERATOR(sys_movement_f,
 de_system sys_movement;
 
 DE_SYSTEM_STORAGE(storage, 64, 2);
-de_system_init(&sys_movement, DE_SYSTEM_ARGS(storage));
+de_system_init(&sys_movement, de_system_args(storage));
 
 struct Position { int16_t x, y; } position;
 struct Velocity { int16_t vx, vy; } velocity;
@@ -1080,42 +1080,42 @@ The manager lifecycle follows a fixed sequence.
 
 ### `de_manager_init()`
 
-Initialization stores the caller-provided `items` array and entity storage pointer, sets `active_count` to zero, sets `paused_start` to `capacity`, calculates the aligned entity stride, and precomputes one entity pointer for every storage slot. The resulting manager starts empty: every slot belongs to the free zone.
+Initialization stores the caller-provided `items` array and entity storage pointer, sets `active` to zero, sets `paused` to `capacity`, calculates the aligned entity stride, and precomputes one entity pointer for every storage slot. The resulting manager starts empty: every slot belongs to the free zone.
 
 The initialization pass is O(capacity), but it is performed once. Normal entity creation does not need to calculate an entity address.
 
 ### `de_manager_new()`
 
-Creation takes the pointer at `items[active_count]`, advances `active_count`, assigns the manager and slot, and initializes the new entity's state, destructor, and tag to their default values. It returns `NULL` when the free zone is empty:
+Creation takes the pointer at `items[active]`, advances `active`, assigns the manager and slot, and initializes the new entity's state, destructor, and tag to their default values. It returns `NULL` when the free zone is empty:
 
 ```text
-active_count >= paused_start
+active >= paused
 ```
 
 The payload is deliberately **not initialized** by `de_manager_new()`. If the application requires zeroed or initialized component data, it must perform that initialization itself.
 
 ### `de_manager_update()`
 
-The active zone is traversed backwards using a snapshot of `active_count`. The callback is executed for active states; `DE_STATE_PAUSE` and `DE_STATE_DELETE` are handled as control states. Paused entities are outside the traversal entirely.
+The active zone is traversed backwards using a snapshot of `active`. The callback is executed for active states; `DE_STATE_PAUSE` and `de_state_delete` are handled as control states. Paused entities are outside the traversal entirely.
 
 ### `de_manager_reset()`
 
 Reset removes active entities and then paused entities, invoking their destructors through the normal deletion path. Only after both live zones are empty does it restore:
 
 ```c
-active_count = 0;
-paused_start = capacity;
+active = 0;
+paused = capacity;
 ```
 
 This distinction matters: simply restoring the counters would make paused entities unreachable without running their destructors.
 
-`de_manager_init()` starts with an entirely free manager: `active_count == 0` and `paused_start == capacity`. It also precomputes the physical address of every entity from the caller-provided storage block and records each initial `slot`.
+`de_manager_init()` starts with an entirely free manager: `active == 0` and `paused == capacity`. It also precomputes the physical address of every entity from the caller-provided storage block and records each initial `slot`.
 
 `de_manager_new()` takes the first pointer in the free zone, moves the active boundary by one, resets the new entity's state/destructor/tag fields, and returns it. The payload bytes are **not initialized** by Darken; callers must initialize `entity->data` when required.
 
-`de_manager_update()` walks the active zone backwards. It invokes executable states and stores returned states except `DE_STATE_LOOP`; pending `DE_STATE_PAUSE` and `DE_STATE_DELETE` values are handled as manager operations. Paused entities are never traversed by the update loop.
+`de_manager_update()` walks the active zone backwards. It invokes executable states and stores returned states except `DE_STATE_LOOP`; pending `DE_STATE_PAUSE` and `de_state_delete` values are handled as manager operations. Paused entities are never traversed by the update loop.
 
-`de_manager_reset()` deletes both active and paused entities, respecting their destructors, and finally restores `active_count == 0` and `paused_start == capacity`.
+`de_manager_reset()` deletes both active and paused entities, respecting their destructors, and finally restores `active == 0` and `paused == capacity`.
 
 A typical lifecycle is:
 
@@ -1146,7 +1146,7 @@ A state callback can therefore act as a lightweight state machine.
 
 The manager operations are designed around constant-time pointer rearrangement. `de_manager_new()`, pause, resume, entity swap, move-front, move-back, and deletion do not move entity bytes; they adjust boundaries and/or a constant number of entries in `items[]`.
 
-`de_manager_init()` is O(capacity) because it precomputes one entity pointer per storage slot. `de_manager_update()` is O(active_count) per call, excluding the cost of user state callbacks. `de_system_remove()` is O(number of groups * params) in the worst case because it searches for the first pointer and may copy one complete group.
+`de_manager_init()` is O(capacity) because it precomputes one entity pointer per storage slot. `de_manager_update()` is O(active) per call, excluding the cost of user state callbacks. `de_system_remove()` is O(number of groups * params) in the worst case because it searches for the first pointer and may copy one complete group.
 
 For the manager:
 
@@ -1247,7 +1247,7 @@ The implementation does not claim that every operation is universally optimal fo
 typedef void *(*de_state)(void *);
 
 typedef struct de_entity *de_entity;
-typedef struct de_manager de_manager;
+typedef struct struct de_manager de_manager;
 typedef struct de_system de_system;
 ```
 
@@ -1258,7 +1258,7 @@ struct de_entity
 {
     de_state state;
     de_state destructor;
-    de_manager *manager;
+    de_manager manager;
     uint16_t slot;
     uint16_t tag;
     uint8_t data[];
@@ -1272,8 +1272,8 @@ struct de_manager
 {
     de_entity *items;
     uint16_t capacity;
-    uint16_t active_count;
-    uint16_t paused_start;
+    uint16_t active;
+    uint16_t paused;
 };
 ```
 
@@ -1307,30 +1307,30 @@ void de_entity_move_back(de_entity);
 
 ```c
 void de_manager_init(
-    de_manager *,
+    de_manager,
     de_entity *,
     void *,
     uint16_t,
     uint16_t
 );
 
-de_entity de_manager_new(de_manager *);
-void de_manager_update(de_manager *);
-void de_manager_reset(de_manager *);
+de_entity de_manager_new(de_manager);
+void de_manager_update(de_manager);
+void de_manager_reset(de_manager);
 ```
 
 ## System functions
 
 ```c
 void de_system_init(
-    de_system *,
+    de_system ,
     void **,
     uint16_t,
     uint16_t
 );
 
 uint16_t de_system_remove(
-    de_system *,
+    de_system ,
     void *
 );
 ```
@@ -1338,14 +1338,14 @@ uint16_t de_system_remove(
 ## Macros
 
 ```c
-DE_ENTITY_STRIDE(PAYLOAD)
+_DE_ENTITY_STRIDE(PAYLOAD)
 
 DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)
-DE_MANAGER_ARGS(NAME)
-DE_MANAGER_FOREACH(M, CODE)
+de_manager_args(NAME)
+de_manager_foreach(M, CODE)
 
 DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS)
-DE_SYSTEM_ARGS(NAME)
+de_system_args(NAME)
 DE_SYSTEM_ADD(...)
 DE_SYSTEM_FOREACH(...)
 DE_SYSTEM_ITERATOR(...)
@@ -1369,7 +1369,7 @@ DE_SYSTEM_ITERATOR(...)
 - Free manager storage while entities are alive.
 - Reuse an entity pointer after `de_entity_delete`.
 - Assume active entity ordering is stable.
-- Modify a different manager entity while a `DE_MANAGER_FOREACH` loop is running unless the mutation is known to be safe.
+- Modify a different manager entity while a `de_manager_foreach` loop is running unless the mutation is known to be safe.
 - Assume `de_system_remove()` preserves order.
 - Treat `DE_SYSTEM_ITERATOR` as a strictly portable `de_state` function pointer.
 
