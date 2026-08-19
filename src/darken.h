@@ -126,18 +126,18 @@ struct de_system
 #define DE_STATE_PAUSE ((void *)2)
 
 // State checking macros
-#define DE_STATE_IS_DELETED(S) ((S) == ((de_state)0))
-#define DE_STATE_IS_LOOP(S) ((S) == ((de_state)1))
-#define DE_STATE_IS_PAUSED(S) ((S) == ((de_state)2))
-#define DE_STATE_IS_ACTIVE(S) ((S) > ((de_state)2))
+#define DE_STATE_IS_DELETED(STATE) ((STATE) == ((de_state)0))
+#define DE_STATE_IS_LOOP(STATE) ((STATE) == ((de_state)1))
+#define DE_STATE_IS_PAUSED(STATE) ((STATE) == ((de_state)2))
+#define DE_STATE_IS_ACTIVE(STATE) ((STATE) > ((de_state)2))
 
 /* ============================================================================
  * ENTITY ZONE CHECKING MACROS
  * ============================================================================ */
 
-#define DE_ENTITY_IS_ACTIVE(E) ((E)->slot < (E)->owner->size)
-#define DE_ENTITY_IS_PAUSED(E) ((E)->slot >= (E)->owner->paused)
-#define DE_ENTITY_IS_FREE(E) (!DE_ENTITY_IS_ACTIVE(E) && !DE_ENTITY_IS_PAUSED(E))
+#define DE_ENTITY_IS_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->owner->size)
+#define DE_ENTITY_IS_PAUSED(ENTITY) ((ENTITY)->slot >= (ENTITY)->owner->paused)
+#define DE_ENTITY_IS_FREE(ENTITY) (!DE_ENTITY_IS_ACTIVE(ENTITY) && !DE_ENTITY_IS_PAUSED(ENTITY))
 
 /* ============================================================================
  * ENTITY API
@@ -157,7 +157,7 @@ uint16_t de_entity_move_back(de_entity);
 
 #define DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE) _DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)
 #define DE_MANAGER_ARGS(NAME) _DE_MANAGER_ARGS(NAME)
-#define DE_MANAGER_FOREACH(M, CODE) _DE_MANAGER_FOREACH(M, CODE)
+#define DE_MANAGER_FOREACH(MANAGER, CODE) _DE_MANAGER_FOREACH(MANAGER, CODE)
 
 void de_manager_init(de_manager, de_entity *, void *, uint16_t, uint16_t);
 de_entity de_manager_new(de_manager);
@@ -213,11 +213,12 @@ uint16_t de_system_remove(de_system, void *);
 #define _DE_MANAGER_ARGS(NAME) \
     (NAME).pool, (NAME).data, (NAME).capacity, (NAME).payload_size
 
-#define _DE_MANAGER_FOREACH(M, CODE)        \
+#define _DE_MANAGER_FOREACH(MANAGER, CODE)  \
     do                                      \
     {                                       \
-        uint16_t INDEX = (M)->size;         \
-        de_entity *POOL = (M)->pool;        \
+        uint16_t INDEX = (MANAGER)->size;   \
+        de_entity *POOL = (MANAGER)->pool;  \
+                                            \
         while (INDEX--)                     \
         {                                   \
             de_entity ENTITY = POOL[INDEX]; \
@@ -239,19 +240,20 @@ uint16_t de_system_remove(de_system, void *);
 #define _DE_SYSTEM_ARGS(NAME) \
     (NAME).pool, (NAME).capacity, (NAME).params
 
-#define _DE_SYSTEM_ADD(SYS, N, ...)                 \
-    ({                                              \
-        de_system system = (SYS);                   \
-        uint16_t ok = 0;                            \
-        if (system->size + (N) <= system->capacity) \
-        {                                           \
-            void **pool = system->end;              \
-            __VA_ARGS__                             \
-            system->size += (N);                    \
-            system->end += (N);                     \
-            ok = 1;                                 \
-        }                                           \
-        ok;                                         \
+#define _DE_SYSTEM_ADD(SYSTEM, ARGS, ...)              \
+    ({                                                 \
+        de_system system = (SYSTEM);                   \
+        uint16_t ok = 0;                               \
+                                                       \
+        if (system->size + (ARGS) <= system->capacity) \
+        {                                              \
+            void **pool = system->end;                 \
+            __VA_ARGS__                                \
+            system->size += (ARGS);                    \
+            system->end += (ARGS);                     \
+            ok = 1;                                    \
+        }                                              \
+        ok;                                            \
     })
 
 #define _DE_SYSTEM_ADD_1(SYS, A) _DE_SYSTEM_ADD(SYS, 1, pool[0] = (void *)(A);)
@@ -260,16 +262,18 @@ uint16_t de_system_remove(de_system, void *);
 #define _DE_SYSTEM_ADD_4(SYS, A, B, C, D) _DE_SYSTEM_ADD(SYS, 4, pool[0] = (void *)(A); pool[1] = (void *)(B); pool[2] = (void *)(C); pool[3] = (void *)(D);)
 #define _DE_SYSTEM_ADD_5(SYS, A, B, C, D, E) _DE_SYSTEM_ADD(SYS, 5, pool[0] = (void *)(A); pool[1] = (void *)(B); pool[2] = (void *)(C); pool[3] = (void *)(D); pool[4] = (void *)(E);)
 
-#define _DE_SYSTEM_FOREACH(SYSTEM, IT) \
-    do                                 \
-    {                                  \
-        void **pool = (SYSTEM)->pool;  \
-        void **end = (SYSTEM)->end;    \
-        while (pool < end)             \
-        {                              \
-            IT;                        \
-            pool += (SYSTEM)->params;  \
-        }                              \
+#define _DE_SYSTEM_FOREACH(SYSTEM, IT)      \
+    do                                      \
+    {                                       \
+        void **pool = (SYSTEM)->pool;       \
+        void **end = (SYSTEM)->end;         \
+        uint16_t params = (SYSTEM)->params; \
+                                            \
+        while (pool < end)                  \
+        {                                   \
+            IT;                             \
+            pool += params;                 \
+        }                                   \
     } while (0)
 
 #define _DE_SYSTEM_FOREACH_0(SYSTEM, IT) _DE_SYSTEM_FOREACH(SYSTEM, { IT; })
