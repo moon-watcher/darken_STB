@@ -4,7 +4,8 @@
  * Adapted to actual implementation behavior (not documentation).
  */
 
-#include "../darken.h"
+#include "../../darken.h"
+#include "../../darksys.h"
 #include <genesis.h>
 
 /* ============================================================================

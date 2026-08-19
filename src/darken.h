@@ -12,6 +12,53 @@
  * - This header uses GNU C extensions (__attribute__ and statement expressions).
  * - 4-byte align boundary because Darken targets GCC and the Motorola 68000.
  * - 16-bit members preference for optimal 68K performance.
+ *
+ *
+ *
+ * Entity: Base object managed by the entity manager
+ *
+ * The entity structure serves as a container for user data with lifecycle  management. The flexible array member
+ * 'data[]' allows entities to have variable-sized payloads while maintaining contiguous memory layout.
+ *
+ * The stride between entities is pre-calculated during manager initialization to enable O(1) access to any entity
+ * by index.
+ *
+ * An entity's own memory address (this struct) never moves once allocated by de_manager_init(). What moves between
+ * the manager's zones is only the *pointer* to it inside de_manager.pool[]. This is what makes it safe to keep a
+ * raw pointer into entity->data even while the entity gets paused/resumed/reordered.
+ *
+ *
+ *
+ * Manager: Entity container and lifecycle manager.
+ *
+ * Maintains the pointer array in three logical zones:
+ *
+ * Array Layout:
+ *    [ active entities ][   free slots   ][ paused entities ]
+ * 0             size      paused        capacity
+ *
+ * The entity objects themselves live in the caller-provided storage block; * manager->pool contains pointers to
+ * those fixed addresses.
+ *
+ * - Active zone [0, size):
+ *     Entity pointers updated every frame by de_manager_update(). Iterable with DE_MANAGER_FOREACH. Freely created
+ *     (de_manager_new) and deleted.
+ *
+ * - Free zone [size, paused):
+ *     Pointer slots not currently assigned to an entity. This is where de_manager_new() takes its next entity from,
+ *     and where an active entity's slot goes right after it's deleted.
+ *
+ * - Paused zone [paused, capacity):
+ *     Entity pointers parked out of the update loop. de_manager_update() never touches them and DE_MANAGER_FOREACH
+ *     never visits them. Crucially, de_manager_new() never hands out a slot from this zone, so a paused entity's
+ *     slot (and therefore its entity->data pointer) stays valid and untouched until it's explicitly resumed or
+ *     deleted. This is what lets keep safely pointing at a paused entity's data.
+ *
+ *
+ *
+ * Entity state/destructor callback type.
+ *
+ * Receives entity->data and returns either another state callback or one of the DE_STATE_* control values.
  */
 
 #ifndef DARKEN_H
@@ -19,38 +66,11 @@
 
 #include <stdint.h>
 
-/**
- * Entity state/destructor callback type.
- *
- * Receives entity->data and returns either another state callback or one of
- * the DE_STATE_* control values.
- */
 typedef void *(*de_state)(void *);
 
 typedef struct de_entity *de_entity;
 typedef struct de_manager *de_manager;
-typedef struct de_system *de_system;
 
-/* ============================================================================
- * DATA STRUCTURES
- * ============================================================================ */
-
-/**
- * Entity: Base object managed by the entity manager
- *
- * The entity structure serves as a container for user data with lifecycle
- * management. The flexible array member 'data[]' allows entities to have
- * variable-sized payloads while maintaining contiguous memory layout.
- *
- * The stride between entities is pre-calculated during manager initialization
- * to enable O(1) access to any entity by index.
- *
- * An entity's own memory address (this struct) never moves once allocated
- * by de_manager_init(). What moves between the manager's zones is only the
- * *pointer* to it inside de_manager.pool[]. This is what makes it safe for
- * a struct de_system (or any external code) to keep a raw pointer into entity->data
- * even while the entity gets paused/resumed/reordered.
- */
 struct de_entity
 {
     de_state state;
@@ -61,35 +81,6 @@ struct de_entity
     uint8_t data[];
 };
 
-/**
- * Manager: Entity container and lifecycle manager.
- *
- * Maintains the pointer array in three logical zones:
- *
- * Array Layout:
- *    [ active entities ][   free slots   ][ paused entities ]
- * 0             size      paused        capacity
- *
- * The entity objects themselves live in the caller-provided storage block;
- * manager->pool contains pointers to those fixed addresses.
- *
- * - Active zone [0, size):
- *     Entity pointers updated every frame by de_manager_update(). Iterable with
- *     DE_MANAGER_FOREACH. Freely created (de_manager_new) and deleted.
- *
- * - Free zone [size, paused):
- *     Pointer slots not currently assigned to an entity. This is where
- *     de_manager_new() takes its next entity from, and where an active entity's
- *     slot goes right after it's deleted.
- *
- * - Paused zone [paused, capacity):
- *     Entity pointers parked out of the update loop. de_manager_update() never
- *     touches them and DE_MANAGER_FOREACH never visits them. Crucially,
- *     de_manager_new() never hands out a slot from this zone, so a paused
- *     entity's slot (and therefore its entity->data pointer) stays valid
- *     and untouched until it's explicitly resumed or deleted. This is what
- *     lets a struct de_system keep safely pointing at a paused entity's data.
- */
 struct de_manager
 {
     de_entity *pool;
@@ -98,50 +89,18 @@ struct de_manager
     uint16_t paused;
 };
 
-/**
- * System: Flat packed pool of data pointers.
- *
- * The pool is organized in groups of 'params' pointers. Each group can hold
- * the pointers associated with one processed item/entity.
- *
- * Pool Layout (params=2):
- *    [e0.a][e0.b][e1.a][e1.b][e2.a][e2.b]...
- */
-struct de_system
-{
-    void **pool;
-    void **end;
-    uint16_t capacity;
-    uint16_t size;
-    uint16_t params;
-};
-
-/* ============================================================================
- * STATE CONSTANTS
- * ============================================================================ */
-
-// Special state values used for entity control
 #define DE_STATE_DELETE ((void *)0)
 #define DE_STATE_LOOP ((void *)1)
 #define DE_STATE_PAUSE ((void *)2)
 
-// State checking macros
 #define DE_STATE_IS_DELETED(STATE) ((STATE) == ((de_state)0))
 #define DE_STATE_IS_LOOP(STATE) ((STATE) == ((de_state)1))
 #define DE_STATE_IS_PAUSED(STATE) ((STATE) == ((de_state)2))
 #define DE_STATE_IS_ACTIVE(STATE) ((STATE) > ((de_state)2))
 
-/* ============================================================================
- * ENTITY ZONE CHECKING MACROS
- * ============================================================================ */
-
 #define DE_ENTITY_IS_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->owner->size)
 #define DE_ENTITY_IS_PAUSED(ENTITY) ((ENTITY)->slot >= (ENTITY)->owner->paused)
 #define DE_ENTITY_IS_FREE(ENTITY) (!DE_ENTITY_IS_ACTIVE(ENTITY) && !DE_ENTITY_IS_PAUSED(ENTITY))
-
-/* ============================================================================
- * ENTITY API
- * ============================================================================ */
 
 void *de_entity_exec(de_entity);
 void *de_entity_update(de_entity);
@@ -151,13 +110,9 @@ uint16_t de_entity_delete(de_entity);
 uint16_t de_entity_move_front(de_entity);
 uint16_t de_entity_move_back(de_entity);
 
-/* ============================================================================
- * MANAGER API
- * ============================================================================ */
-
-#define DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE) _DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)
-#define DE_MANAGER_ARGS(NAME) _DE_MANAGER_ARGS(NAME)
-#define DE_MANAGER_FOREACH(MANAGER, CODE) _DE_MANAGER_FOREACH(MANAGER, CODE)
+#define DE_MANAGER_STORAGE _DE_MANAGER_STORAGE
+#define DE_MANAGER_ARGS _DE_MANAGER_ARGS
+#define DE_MANAGER_FOREACH _DE_MANAGER_FOREACH
 
 void de_manager_init(de_manager, de_entity *, void *, uint16_t, uint16_t);
 de_entity de_manager_new(de_manager);
@@ -165,24 +120,8 @@ void de_manager_update(de_manager);
 void de_manager_reset(de_manager);
 
 /* ============================================================================
- * SYSTEM API
- * ============================================================================ */
-
-#define DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS) _DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS)
-#define DE_SYSTEM_ARGS(NAME) _DE_SYSTEM_ARGS(NAME)
-#define DE_SYSTEM_ADD(...) _DE_CONCAT(_DE_SYSTEM_ADD_, _DE_ADD_NARGS(__VA_ARGS__))(__VA_ARGS__)
-#define DE_SYSTEM_FOREACH(...) _DE_CONCAT(_DE_SYSTEM_FOREACH_, _DE_FOREACH_NARGS(__VA_ARGS__))(__VA_ARGS__)
-#define DE_SYSTEM_ITERATOR(...) _DE_CONCAT(_DE_SYSTEM_ITERATOR_, _DE_FOREACH_NARGS(__VA_ARGS__))(__VA_ARGS__)
-
-void de_system_init(de_system, void **, uint16_t, uint16_t);
-uint16_t de_system_remove(de_system, void *);
-
-/* ============================================================================
  * INTERNAL MACRO IMPLEMENTATIONS
  * ============================================================================ */
-
-// Ensures proper alignment between consecutive entities
-#define _DE_ENTITY_STRIDE(PAYLOAD) _DE_ALIGN4(sizeof(struct de_entity) + (PAYLOAD))
 
 /**
  * Align a byte count to a 4-byte boundary.
@@ -191,12 +130,9 @@ uint16_t de_system_remove(de_system, void *);
  * Longword alignment keeps entity strides predictable and efficient.
  */
 #define _DE_ALIGN4(X) (((X) + 3U) & ~3U)
-#define _DE_ADD_NARGS(...) _DE_ADD_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1, 0)
-#define _DE_ADD_NARGS_I(_1, _2, _3, _4, _5, _6, N, ...) N
-#define _DE_FOREACH_NARGS(...) _DE_FOREACH_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1, 0, -1)
-#define _DE_FOREACH_NARGS_I(_1, _2, _3, _4, _5, _6, _7, N, ...) N
-#define _DE_CONCAT_INNER(A, B) A##B
-#define _DE_CONCAT(A, B) _DE_CONCAT_INNER(A, B)
+
+// Ensures proper alignment between consecutive entities
+#define _DE_ENTITY_STRIDE(PAYLOAD) _DE_ALIGN4(sizeof(struct de_entity) + (PAYLOAD))
 
 #define _DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)                                         \
     struct                                                                                        \
@@ -226,82 +162,7 @@ uint16_t de_system_remove(de_system, void *);
         }                                   \
     } while (0)
 
-#define _DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS) \
-    struct                                         \
-    {                                              \
-        void *pool[(CAPACITY) * (PARAMS)];         \
-        uint16_t capacity;                         \
-        uint16_t params;                           \
-    } NAME = {                                     \
-        .capacity = (CAPACITY),                    \
-        .params = (PARAMS),                        \
-    }
-
-#define _DE_SYSTEM_ARGS(NAME) \
-    (NAME).pool, (NAME).capacity, (NAME).params
-
-#define _DE_SYSTEM_ADD(SYSTEM, ARGS, ...)              \
-    ({                                                 \
-        de_system system = (SYSTEM);                   \
-        uint16_t ok = 0;                               \
-                                                       \
-        if (system->size + (ARGS) <= system->capacity) \
-        {                                              \
-            void **pool = system->end;                 \
-            __VA_ARGS__                                \
-            system->size += (ARGS);                    \
-            system->end += (ARGS);                     \
-            ok = 1;                                    \
-        }                                              \
-        ok;                                            \
-    })
-
-#define _DE_SYSTEM_ADD_1(SYS, A) _DE_SYSTEM_ADD(SYS, 1, pool[0] = (void *)(A);)
-#define _DE_SYSTEM_ADD_2(SYS, A, B) _DE_SYSTEM_ADD(SYS, 2, pool[0] = (void *)(A); pool[1] = (void *)(B);)
-#define _DE_SYSTEM_ADD_3(SYS, A, B, C) _DE_SYSTEM_ADD(SYS, 3, pool[0] = (void *)(A); pool[1] = (void *)(B); pool[2] = (void *)(C);)
-#define _DE_SYSTEM_ADD_4(SYS, A, B, C, D) _DE_SYSTEM_ADD(SYS, 4, pool[0] = (void *)(A); pool[1] = (void *)(B); pool[2] = (void *)(C); pool[3] = (void *)(D);)
-#define _DE_SYSTEM_ADD_5(SYS, A, B, C, D, E) _DE_SYSTEM_ADD(SYS, 5, pool[0] = (void *)(A); pool[1] = (void *)(B); pool[2] = (void *)(C); pool[3] = (void *)(D); pool[4] = (void *)(E);)
-
-#define _DE_SYSTEM_FOREACH(SYSTEM, IT)      \
-    do                                      \
-    {                                       \
-        void **pool = (SYSTEM)->pool;       \
-        void **end = (SYSTEM)->end;         \
-        uint16_t params = (SYSTEM)->params; \
-                                            \
-        while (pool < end)                  \
-        {                                   \
-            IT;                             \
-            pool += params;                 \
-        }                                   \
-    } while (0)
-
-#define _DE_SYSTEM_FOREACH_0(SYSTEM, IT) _DE_SYSTEM_FOREACH(SYSTEM, { IT; })
-#define _DE_SYSTEM_FOREACH_1(SYSTEM, A, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; IT; })
-#define _DE_SYSTEM_FOREACH_2(SYSTEM, A, B, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; IT; })
-#define _DE_SYSTEM_FOREACH_3(SYSTEM, A, B, C, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; C = pool[2]; IT; })
-#define _DE_SYSTEM_FOREACH_4(SYSTEM, A, B, C, D, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; C = pool[2]; D = pool[3]; IT; })
-#define _DE_SYSTEM_FOREACH_5(SYSTEM, A, B, C, D, E, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; C = pool[2]; D = pool[3]; E = pool[4]; IT; })
-
-#define _DE_SYSTEM_ITERATOR(NAME, FOREACH, ...) \
-    void *NAME(de_system system)                \
-    {                                           \
-        FOREACH(system, __VA_ARGS__);           \
-        return DE_STATE_LOOP;                   \
-    }
-
-#define _DE_SYSTEM_ITERATOR_0(NAME, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_0, IT)
-#define _DE_SYSTEM_ITERATOR_1(NAME, A, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_1, A, IT)
-#define _DE_SYSTEM_ITERATOR_2(NAME, A, B, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_2, A, B, IT)
-#define _DE_SYSTEM_ITERATOR_3(NAME, A, B, C, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_3, A, B, C, IT)
-#define _DE_SYSTEM_ITERATOR_4(NAME, A, B, C, D, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_4, A, B, C, D, IT)
-#define _DE_SYSTEM_ITERATOR_5(NAME, A, B, C, D, E, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_5, A, B, C, D, E, IT)
-
 #endif // DARKEN_H
-
-/* ============================================================================
- * IMPLEMENTATION
- * ============================================================================ */
 
 #ifdef DARKEN_IMPLEMENTATION
 
@@ -503,43 +364,6 @@ void de_manager_reset(de_manager $)
 
     $->size = 0;
     $->paused = $->capacity;
-}
-
-//
-
-void de_system_init(de_system $, void **storage, uint16_t capacity_groups, uint16_t params)
-{
-    $->pool = storage;
-    $->end = storage;
-    $->size = 0;
-    $->capacity = capacity_groups * params;
-    $->params = params;
-}
-
-uint16_t de_system_remove(de_system $, void *first)
-{
-    uint16_t params = $->params;
-    void **pool = $->pool;
-    uint16_t i = $->size;
-
-    while (i)
-    {
-        i -= params;
-
-        if (pool[i] != first)
-            continue;
-
-        uint16_t size = $->size -= params;
-        $->end -= params;
-
-        if (i != size)
-            while (params--)
-                pool[i + params] = pool[size + params];
-
-        return 1;
-    }
-
-    return 0;
 }
 
 #endif // DARKEN_IMPLEMENTATION

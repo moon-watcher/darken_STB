@@ -169,16 +169,13 @@ First, we need a system. It's a flat array of pointers. If you tell it 2 paramet
 /* Particle system: stores (position, velocity) */
 DE_SYSTEM_STORAGE(particles, 100, 2);
 
-/* Function that updates all particles */
-void *update_particles(de_system sys)
-{
-    /* DE_SYSTEM_FOREACH_2 unpacks 2 pointers per group */
-    DE_SYSTEM_FOREACH_2(sys, float *px, float *py, {
-        *px += (rand() % 3 - 1) * 0.1f;  /* jitter on X */
-        *py += 0.3f;                      /* fall down */
-    });
-    return DE_STATE_LOOP;
-}
+/* Generate a system function that updates all particles.
+ * DE_SYSTEM_ITERATOR_2 creates: void *update_particles(de_system system)
+ * with two unpacked pointers per group: px = pool[0], py = pool[1] */
+DE_SYSTEM_ITERATOR_2(update_particles, float *px, float *py, {
+    *px += (rand() % 3 - 1) * 0.1f;  /* jitter on X */
+    *py += 0.3f;                      /* fall down */
+})
 ```
 
 In `main`, initialize and use it:
@@ -379,7 +376,7 @@ gcc -std=gnu99 main.c -o orbit && ./orbit
 | Create something | `de_manager_new(&manager)` |
 | Make it move/change every frame | Assign a `state` and call `de_manager_update()` |
 | Make it disappear | The `state` returns `DE_STATE_DELETE` |
-| Process lots of data fast | `de_system` + `DE_SYSTEM_FOREACH` |
+| Process lots of data fast | `de_system` + `DE_SYSTEM_ITERATOR_*` or `DE_SYSTEM_FOREACH` |
 | Check if something is active | `DE_ENTITY_IS_ACTIVE(e)` |
 | Reset everything | `de_manager_reset(&manager)` |
 

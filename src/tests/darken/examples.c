@@ -1,6 +1,6 @@
 #include <genesis.h>
 
-#include "../darken.h"
+#include "../../darken.h"
 #include "examples.h"
 
 struct MyComponent
@@ -9,7 +9,7 @@ struct MyComponent
     uint8_t health;
 };
 
-static void *update_walk(struct MyComponent *data)
+static void *de_update_walk(struct MyComponent *data)
 {
     data->x += 1;
     data->y += 1;
@@ -17,19 +17,19 @@ static void *update_walk(struct MyComponent *data)
     return DE_STATE_LOOP;
 }
 
-static void *update_idle(struct MyComponent *data)
+static void *de_update_idle(struct MyComponent *data)
 {
     kprintf("Idle: (%d, %d) health=%d", data->x, data->y, data->health);
     return DE_STATE_LOOP;
 }
 
-static void *destructor(struct MyComponent *data)
+static void *de_destructor(struct MyComponent *data)
 {
     kprintf("Destructor llamado para entidad en (%d, %d)", data->x, data->y);
     return DE_STATE_DELETE;
 }
 
-void run_usage_example(void)
+void de_run_usage_example(void)
 {
     kprintf("========== EJEMPLO DE USO ==========");
     struct de_manager g_manager, g_manager2;
@@ -42,24 +42,24 @@ void run_usage_example(void)
     data1->x = 0;
     data1->y = 0;
     data1->health = 100;
-    e1->state = (de_state)update_walk;
-    e1->destructor = (de_state)destructor;
+    e1->state = (de_state)de_update_walk;
+    e1->destructor = (de_state)de_destructor;
     e1->tag = 1;
     de_entity e2 = de_manager_new(&g_manager);
     struct MyComponent *data2 = (struct MyComponent *)e2->data;
     data2->x = 10;
     data2->y = 20;
     data2->health = 80;
-    e2->state = (de_state)update_idle;
-    e2->destructor = (de_state)destructor;
+    e2->state = (de_state)de_update_idle;
+    e2->destructor = (de_state)de_destructor;
     e2->tag = 2;
     de_entity e3 = de_manager_new(&g_manager);
     struct MyComponent *data3 = (struct MyComponent *)e3->data;
     data3->x = 5;
     data3->y = 5;
     data3->health = 50;
-    e3->state = (de_state)update_walk;
-    e3->destructor = (de_state)destructor;
+    e3->state = (de_state)de_update_walk;
+    e3->destructor = (de_state)de_destructor;
     e3->tag = 3;
     kprintf("--- Frame 1 ---");
     de_manager_update(&g_manager);
