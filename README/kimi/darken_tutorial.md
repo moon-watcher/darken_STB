@@ -198,14 +198,12 @@ We define a `de_system` that stores pointers to `Vec2` (positions) for drawing.
 /* Rendering system: 1 parameter (pointer to Vec2) */
 DE_SYSTEM_STORAGE(render_sys, 64, 1);
 
-/* Function that draws an entity (simulated with printf) */
-void *draw_system(de_system sys)
-{
-    DE_SYSTEM_FOREACH_1(sys, Vec2 *pos, {
-        printf("\033[%d;%dH*", (int)pos->y, (int)pos->x);
-    });
-    return DE_STATE_LOOP;
-}
+/* Generate a system function that draws entities.
+ * DE_SYSTEM_ITERATOR_1 creates: void *draw_system(de_system system)
+ * with one unpacked pointer per group: Vec2 *pos = pool[0] */
+DE_SYSTEM_ITERATOR_1(draw_system, Vec2 *pos, {
+    printf("\033[%d;%dH*", (int)pos->y, (int)pos->x);
+})
 ```
 
 In `main`:
@@ -286,7 +284,7 @@ In the game loop, spawn every few frames:
         if (frame % 30 == 0) spawn_asteroid(&manager, &renderer);
 
         de_manager_update(&manager);   /* moves everything */
-        draw_system(&renderer);        /* draws everything */
+        draw_system(&renderer);          /* draws everything */
     }
 ```
 
@@ -468,7 +466,33 @@ DE_SYSTEM_ARGS(name)                              /* args for init */
 DE_MANAGER_FOREACH(manager, code)   /* iterates active zone, defines ENTITY */
 
 DE_SYSTEM_ADD(system, ptr1, ...)    /* add pointer group */
-DE_SYSTEM_FOREACH(system, a, b, code)  /* iterate unpacking params */
+
+/* Iterate a system inline, unpacking N pointers per group.
+ * pool[0], pool[1], etc. are accessible inside code. */
+DE_SYSTEM_FOREACH(system, code)
+DE_SYSTEM_FOREACH(system, A, code)       /* A = pool[0] */
+DE_SYSTEM_FOREACH(system, A, B, code)    /* A = pool[0], B = pool[1] */
+/* ... up to 5 pointers */
+```
+
+### System Iterator Generators
+
+```c
+/* Generate a de_state function that iterates a system.
+ * NAME will be: void *NAME(de_system system) */
+DE_SYSTEM_ITERATOR_0(NAME, code)
+DE_SYSTEM_ITERATOR_1(NAME, A, code)       /* A = pool[0] */
+DE_SYSTEM_ITERATOR_2(NAME, A, B, code)    /* A = pool[0], B = pool[1] */
+/* ... up to 5 pointers */
+```
+
+Example:
+```c
+DE_SYSTEM_ITERATOR_2(update_particles, float *px, float *py, {
+    *px += (rand() % 3 - 1) * 0.1f;
+    *py += 0.3f;
+})
+/* Generates: void *update_particles(de_system system) { ... } */
 ```
 
 ### Entity Functions

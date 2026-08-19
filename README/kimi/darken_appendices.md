@@ -100,6 +100,25 @@ Darken **does not initialize your payload**. It gives you the entity with `state
 ### 10. "My `de_system` has weird `capacity`"
 `de_system_init` receives `capacity_groups` (how many groups you want) and `params` (how many pointers per group). The **total** pointer capacity is `groups * params`. If you reserve `DE_SYSTEM_STORAGE(sys, 10, 3)`, you have room for 10 groups of 3 pointers, not 30 groups.
 
+### 11. "I used `DE_SYSTEM_FOREACH_2` and it doesn't compile"
+The public macro is `DE_SYSTEM_FOREACH`, not `DE_SYSTEM_FOREACH_2`. The number suffix is resolved automatically by the variadic macro. Use:
+```c
+/* Good: 2 unpacked pointers + code block */
+DE_SYSTEM_FOREACH(sys, float *px, float *py, {
+    *px += 1.0f;
+    *py += 0.5f;
+});
+
+/* Good: generating a system function */
+DE_SYSTEM_ITERATOR_2(update_particles, float *px, float *py, {
+    *px += (rand() % 3 - 1) * 0.1f;
+    *py += 0.3f;
+})
+
+/* Bad: internal macro, don't use directly */
+_DE_SYSTEM_FOREACH_2(...)
+```
+
 ---
 
 **Summary to remember:**
@@ -111,5 +130,6 @@ Darken **does not initialize your payload**. It gives you the entity with `state
 | Pause entities if you want stable pointers to their `data` | Keep pointers to `data` of active entities |
 | Initialize your payload after `de_manager_new` | Assume `data[]` comes zeroed |
 | Use `de_system_remove` searching by the **first** pointer of the group | Search by the second, third, etc. |
+| Use `DE_SYSTEM_FOREACH` or `DE_SYSTEM_ITERATOR_*` (public) | Use `_DE_SYSTEM_FOREACH_*` (internal) |
 
 With these rules, Darken is practically impossible to break. Or well, harder. A bit. 🎮

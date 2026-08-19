@@ -1,0 +1,199 @@
+/**
+ * darksys.h — Darksys 2.0 Entity System
+ *
+ * Public functions/types: de_*
+ * Public macros:          DE_*
+ * Internal functions:     _de_*
+ * Internal macros:        _DE_*
+ *
+ * Full documentation: README.md
+ *
+ * GNU C note:
+ * - This header uses GNU C extensions (__attribute__ and statement expressions).
+ * - 4-byte align boundary because Darksys targets GCC and the Motorola 68000.
+ * - 16-bit members preference for optimal 68K performance.
+ */
+
+#ifndef DARKSYS_H
+#define DARKSYS_H
+
+#include <stdint.h>
+
+typedef struct de_system *de_system;
+
+/**
+ * System: Flat packed pool of data pointers.
+ *
+ * The pool is organized in groups of 'params' pointers. Each group can hold
+ * the pointers associated with one processed item/entity.
+ *
+ * Pool Layout (params=2):
+ *    [e0.a][e0.b][e1.a][e1.b][e2.a][e2.b]...
+ */
+struct de_system
+{
+    void **pool;
+    void **end;
+    uint16_t capacity;
+    uint16_t size;
+    uint16_t params;
+};
+
+#define DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS) _DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS)
+#define DE_SYSTEM_ARGS(NAME) _DE_SYSTEM_ARGS(NAME)
+#define DE_SYSTEM_ADD(...) _DE_CONCAT(_DE_SYSTEM_ADD_, _DE_ADD_NARGS(__VA_ARGS__))(__VA_ARGS__)
+#define DE_SYSTEM_FOREACH(...) _DE_CONCAT(_DE_SYSTEM_FOREACH_, _DE_FOREACH_NARGS(__VA_ARGS__))(__VA_ARGS__)
+
+void de_system_init(de_system, void **, uint16_t, uint16_t);
+uint16_t de_system_remove(de_system, void *);
+
+/* ============================================================================
+ * INTERNAL MACRO IMPLEMENTATIONS
+ * ============================================================================ */
+
+// Ensures proper alignment between consecutive entities
+#define _DE_ENTITY_STRIDE(PAYLOAD) _DE_ALIGN4(sizeof(struct de_entity) + (PAYLOAD))
+
+/**
+ * Align a byte count to a 4-byte boundary.
+ *
+ * The Motorola 68000 requires word alignment for word/long accesses.
+ * Longword alignment keeps entity strides predictable and efficient.
+ */
+#define _DE_ALIGN4(X) (((X) + 3U) & ~3U)
+#define _DE_ADD_NARGS(...) _DE_ADD_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1, 0)
+#define _DE_ADD_NARGS_I(_1, _2, _3, _4, _5, _6, N, ...) N
+#define _DE_FOREACH_NARGS(...) _DE_FOREACH_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1, 0, -1)
+#define _DE_FOREACH_NARGS_I(_1, _2, _3, _4, _5, _6, _7, N, ...) N
+#define _DE_CONCAT_INNER(A, B) A##B
+#define _DE_CONCAT(A, B) _DE_CONCAT_INNER(A, B)
+
+#define _DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)                                         \
+    struct                                                                                        \
+    {                                                                                             \
+        de_entity pool[(CAPACITY)];                                                               \
+        uint8_t data[(CAPACITY) * _DE_ENTITY_STRIDE((PAYLOAD_SIZE))] __attribute__((aligned(4))); \
+        uint16_t capacity;                                                                        \
+        uint16_t payload_size;                                                                    \
+    } NAME = {                                                                                    \
+        .capacity = (CAPACITY),                                                                   \
+        .payload_size = (PAYLOAD_SIZE),                                                           \
+    }
+
+#define _DE_MANAGER_ARGS(NAME) \
+    (NAME).pool, (NAME).data, (NAME).capacity, (NAME).payload_size
+
+#define _DE_MANAGER_FOREACH(MANAGER, CODE)  \
+    do                                      \
+    {                                       \
+        uint16_t INDEX = (MANAGER)->size;   \
+        de_entity *POOL = (MANAGER)->pool;  \
+                                            \
+        while (INDEX--)                     \
+        {                                   \
+            de_entity ENTITY = POOL[INDEX]; \
+            CODE;                           \
+        }                                   \
+    } while (0)
+
+#define _DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS) \
+    struct                                         \
+    {                                              \
+        void *pool[(CAPACITY) * (PARAMS)];         \
+        uint16_t capacity;                         \
+        uint16_t params;                           \
+    } NAME = {                                     \
+        .capacity = (CAPACITY),                    \
+        .params = (PARAMS),                        \
+    }
+
+#define _DE_SYSTEM_ARGS(NAME) \
+    (NAME).pool, (NAME).capacity, (NAME).params
+
+#define _DE_SYSTEM_ADD(SYSTEM, ARGS, ...)              \
+    ({                                                 \
+        de_system system = (SYSTEM);                   \
+        uint16_t ok = 0;                               \
+                                                       \
+        if (system->size + (ARGS) <= system->capacity) \
+        {                                              \
+            void **pool = system->end;                 \
+            __VA_ARGS__                                \
+            system->size += (ARGS);                    \
+            system->end += (ARGS);                     \
+            ok = 1;                                    \
+        }                                              \
+        ok;                                            \
+    })
+
+#define _DE_SYSTEM_ADD_1(SYS, A) _DE_SYSTEM_ADD(SYS, 1, pool[0] = (void *)(A);)
+#define _DE_SYSTEM_ADD_2(SYS, A, B) _DE_SYSTEM_ADD(SYS, 2, pool[0] = (void *)(A); pool[1] = (void *)(B);)
+#define _DE_SYSTEM_ADD_3(SYS, A, B, C) _DE_SYSTEM_ADD(SYS, 3, pool[0] = (void *)(A); pool[1] = (void *)(B); pool[2] = (void *)(C);)
+#define _DE_SYSTEM_ADD_4(SYS, A, B, C, D) _DE_SYSTEM_ADD(SYS, 4, pool[0] = (void *)(A); pool[1] = (void *)(B); pool[2] = (void *)(C); pool[3] = (void *)(D);)
+#define _DE_SYSTEM_ADD_5(SYS, A, B, C, D, E) _DE_SYSTEM_ADD(SYS, 5, pool[0] = (void *)(A); pool[1] = (void *)(B); pool[2] = (void *)(C); pool[3] = (void *)(D); pool[4] = (void *)(E);)
+
+#define _DE_SYSTEM_FOREACH(SYSTEM, IT)      \
+    do                                      \
+    {                                       \
+        void **pool = (SYSTEM)->pool;       \
+        void **end = (SYSTEM)->end;         \
+        uint16_t params = (SYSTEM)->params; \
+                                            \
+        while (pool < end)                  \
+        {                                   \
+            IT;                             \
+            pool += params;                 \
+        }                                   \
+    } while (0)
+
+#define _DE_SYSTEM_FOREACH_0(SYSTEM, IT) _DE_SYSTEM_FOREACH(SYSTEM, { IT; })
+#define _DE_SYSTEM_FOREACH_1(SYSTEM, A, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; IT; })
+#define _DE_SYSTEM_FOREACH_2(SYSTEM, A, B, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; IT; })
+#define _DE_SYSTEM_FOREACH_3(SYSTEM, A, B, C, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; C = pool[2]; IT; })
+#define _DE_SYSTEM_FOREACH_4(SYSTEM, A, B, C, D, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; C = pool[2]; D = pool[3]; IT; })
+#define _DE_SYSTEM_FOREACH_5(SYSTEM, A, B, C, D, E, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; C = pool[2]; D = pool[3]; E = pool[4]; IT; })
+
+#endif // DARKSYS_H
+
+/* ============================================================================
+ * IMPLEMENTATION
+ * ============================================================================ */
+
+#ifdef DARKSYS_IMPLEMENTATION
+
+void de_system_init(de_system $, void **storage, uint16_t capacity_groups, uint16_t params)
+{
+    $->pool = storage;
+    $->end = storage;
+    $->size = 0;
+    $->capacity = capacity_groups * params;
+    $->params = params;
+}
+
+uint16_t de_system_remove(de_system $, void *first)
+{
+    uint16_t params = $->params;
+    void **pool = $->pool;
+    uint16_t i = $->size;
+
+    while (i)
+    {
+        i -= params;
+
+        if (pool[i] != first)
+            continue;
+
+        uint16_t size = $->size -= params;
+        $->end -= params;
+
+        if (i != size)
+            while (params--)
+                pool[i + params] = pool[size + params];
+
+        return 1;
+    }
+
+    return 0;
+}
+
+#endif // DARKSYS_IMPLEMENTATION

@@ -293,8 +293,9 @@ static void render_frame(de_system *ren)
     /* Flag */
     printf("\033[%d;%dH$", (int)FLAG_Y + 1, (int)FLAG_X + 1);
 
-    /* Iterate the flat de_system: 3 pointers per group (x, y, symbol) */
-    DE_SYSTEM_FOREACH_3(ren, float *px, float *py, char *sym, {
+    /* Iterate the flat de_system: 3 pointers per group (x, y, symbol).
+     * Using the public DE_SYSTEM_FOREACH macro. */
+    DE_SYSTEM_FOREACH(ren, float *px, float *py, char *sym, {
         int ix = (int)(*px);
         int iy = (int)(*py);
         if (ix >= 1 && ix < MAP_W - 1 && iy >= 1 && iy < MAP_H - 1)
