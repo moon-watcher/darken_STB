@@ -1,26 +1,26 @@
-# Darken 2.0 — El tutorial que no te hará llorar
+# Darken 2.0 — The Tutorial That Won't Make You Cry
 
-> Oye, ¿te contaron que programar un entity system en C es un dolor de muelas? Mentira. Con Darken es más bien como armar un LEGO: piezas chiquitas, clicks satisfactorios, y al final tienes algo que se mueve en pantalla.
+> Hey, did someone tell you that writing an entity system in C is a pain? Lies. With Darken it's more like LEGO: tiny pieces, satisfying clicks, and at the end you have something moving on screen.
 
-Vamos a hacer un jueguito de **naves y basura espacial**. Nada de arquitecturas enterprise ni 47 capas de abstracción. Una nave, unos asteroides, y un loop que hace *tick tick tick*.
-
----
-
-## ¿Qué necesito saber antes de empezar?
-
-Tres cosas nada más:
-
-1. **El Manager** es como el dueño del antro. Decide quién entra, quién sale, y quién está en la pista de baile (activas) versus quién está en la barra de al lado tomando una pausa (pausadas).
-2. **Las entidades** son tus objetos del juego: nave, asteroides, disparos, partículas... Cada una tiene un `state`, que no es más que una función que le dice "hacé esto cada frame".
-3. **`de_manager_update()`** es el DJ. Cada vez que lo llamás, pasa por todas las entidades activas y les dice "dale, tocá tu tema".
-
-Listo. Con eso ya podemos arrancar.
+We're gonna build a **spaceship vs space junk** game. No enterprise architecture, no 47 layers of abstraction. One ship, some asteroids, and a loop that goes *tick tick tick*.
 
 ---
 
-## Paso 1: Preparar la escena
+## What do I need to know before starting?
 
-Primero: reservamos memoria. Darken no te roba bytes a escondidas; vos le decís "che, reservame espacio para 50 entidades de tamaño X" y listo.
+Three things, that's it:
+
+1. **The Manager** is like the club owner. Decides who gets in, who leaves, and who's on the dance floor (active) vs who's at the bar taking a break (paused).
+2. **Entities** are your game objects: ship, asteroids, bullets, particles... Each one has a `state`, which is just a function saying "do this every frame."
+3. **`de_manager_update()`** is the DJ. Every time you call it, it goes through all active entities and says "alright, play your tune."
+
+That's it. With that we can start.
+
+---
+
+## Step 1: Setting the Scene
+
+First: reserve memory. Darken doesn't steal bytes behind your back; you say "yo, reserve space for 50 entities of size X" and that's it.
 
 ```c
 #define DARKEN_IMPLEMENTATION
@@ -28,301 +28,296 @@ Primero: reservamos memoria. Darken no te roba bytes a escondidas; vos le decís
 #include <stdio.h>
 #include <stdlib.h>
 
-/* Nuestros datos de juego */
+/* Our game data */
 typedef struct {
     float x, y;
     float vx, vy;
-    int   vida;
-} Coso;
+    int   life;
+} Thing;
 
 int main(void)
 {
-    /* Esto crea una struct anónima con:
-       - pool[] : los punteros a entidades
-       - data[] : la memoria REAL donde viven los Coso
+    /* This creates an anonymous struct with:
+       - pool[] : entity pointers
+       - data[] : ACTUAL memory where the Things live
     */
-    DE_MANAGER_STORAGE(mundo, 50, sizeof(Coso));
+    DE_MANAGER_STORAGE(world, 50, sizeof(Thing));
 
-    de_manager manager;
-    de_manager_init(&manager, DE_MANAGER_ARGS(mundo));
+    struct de_manager manager;
+    de_manager_init(&manager, DE_MANAGER_ARGS(world));
 
-    printf("Manager listo. Capacidad: %u\n", manager.capacity);
+    printf("Manager ready. Capacity: %u\n", manager.capacity);
     return 0;
 }
 ```
 
-Compilalo:
+Compile it:
 ```bash
-gcc -std=gnu99 main.c -o jueguito && ./jueguito
+gcc -std=gnu99 main.c -o little_game && ./little_game
 ```
 
-Si ves `Manager listo. Capacidad: 50`, ya ganaste la mitad de la batalla.
+If you see `Manager ready. Capacity: 50`, you've already won half the battle.
 
 ---
 
-## Paso 2: Crear entidades (la parte divertida)
+## Step 2: Creating Entities (The Fun Part)
 
-`de_manager_new()` te da una entidad fresquita del horno. Si te devuelve `NULL`, es que no hay lugar (ya llenaste el antro).
+`de_manager_new()` gives you a fresh entity hot from the oven. If it returns `NULL`, the club is full.
 
 ```c
-de_entity crear_nave(de_manager *m)
+de_entity create_ship(de_manager *m)
 {
     de_entity e = de_manager_new(m);
     if (!e) {
-        printf("No hay lugar para más naves, capo.\n");
+        printf("No room for more ships, buddy.\n");
         return NULL;
     }
 
-    Coso *c = (Coso *)e->data;
-    c->x = 40.0f;
-    c->y = 20.0f;
-    c->vx = 0.0f;
-    c->vy = 0.0f;
-    c->vida = 3;
+    Thing *t = (Thing *)e->data;
+    t->x = 40.0f;
+    t->y = 20.0f;
+    t->vx = 0.0f;
+    t->vy = 0.0f;
+    t->life = 3;
 
-    /* El tag es libre, lo usamos como queramos */
-    e->tag = 1;  /* 1 = nave */
+    /* Tag is free for whatever you want */
+    e->tag = 1;  /* 1 = ship */
 
     return e;
 }
 ```
 
-Llamalo en tu `main`:
+Call it in your `main`:
 
 ```c
-    de_entity nave = crear_nave(&manager);
-    if (nave) {
-        Coso *c = (Coso *)nave->data;
-        printf("Nave creada en (%.0f, %.0f) con %d vidas\n", c->x, c->y, c->vida);
+    de_entity ship = create_ship(&manager);
+    if (ship) {
+        Thing *t = (Thing *)ship->data;
+        printf("Ship created at (%.0f, %.0f) with %d lives\n", t->x, t->y, t->life);
     }
 ```
 
-**¿Qué pasó acá?**
-- `de_manager_new` agarró un slot del área libre y lo pasó al área activa.
-- `e->data` apunta directo a tu `Coso`. No hay magia, no hay offsets raros. Es tu struct, punto.
+**What happened here?**
+- `de_manager_new` grabbed a slot from the free area and moved it to the active area.
+- `e->data` points straight at your `Thing`. No magic, no weird offsets. It's your struct, period.
 
 ---
 
-## Paso 3: Darle vida con estados y `de_manager_update()`
+## Step 3: Giving It Life with States and `de_manager_update()`
 
-Acá viene la magia. Cada entidad tiene un `state`: una función que recibe `void *data` y devuelve qué hacer después.
+Here's the magic. Every entity has a `state`: a function that takes `void *data` and returns what to do next.
 
 ```c
-void *estado_nave(void *data)
+void *ship_update(Thing *t)
 {
-    Coso *c = (Coso *)data;
+    /* Automatic movement for the example */
+    t->x += t->vx;
+    t->y += t->vy;
 
-    /* Movimiento automático para el ejemplo */
-    c->x += c->vx;
-    c->y += c->vy;
+    /* Dumb bounce against imaginary borders */
+    if (t->x < 0 || t->x > 80) t->vx *= -1;
+    if (t->y < 0 || t->y > 24) t->vy *= -1;
 
-    /* Rebote bobo contra bordes imaginarios */
-    if (c->x < 0 || c->x > 80) c->vx *= -1;
-    if (c->y < 0 || c->y > 24) c->vy *= -1;
-
-    /* Seguí con este estado el próximo frame */
+    /* Keep this state next frame */
     return DE_STATE_LOOP;
 }
 ```
 
-Asignalo cuando creás la nave:
+Assign it when creating the ship:
 
 ```c
-    nave->state = estado_nave;
-    ((Coso *)nave->data)->vx = 0.5f;
-    ((Coso *)nave->data)->vy = 0.2f;
+    ship->state = (de_state)ship_update;
+    ((Thing *)ship->data)->vx = 0.5f;
+    ((Thing *)ship->data)->vy = 0.2f;
 ```
 
-Y ahora el loop de juego:
+And now the game loop:
 
 ```c
     for (int frame = 0; frame < 200; frame++) {
-        de_manager_update(&manager);  /* ¡ESTO ES TODO! */
+        de_manager_update(&manager);  /* THAT'S IT! */
 
-        /* Solo para ver que se mueve */
-        Coso *c = (Coso *)nave->data;
-        printf("\rFrame %3d | Nave en (%.1f, %.1f)", frame, c->x, c->y);
+        /* Just to see it move */
+        Thing *t = (Thing *)ship->data;
+        printf("\rFrame %3d | Ship at (%.1f, %.1f)", frame, t->x, t->y);
         fflush(stdout);
     }
     printf("\n");
 ```
 
-### ¿Qué hace `de_manager_update()` por dentro?
+### What does `de_manager_update()` do under the hood?
 
-Recorre las entidades activas **de atrás para adelante** (sí, en reversa como *Tenet*). Para cada una:
+It walks active entities **backwards** (yeah, in reverse like *Tenet*). For each one:
 
-1. Llama a `entity->state(entity->data)`.
-2. Si devuelve `DE_STATE_LOOP`, no toca nada. La entidad sigue viva y con el mismo estado.
-3. Si devuelve `DE_STATE_DELETE`, la mata ahí nomás.
-4. Si devuelve `DE_STATE_PAUSE`, la saca de la pista de baile.
-5. Si devuelve otra función, le cambia el estado a esa nueva función.
+1. Calls `entity->state(entity->data)`.
+2. If it returns `DE_STATE_LOOP`, does nothing. Entity stays alive with the same state.
+3. If it returns `DE_STATE_DELETE`, kills it right there.
+4. If it returns `DE_STATE_PAUSE`, removes it from the dance floor.
+5. If it returns another function, switches to that new state.
 
-> **¿Por qué de atrás para adelante?** Porque si una entidad se borra a sí misma (o a otras), los índices del array no se rompen. Es una genialidad simple que te salva de un montón de dolores de cabeza.
+> **Why backwards?** Because if an entity deletes itself (or another), array indices don't break. It's a simple trick that saves you a ton of headaches.
 
 ---
 
-## Paso 4: Meter un `de_system` (porque pintó)
+## Step 4: Throwing in a `de_system` (Because Why Not)
 
-Los managers gestionan la vida de las cosas. Los **systems** procesan datos de forma cache-friendly. Vamos a hacer un sistema de **partículas de motor** para la nave.
+Managers handle life and death. **Systems** process data in a cache-friendly way. Let's make an **engine particle** system for the ship.
 
-Primero, necesitamos un system. Es un array plano de punteros. Si le decís que tiene 2 parámetros, guarda grupos de 2 punteros seguidos: `(ptr1, ptr2), (ptr1, ptr2)...`
+First, we need a system. It's a flat array of pointers. If you tell it 2 parameters, it stores groups of 2 pointers back-to-back: `(ptr1, ptr2), (ptr1, ptr2)...`
 
 ```c
-/* Sistema de partículas: guarda (posición, velocidad) */
-DE_SYSTEM_STORAGE(particulas, 100, 2);
+/* Particle system: stores (position, velocity) */
+DE_SYSTEM_STORAGE(particles, 100, 2);
 
-/* Función que actualiza todas las partículas */
-void *actualizar_particulas(de_system sys)
+/* Function that updates all particles */
+void *update_particles(de_system sys)
 {
-    /* DE_SYSTEM_FOREACH_2 desempaqueta 2 punteros por grupo */
+    /* DE_SYSTEM_FOREACH_2 unpacks 2 pointers per group */
     DE_SYSTEM_FOREACH_2(sys, float *px, float *py, {
-        *px += (rand() % 3 - 1) * 0.1f;  /* jitter en X */
-        *py += 0.3f;                      /* caen */
+        *px += (rand() % 3 - 1) * 0.1f;  /* jitter on X */
+        *py += 0.3f;                      /* fall down */
     });
     return DE_STATE_LOOP;
 }
 ```
 
-En el `main`, inicializalo y usalo:
+In `main`, initialize and use it:
 
 ```c
-    de_system motor;
-    de_system_init(&motor, DE_SYSTEM_ARGS(particulas));
+    struct de_system engine;
+    de_system_init(&engine, DE_SYSTEM_ARGS(particles));
 
-    /* Cada vez que queremos una partícula, hacemos: */
-    float *pos_x = &((Coso *)nave->data)->x;
-    float *pos_y = &((Coso *)nave->data)->y;
-    DE_SYSTEM_ADD(&motor, pos_x, pos_y);  /* guardamos punteros a la posición de la nave */
+    /* Every time we want a particle: */
+    float *pos_x = &((Thing *)ship->data)->x;
+    float *pos_y = &((Thing *)ship->data)->y;
+    DE_SYSTEM_ADD(&engine, pos_x, pos_y);  /* store pointers to ship position */
 ```
 
-Y en el loop:
+And in the loop:
 
 ```c
     for (int frame = 0; frame < 200; frame++) {
         de_manager_update(&manager);
-        actualizar_particulas(&motor);
+        update_particles(&engine);
 
-        /* ... imprimir cosas ... */
+        /* ... print stuff ... */
     }
 ```
 
-### ¿Qué onda el `de_system`?
+### What's the deal with `de_system`?
 
-Es una caja de punteros planos. No sabe de entidades, no sabe de managers. Solo sabe que tiene `params` punteros por grupo y un montón de grupos. Iterar es ultra rápido porque todo está pegadito en memoria.
+It's a box of flat pointers. Doesn't know about entities, doesn't know about managers. Only knows it has `params` pointers per group and a bunch of groups. Iteration is super fast because everything is packed tight in memory.
 
-> **Truco:** Si tenés un sistema de renderizado, un sistema de física, y un sistema de sonido, cada uno puede tener su propio `de_system` apuntando a los datos que le importan. Nada de "buscar componentes por ID". Punteros directos, amigo.
+> **Tip:** If you have a rendering system, a physics system, and a sound system, each can have its own `de_system` pointing at the data it cares about. No "searching components by ID." Direct pointers, friend.
 
 ---
 
-## Paso 5: Spawnear enemigos y matarlos
+## Step 5: Spawning Enemies and Killing Them
 
-Vamos a crear asteroides que se destruyen solos al salir de pantalla.
+Let's create asteroids that self-destruct when leaving the screen.
 
 ```c
-void *estado_asteroide(void *data)
+void *asteroid_update(Thing *t)
 {
-    Coso *c = (Coso *)data;
-    c->y += c->vy;
+    t->y += t->vy;
 
-    if (c->y > 25.0f)
-        return DE_STATE_DELETE;  /* Chau, asteroide */
+    if (t->y > 25.0f)
+        return DE_STATE_DELETE;  /* Bye, asteroid */
 
     return DE_STATE_LOOP;
 }
 
-de_entity crear_asteroide(de_manager *m)
+de_entity create_asteroid(de_manager *m)
 {
     de_entity e = de_manager_new(m);
     if (!e) return NULL;
 
-    Coso *c = (Coso *)e->data;
-    c->x = rand() % 80;
-    c->y = 0.0f;
-    c->vx = 0.0f;
-    c->vy = 0.1f + (rand() % 5) / 10.0f;
-    c->vida = 1;
-    e->tag = 2;  /* 2 = asteroide */
-    e->state = estado_asteroide;
+    Thing *t = (Thing *)e->data;
+    t->x = rand() % 80;
+    t->y = 0.0f;
+    t->vx = 0.0f;
+    t->vy = 0.1f + (rand() % 5) / 10.0f;
+    t->life = 1;
+    e->tag = 2;  /* 2 = asteroid */
+    e->state = (de_state)asteroid_update;
 
     return e;
 }
 ```
 
-Y en el loop, spawnear cada 30 frames:
+And in the loop, spawn every 30 frames:
 
 ```c
     for (int frame = 0; frame < 300; frame++) {
-        if (frame % 30 == 0) crear_asteroide(&manager);
+        if (frame % 30 == 0) create_asteroid(&manager);
 
         de_manager_update(&manager);
 
-        printf("\rFrame %3d | Activas: %2u | Libres: %2u",
+        printf("\rFrame %3d | Active: %2u | Free: %2u",
                frame, manager.size, manager.paused - manager.size);
         fflush(stdout);
     }
 ```
 
-Fijate cómo `manager.size` va creciendo cuando aparecen asteroides y bajando cuando se destruyen. `de_manager_update()` se encarga de todo: llama los estados, borra lo que devuelve `DE_STATE_DELETE`, y reordena punteros para que no queden huecos.
+Notice how `manager.size` grows when asteroids appear and shrinks when they die. `de_manager_update()` handles everything: calls states, deletes whatever returns `DE_STATE_DELETE`, and shuffles pointers so there are no gaps.
 
 ---
 
-## Paso 6: El gran final — Todo junto
+## Step 6: The Grand Finale — Everything Together
 
 ```c
 #define DARKEN_IMPLEMENTATION
 #include "darken.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>  /* para usleep */
+#include <unistd.h>  /* for usleep */
 
 typedef struct {
     float x, y;
     float vx, vy;
-    int   vida;
-} Coso;
+    int   life;
+} Thing;
 
-/* ---------- ESTADOS ---------- */
+/* ---------- STATES ---------- */
 
-void *estado_nave(void *data)
+void *ship_update(Thing *t)
 {
-    Coso *c = (Coso *)data;
-    c->x += c->vx;
-    c->y += c->vy;
-    if (c->x < 0 || c->x > 80) c->vx *= -1;
-    if (c->y < 0 || c->y > 24) c->vy *= -1;
+    t->x += t->vx;
+    t->y += t->vy;
+    if (t->x < 0 || t->x > 80) t->vx *= -1;
+    if (t->y < 0 || t->y > 24) t->vy *= -1;
     return DE_STATE_LOOP;
 }
 
-void *estado_asteroide(void *data)
+void *asteroid_update(Thing *t)
 {
-    Coso *c = (Coso *)data;
-    c->y += c->vy;
-    if (c->y > 25.0f) return DE_STATE_DELETE;
+    t->y += t->vy;
+    if (t->y > 25.0f) return DE_STATE_DELETE;
     return DE_STATE_LOOP;
 }
 
-/* ---------- AYUDANTES ---------- */
+/* ---------- HELPERS ---------- */
 
-de_entity crear_nave(de_manager *m)
+de_entity create_ship(de_manager *m)
 {
     de_entity e = de_manager_new(m);
     if (!e) return NULL;
-    Coso *c = (Coso *)e->data;
-    c->x = 40; c->y = 12; c->vx = 0.3f; c->vy = 0.15f; c->vida = 3;
+    Thing *t = (Thing *)e->data;
+    t->x = 40; t->y = 12; t->vx = 0.3f; t->vy = 0.15f; t->life = 3;
     e->tag = 1;
-    e->state = estado_nave;
+    e->state = (de_state)ship_update;
     return e;
 }
 
-de_entity crear_asteroide(de_manager *m)
+de_entity create_asteroid(de_manager *m)
 {
     de_entity e = de_manager_new(m);
     if (!e) return NULL;
-    Coso *c = (Coso *)e->data;
-    c->x = rand() % 80; c->y = 0;
-    c->vx = 0; c->vy = 0.1f + (rand() % 5)/10.0f; c->vida = 1;
+    Thing *t = (Thing *)e->data;
+    t->x = rand() % 80; t->y = 0;
+    t->vx = 0; t->vy = 0.1f + (rand() % 5)/10.0f; t->life = 1;
     e->tag = 2;
-    e->state = estado_asteroide;
+    e->state = (de_state)asteroid_update;
     return e;
 }
 
@@ -330,46 +325,46 @@ de_entity crear_asteroide(de_manager *m)
 
 int main(void)
 {
-    DE_MANAGER_STORAGE(mundo, 50, sizeof(Coso));
-    de_manager manager;
-    de_manager_init(&manager, DE_MANAGER_ARGS(mundo));
+    DE_MANAGER_STORAGE(world, 50, sizeof(Thing));
+    struct de_manager manager;
+    de_manager_init(&manager, DE_MANAGER_ARGS(world));
 
-    /* Sistema de partículas del motor */
-    DE_SYSTEM_STORAGE(particulas, 100, 2);
-    de_system motor;
-    de_system_init(&motor, DE_SYSTEM_ARGS(particulas));
+    /* Engine particle system */
+    DE_SYSTEM_STORAGE(particles, 100, 2);
+    struct de_system engine;
+    de_system_init(&engine, DE_SYSTEM_ARGS(particles));
 
-    crear_nave(&manager);
+    create_ship(&manager);
 
-    printf("=== ORBIT DEFENDER (modo terminal) ===\n\n");
+    printf("=== ORBIT DEFENDER (terminal mode) ===\n\n");
 
     for (int frame = 0; frame < 200; frame++) {
-        if (frame % 30 == 0) crear_asteroide(&manager);
+        if (frame % 30 == 0) create_asteroid(&manager);
 
         de_manager_update(&manager);
 
-        /* Dibujito bobo en terminal */
-        printf("\033[2J\033[H");  /* limpiar pantalla */
-        printf("Frame: %d | Activas: %u | Libres: %u\n", frame, manager.size, manager.paused - manager.size);
+        /* Dumb terminal drawing */
+        printf("\033[2J\033[H");  /* clear screen */
+        printf("Frame: %d | Active: %u | Free: %u\n", frame, manager.size, manager.paused - manager.size);
 
         DE_MANAGER_FOREACH(&manager, {
-            Coso *c = (Coso *)ENTITY->data;
+            Thing *t = (Thing *)ENTITY->data;
             if (ENTITY->tag == 1)
-                printf("\033[%d;%dH@", (int)c->y, (int)c->x);  /* nave */
+                printf("\033[%d;%dH@", (int)t->y, (int)t->x);  /* ship */
             else
-                printf("\033[%d;%dH#", (int)c->y, (int)c->x);  /* asteroide */
+                printf("\033[%d;%dH#", (int)t->y, (int)t->x);  /* asteroid */
         });
 
         fflush(stdout);
         usleep(50000);  /* ~20 FPS */
     }
 
-    printf("\n\n¡Fin! No explotaste. Eso ya es algo.\n");
+    printf("\n\nDone! You didn't explode. That's something.\n");
     return 0;
 }
 ```
 
-Compilá y corrélos:
+Compile and run:
 
 ```bash
 gcc -std=gnu99 main.c -o orbit && ./orbit
@@ -377,28 +372,28 @@ gcc -std=gnu99 main.c -o orbit && ./orbit
 
 ---
 
-## Cheat sheet rápida
+## Cheat Sheet
 
-| Quiero... | Hago... |
-|-----------|---------|
-| Crear algo | `de_manager_new(&manager)` |
-| Que se mueva/cambie cada frame | Le asigno un `state` y llamo `de_manager_update()` |
-| Que desaparezca | El `state` devuelve `DE_STATE_DELETE` |
-| Procesar muchos datos rápido | `de_system` + `DE_SYSTEM_FOREACH` |
-| Saber si algo está activo | `DE_ENTITY_IN_ACTIVE(e)` |
-| Resetear todo | `de_manager_reset(&manager)` |
+| I want to... | I do... |
+|--------------|---------|
+| Create something | `de_manager_new(&manager)` |
+| Make it move/change every frame | Assign a `state` and call `de_manager_update()` |
+| Make it disappear | The `state` returns `DE_STATE_DELETE` |
+| Process lots of data fast | `de_system` + `DE_SYSTEM_FOREACH` |
+| Check if something is active | `DE_ENTITY_IS_ACTIVE(e)` |
+| Reset everything | `de_manager_reset(&manager)` |
 
 ---
 
-## Y ahora, ¿qué?
+## Now what?
 
-Ya tenés el esqueleto. De acá podés:
+You've got the skeleton. From here you can:
 
-- Agregar `de_entity_delete()` manualmente cuando un asteroide choque con la nave.
-- Usar `e->destructor` para spawnear explosiones cuando algo muere.
-- Pausar entidades con `de_entity_pause()` (útil para menú de pausa o efectos de congelamiento).
-- Hacer más `de_system`: uno para sonido, otro para IA, otro para networking.
+- Add `de_entity_delete()` manually when an asteroid hits the ship.
+- Use `e->destructor` to spawn explosions when something dies.
+- Pause entities with `de_entity_pause()` (useful for pause menus or freeze effects).
+- Make more `de_system`s: one for sound, one for AI, one for networking.
 
-Darken no te dice cómo estructurar tu juego. Te da un manager que no se rompe, un system que itera rápido, y estados que son solo funciones. El resto lo inventás vos.
+Darken doesn't tell you how to structure your game. It gives you a manager that doesn't break, a system that iterates fast, and states that are just functions. The rest is up to you.
 
-**A codear, campeón.** 🚀
+**Go code, champ.** 🚀

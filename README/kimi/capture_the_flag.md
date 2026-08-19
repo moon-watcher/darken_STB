@@ -1,84 +1,101 @@
-# Capture The Flag — Juego de ejemplo con Darken 2.0
+# Capture The Flag — Example Game with Darken 2.0
 
-Un juego completo de **Capture The Flag** en terminal con dos jugadores humanos, tres tipos de enemigos con IA distinta, y el engine Darken 2.0 gestionando todo.
+A complete **Capture The Flag** terminal game with two human players, three enemy types with distinct AI, and the Darken 2.0 engine managing everything.
 
 ---
 
-## 🎮 Cómo jugar
+## 🎮 How to Play
 
-Compilá esto junto al `darken.h` que ya tenés:
+Compile this alongside your `darken.h`:
 
 ```bash
 gcc -std=gnu99 capture.c -o ctf -lm
 ./ctf
 ```
 
-**Controles:**
-- **P1** (símbolo `1`): `W A S D`
-- **P2** (símbolo `2`): `I J K L`
-- **Salir**: `Q`
+**Controls:**
+- **P1** (symbol `1`): `W A S D`
+- **P2** (symbol `2`): `I J K L`
+- **Quit**: `Q`
 
-El primero que toque la `$` gana. Si te toca un enemigo, perdés 1 de 3 vidas y volvés al spawn. Si se te acaban, gana el otro player.
-
----
-
-## 🧠 Los tres tipos de IA
-
-| Enemigo | Símbolo | Comportamiento |
-|---------|---------|----------------|
-| **Chaser** | `C` | Persigue al player más cercano sin piedad. |
-| **Patroller** | `P` | Cambia de dirección cada ~1.5 segundos, patrullando como poli de barrio. |
-| **Blocker** | `B` | Se interpone a mitad de camino entre el player más cercano y la bandera. |
+First one to touch the `$` wins. If an enemy touches you, you lose 1 of 3 lives and respawn. If you run out, the other player wins.
 
 ---
 
-## 🎯 Cómo está usando Darken
+## 🧠 The Three AI Types
 
-| Feature | Dónde |
+| Enemy | Symbol | Behavior |
+|-------|--------|----------|
+| **Chaser** | `C` | Hunts the closest player relentlessly. |
+| **Patroller** | `P` | Changes direction every ~1.5 seconds, patrolling like a neighborhood cop. |
+| **Blocker** | `B` | Positions itself halfway between the closest player and the flag. |
+
+---
+
+## 🎯 How Darken Is Used
+
+| Feature | Where |
 |---------|-------|
-| **`de_manager_update()`** | En cada frame del loop principal. Es el "heartbeat" que ejecuta los estados de todos. |
-| **`de_state` (callbacks)** | Cada entidad tiene `game_state` como callback. Ahí adentro vive el movimiento, la fricción y la llamada a la IA. |
-| **`de_system` (render)** | `render_sys` es un array plano de punteros `(x, y, symbol)`. Se actualiza automáticamente porque apunta a los campos de las entidades vivas. |
-| **`DE_MANAGER_FOREACH`** | Usado en `check_collisions` para recorrer players y enemigos sin preocuparse por quién murió o quién se creó recién. |
-| **`DE_SYSTEM_ADD`** | Cada vez que creamos una entidad, la registramos en el sistema de renderizado con sus 3 punteros. |
+| **`de_manager_update()`** | Every frame in the main loop. The "heartbeat" that executes everyone's state. |
+| **`de_state` (callbacks)** | Every entity has `game_state` as its callback. Movement, friction, and AI calls live inside it. |
+| **`de_system` (render)** | `render_sys` is a flat array of pointers `(x, y, symbol)`. It auto-updates because it points directly at entity fields. |
+| **`DE_MANAGER_FOREACH`** | Used in `check_collisions` to walk players and enemies without worrying about who died or who was just created. |
+| **`DE_SYSTEM_ADD`** | Every time we create an entity, we register it in the render system with its 3 pointers. |
 
 ---
 
-## 📁 Estructura del código
+## 📁 Code Structure
 
 ```
 capture.c
-├── Input sin bloqueo (kbhit, getch_noblock)
-├── EntityData (payload de cada entidad)
-├── IA de enemigos
-│   ├── ai_chaser()      → persigue al más cercano
-│   ├── ai_patroller()   → cambia de dirección cada 50 frames
-│   └── ai_blocker()     → bloquea el camino a la bandera
-├── game_state()         → de_state ejecutado por de_manager_update()
-├── create_entity()      → fábrica usando de_manager_new + DE_SYSTEM_ADD
-├── check_collisions()   → doble DE_MANAGER_FOREACH (players vs enemigos)
-├── render_frame()       → dibuja vía DE_SYSTEM_FOREACH_3
-└── main()               → loop de juego (~30 FPS)
+├── Non-blocking input (kbhit, getch_noblock)
+├── EntityData (payload for every entity)
+├── Enemy AI
+│   ├── ai_chaser()      → hunts closest player
+│   ├── ai_patroller()   → changes direction every 50 frames
+│   └── ai_blocker()     → blocks path to flag
+├── game_state()         → de_state executed by de_manager_update()
+├── create_entity()      → factory using de_manager_new + DE_SYSTEM_ADD
+├── check_collisions()   → nested DE_MANAGER_FOREACH (players vs enemies)
+├── render_frame()       → draws via DE_SYSTEM_FOREACH_3
+└── main()               → game loop (~30 FPS)
 ```
 
 ---
 
-## 🔧 Notas técnicas
+## 🔧 Technical Notes
 
-- Los players tienen **fricción** (`vx *= 0.85f`) para que no se deslicen eternamente.
-- **Invulnerabilidad** de 45 frames (~0.75s) tras ser golpeado para evitar spam de daño.
-- Los enemigos usan **coordenadas globales** (`g_p1_x`, `g_p2_x`) para calcular distancias sin necesidad de buscar en el manager.
-- El renderizado usa **ANSI escape codes** para limpiar pantalla y posicionar el cursor.
-
----
-
-## 🚀 Ideas para extender
-
-- **Power-ups:** Items que congelen enemigos (usar `de_entity_pause`) o den velocidad extra.
-- **Oleadas:** Spawnear más enemigos progresivamente usando `de_manager_new` dinámicamente.
-- **Destructores:** Agregar `e->destructor` que suene un efecto o spawnee partículas al morir.
-- **Más systems:** Un `de_system` para sonido, otro para networking, otro para persistencia.
+- Players have **friction** (`vx *= 0.85f`) so they don't slide forever.
+- **Invulnerability** lasts 45 frames (~0.75s) after being hit to prevent damage spam.
+- Enemies use **global coordinates** (`g_p1_x`, `g_p2_x`) to compute distances without searching the manager.
+- Rendering uses **ANSI escape codes** to clear screen and position the cursor.
 
 ---
 
-*Hecho con Darken 2.0. Sin malloc, sin drama.* 🏴
+## 🚀 Ideas for Extension
+
+- **Power-ups:** Items that freeze enemies (use `de_entity_pause`) or give speed boost.
+- **Waves:** Spawn more enemies progressively using `de_manager_new` dynamically.
+- **Destructors:** Add `e->destructor` that plays a sound or spawns particles on death.
+- **More systems:** A `de_system` for sound, one for networking, one for persistence.
+
+---
+
+## API Fixes from Previous Version
+
+This code uses the **latest** `darken.h` API:
+
+| Old (broken) | New (correct) |
+|--------------|---------------|
+| `de_manager manager;` | `struct de_manager manager;` |
+| `de_system renderer;` | `struct de_system renderer;` |
+| `DE_ENTITY_IN_ACTIVE(e)` | `DE_ENTITY_IS_ACTIVE(e)` |
+| `DE_ENTITY_IN_PAUSED(e)` | `DE_ENTITY_IS_PAUSED(e)` |
+| `DE_ENTITY_IN_FREE(e)` | `DE_ENTITY_IS_FREE(e)` |
+| `DE_STATE_IS_DELETED(S)` | `DE_STATE_IS_DELETED(STATE)` |
+| `void *foo(void *data)` | `void *foo(MyType *t)` (implicit cast to `de_state`) |
+| `DE_SYSTEM_FOREACH_1` didn't exist | Now works perfectly |
+
+---
+
+*Built with Darken 2.0. No malloc, no drama.* 🏴

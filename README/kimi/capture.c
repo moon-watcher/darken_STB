@@ -1,5 +1,5 @@
 /*
- * capture.c — Capture The Flag con Darken 2.0
+ * capture.c — Capture The Flag with Darken 2.0
  *
  * Compile:  gcc -std=gnu99 capture.c -o ctf -lm
  * Run:      ./ctf
@@ -20,7 +20,7 @@
 #include <time.h>
 
 /* ============================================================
- * CONFIGURACIÓN
+ * CONFIG
  * ============================================================ */
 
 #define MAP_W       42
@@ -30,7 +30,7 @@
 #define MAX_ENT     64
 
 /* ============================================================
- * INPUT SIN BLOQUEO (Linux)
+ * NON-BLOCKING INPUT (Linux)
  * ============================================================ */
 
 static int kbhit(void)
@@ -56,7 +56,7 @@ static int getch_noblock(void)
 }
 
 /* ============================================================
- * DATOS DEL JUEGO
+ * GAME DATA
  * ============================================================ */
 
 typedef struct {
@@ -64,14 +64,14 @@ typedef struct {
     float vx, vy;
     int   hp;
     int   type;          /* 0=player, 1=chaser, 2=patroller, 3=blocker */
-    int   id;            /* 1 o 2 para players */
-    int   dir;           /* patrón del patrullero */
-    int   timer;         /* uso general */
-    int   invulnerable;  /* frames de invencibilidad */
+    int   id;            /* 1 or 2 for players */
+    int   dir;           /* patroller pattern */
+    int   timer;         /* general purpose */
+    int   invulnerable;  /* invincibility frames */
     char  symbol;
 } EntityData;
 
-/* Globales del juego */
+/* Game globals */
 static float g_p1_x = 3.0f, g_p1_y = 3.0f;
 static float g_p2_x = 3.0f, g_p2_y = 18.0f;
 static int   g_hp[2] = {3, 3};
@@ -80,12 +80,12 @@ static int   g_game_over = 0;
 static int   g_winner = 0;
 
 /* ============================================================
- * IA DE LOS ENEMIGOS
+ * ENEMY AI
  * ============================================================ */
 
 static void ai_chaser(EntityData *e)
 {
-    /* Va tras el player más cercano */
+    /* Chase the closest player */
     float tx, ty;
     float d1 = (g_p1_x - e->x) * (g_p1_x - e->x) + (g_p1_y - e->y) * (g_p1_y - e->y);
     float d2 = (g_p2_x - e->x) * (g_p2_x - e->x) + (g_p2_y - e->y) * (g_p2_y - e->y);
@@ -105,11 +105,11 @@ static void ai_chaser(EntityData *e)
 
 static void ai_patroller(EntityData *e)
 {
-    /* Cambia de rumbo cada 50 frames (~1.5s) */
+    /* Change direction every 50 frames (~1.5s) */
     e->timer++;
     if (e->timer > 50) {
         e->timer = 0;
-        e->dir = rand() % 4;   /* 0=arriba 1=der 2=abajo 3=izq */
+        e->dir = rand() % 4;   /* 0=up 1=right 2=down 3=left */
     }
     switch (e->dir) {
         case 0: e->vx = 0.0f;   e->vy = -0.15f; break;
@@ -121,7 +121,7 @@ static void ai_patroller(EntityData *e)
 
 static void ai_blocker(EntityData *e)
 {
-    /* Se planta entre el player más cercano y la bandera */
+    /* Stand between the closest player and the flag */
     float tx, ty;
     float d1 = (g_p1_x - e->x) * (g_p1_x - e->x) + (g_p1_y - e->y) * (g_p1_y - e->y);
     float d2 = (g_p2_x - e->x) * (g_p2_x - e->x) + (g_p2_y - e->y) * (g_p2_y - e->y);
@@ -143,18 +143,16 @@ static void ai_blocker(EntityData *e)
 }
 
 /* ============================================================
- * ESTADO DE ENTIDAD (el callback que corre cada frame)
+ * ENTITY STATE (callback run every frame by de_manager_update)
  * ============================================================ */
 
-static void *game_state(void *data)
+static void *game_state(EntityData *e)
 {
-    EntityData *e = (EntityData *)data;
-
-    /* Movimiento */
+    /* Movement */
     e->x += e->vx;
     e->y += e->vy;
 
-    /* Fricción para players (se deslizan un toque) */
+    /* Friction for players (they slide a bit) */
     if (e->type == 0) {
         e->vx *= 0.85f;
         e->vy *= 0.85f;
@@ -163,13 +161,13 @@ static void *game_state(void *data)
         else            { g_p2_x = e->x; g_p2_y = e->y; }
     }
 
-    /* Bordes del mapa */
+    /* Map borders */
     if (e->x < 1.0f) e->x = 1.0f;
     if (e->x > MAP_W - 2) e->x = MAP_W - 2;
     if (e->y < 1.0f) e->y = 1.0f;
     if (e->y > MAP_H - 2) e->y = MAP_H - 2;
 
-    /* Llamar al cerebro correspondiente */
+    /* Call the corresponding brain */
     if (e->type == 1) ai_chaser(e);
     else if (e->type == 2) ai_patroller(e);
     else if (e->type == 3) ai_blocker(e);
@@ -180,7 +178,7 @@ static void *game_state(void *data)
 }
 
 /* ============================================================
- * FÁBRICA DE ENTIDADES
+ * ENTITY FACTORY
  * ============================================================ */
 
 static de_entity create_entity(de_manager *m, de_system *ren,
@@ -188,7 +186,7 @@ static de_entity create_entity(de_manager *m, de_system *ren,
 {
     de_entity e = de_manager_new(m);
     if (!e) {
-        fprintf(stderr, "¡Sin slots libres!\n");
+        fprintf(stderr, "No free slots!\n");
         return NULL;
     }
 
@@ -201,26 +199,27 @@ static de_entity create_entity(de_manager *m, de_system *ren,
     d->id = id;
     d->symbol = sym;
 
-    e->state = game_state;
+    e->state = (de_state)game_state;
     e->tag = (uint16_t)type;
 
-    /* Registramos en el de_system de renderizado: (x*, y*, sym*) */
+    /* Register in render system: (x*, y*, sym*) */
     DE_SYSTEM_ADD(ren, &d->x, &d->y, &d->symbol);
 
     return e;
 }
 
 /* ============================================================
- * COLISIONES
+ * COLLISIONS
  * ============================================================ */
 
 static void check_collisions(de_manager *m)
 {
+    /* Outer loop: players */
     DE_MANAGER_FOREACH(m, {
         EntityData *p = (EntityData *)ENTITY->data;
-        if (p->type != 0) continue;   /* solo players */
+        if (p->type != 0) continue;   /* only players */
 
-        /* --- ¿Llegó a la bandera? --- */
+        /* --- Reached the flag? --- */
         float fdx = p->x - FLAG_X;
         float fdy = p->y - FLAG_Y;
         if (fdx * fdx + fdy * fdy < 2.5f) {
@@ -231,7 +230,9 @@ static void check_collisions(de_manager *m)
 
         if (p->invulnerable > 0) continue;
 
-        /* --- ¿Le pegó un enemigo? --- */
+        /* --- Hit by an enemy? --- */
+        /* NOTE: nested DE_MANAGER_FOREACH is valid because each
+         * macro creates its own ENTITY in a separate do-while block. */
         DE_MANAGER_FOREACH(m, {
             EntityData *enemy = (EntityData *)ENTITY->data;
             if (enemy->type == 0) continue;
@@ -240,7 +241,7 @@ static void check_collisions(de_manager *m)
             float edy = p->y - enemy->y;
             if (edx * edx + edy * edy < 1.8f) {
                 p->hp--;
-                p->invulnerable = 45;   /* ~0.75s de invencibilidad */
+                p->invulnerable = 45;   /* ~0.75s invincibility */
                 int idx = p->id - 1;
                 g_hp[idx] = p->hp;
 
@@ -257,20 +258,20 @@ static void check_collisions(de_manager *m)
                     g_game_over = 1;
                     g_winner = (p->id == 1) ? 2 : 1;
                 }
-                return;  /* un golpe por frame */
+                return;  /* one hit per frame */
             }
         });
     });
 }
 
 /* ============================================================
- * RENDERIZADO VIA DE_SYSTEM (flat array, cache-friendly)
+ * RENDERING VIA DE_SYSTEM (flat array, cache-friendly)
  * ============================================================ */
 
 static void draw_borders(void)
 {
     int x, y;
-    printf("\033[2J\033[H");   /* limpiar pantalla */
+    printf("\033[2J\033[H");   /* clear screen */
 
     for (x = 0; x < MAP_W; x++) printf("#");
     printf("\n");
@@ -289,10 +290,10 @@ static void render_frame(de_system *ren)
 {
     draw_borders();
 
-    /* Bandera */
+    /* Flag */
     printf("\033[%d;%dH$", (int)FLAG_Y + 1, (int)FLAG_X + 1);
 
-    /* Iteramos el de_system plano: 3 punteros por grupo (x, y, symbol) */
+    /* Iterate the flat de_system: 3 pointers per group (x, y, symbol) */
     DE_SYSTEM_FOREACH_3(ren, float *px, float *py, char *sym, {
         int ix = (int)(*px);
         int iy = (int)(*py);
@@ -316,16 +317,16 @@ int main(void)
     srand((unsigned)time(NULL));
 
     /* --- Setup Darken --- */
-    DE_MANAGER_STORAGE(mundo, MAX_ENT, sizeof(EntityData));
+    DE_MANAGER_STORAGE(world, MAX_ENT, sizeof(EntityData));
     DE_SYSTEM_STORAGE(render_sys, MAX_ENT, 3);
 
-    de_manager manager;
-    de_system  renderer;
+    struct de_manager manager;
+    struct de_system  renderer;
 
-    de_manager_init(&manager, DE_MANAGER_ARGS(mundo));
+    de_manager_init(&manager, DE_MANAGER_ARGS(world));
     de_system_init(&renderer, DE_SYSTEM_ARGS(render_sys));
 
-    /* --- Crear players --- */
+    /* --- Create players --- */
     EntityData *p1_data = NULL;
     EntityData *p2_data = NULL;
 
@@ -335,7 +336,7 @@ int main(void)
     if (p1) p1_data = (EntityData *)p1->data;
     if (p2) p2_data = (EntityData *)p2->data;
 
-    /* --- Crear enemigos --- */
+    /* --- Create enemies --- */
     /* 2 Chasers */
     create_entity(&manager, &renderer, 1, 0, 20.0f, 5.0f,  'C');
     create_entity(&manager, &renderer, 1, 0, 25.0f, 15.0f, 'C');
@@ -348,8 +349,8 @@ int main(void)
     create_entity(&manager, &renderer, 3, 0, 22.0f, 11.0f, 'B');
     create_entity(&manager, &renderer, 3, 0, 28.0f, 11.0f, 'B');
 
-    /* --- Loop de juego --- */
-    printf("Empezando en 1 segundo... ¡Agarrá un amigo!\n");
+    /* --- Game loop --- */
+    printf("Starting in 1 second... Grab a friend!\n");
     usleep(1000000);
 
     while (!g_game_over) {
@@ -371,22 +372,22 @@ int main(void)
             if (c == 'q' || c == 'Q') g_game_over = 1;
         }
 
-        /* Un tick del motor: ejecuta TODOS los estados */
+        /* One tick of the engine: runs ALL states */
         de_manager_update(&manager);
 
-        /* Colisiones */
+        /* Collisions */
         check_collisions(&manager);
 
-        /* Render vía de_system */
+        /* Render via de_system */
         render_frame(&renderer);
 
         usleep(33333);  /* ~30 FPS */
     }
 
-    /* --- Fin --- */
+    /* --- Game Over --- */
     printf("\033[%d;1H", MAP_H + 4);
     if (g_winner == 1 || g_winner == 2)
-        printf(">>> ¡PLAYER %d CAPTURÓ LA BANDERA! <<<\n", g_winner);
+        printf(">>> PLAYER %d CAPTURED THE FLAG! <<<\n", g_winner);
     else
         printf(">>> GAME OVER <<<\n");
 

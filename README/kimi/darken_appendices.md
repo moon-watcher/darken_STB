@@ -1,116 +1,115 @@
-# Apéndices Darken 2.0
+# Darken 2.0 — Appendices
 
-## 🚀 Apéndice A: Hola Mundo en 30 líneas
+## 🚀 Appendix A: Hello World in 30 Lines
 
-El mínimo programa que crea una entidad, le pone un estado, y la hace contar hasta 5 antes de suicidarse.
+The minimum program that creates an entity, gives it a state, and makes it count to 5 before deleting itself.
 
 ```c
 #define DARKEN_IMPLEMENTATION
 #include "darken.h"
 #include <stdio.h>
 
-typedef struct { int contador; } Datos;
+typedef struct { int counter; } Data;
 
-void *contar(void *data) {
-    Datos *d = data;
-    printf("Contador: %d\n", d->contador++);
-    return d->contador > 5 ? DE_STATE_DELETE : DE_STATE_LOOP;
+void *count(Data *d) {
+    printf("Counter: %d\n", d->counter++);
+    return d->counter > 5 ? DE_STATE_DELETE : DE_STATE_LOOP;
 }
 
 int main(void) {
-    DE_MANAGER_STORAGE(m, 10, sizeof(Datos));
-    de_manager manager;
+    DE_MANAGER_STORAGE(m, 10, sizeof(Data));
+    struct de_manager manager;
     de_manager_init(&manager, DE_MANAGER_ARGS(m));
 
     de_entity e = de_manager_new(&manager);
-    ((Datos *)e->data)->contador = 1;
-    e->state = contar;
+    ((Data *)e->data)->counter = 1;
+    e->state = (de_state)count;
 
     while (manager.size > 0) {
         de_manager_update(&manager);
     }
 
-    printf("Se borró solita. Magia.\n");
+    printf("It deleted itself. Magic.\n");
     return 0;
 }
 ```
 
-Compilá:
+Compile:
 ```bash
-gcc -std=gnu99 hola.c -o hola && ./hola
+gcc -std=gnu99 hello.c -o hello && ./hello
 ```
 
-**Salida esperada:**
+**Expected output:**
 ```
-Contador: 1
-Contador: 2
-Contador: 3
-Contador: 4
-Contador: 5
-Contador: 6
-Se borró solita. Magia.
+Counter: 1
+Counter: 2
+Counter: 3
+Counter: 4
+Counter: 5
+Counter: 6
+It deleted itself. Magic.
 ```
 
-Eso es todo. Una entidad, un estado, un loop. El resto son detalles.
+That's it. One entity, one state, one loop. Everything else is details.
 
 ---
 
-## 💀 Apéndice B: Errores comunes y cómo no romper todo
+## 💀 Appendix B: Common Mistakes and How Not to Break Everything
 
-### 1. "Me olvidé del `#define DARKEN_IMPLEMENTATION`"
-Sin esto, el compilador te tira `undefined reference` en todas las funciones (`de_manager_update`, `de_entity_delete`, etc.). La mitad del header son macros y tipos; la otra mitad (las funciones con cuerpo) solo aparece si definís esa macro **antes** del `#include`, en **exactamente un** archivo `.c`.
+### 1. "I forgot `#define DARKEN_IMPLEMENTATION`"
+Without this, the compiler throws `undefined reference` on every function (`de_manager_update`, `de_entity_delete`, etc.). Half the header is macros and types; the other half (functions with bodies) only appears if you define that macro **before** the `#include`, in **exactly one** `.c` file.
 
 ```c
-/* Bien */
+/* Good */
 #define DARKEN_IMPLEMENTATION
 #include "darken.h"
 
-/* Mal: lo pusiste en el .h o en ningún lado */
+/* Bad: you put it in the .h or nowhere */
 ```
 
 ### 2. "`DE_MANAGER_FOREACH` + `de_entity_delete` = 💥"
-El macro `DE_MANAGER_FOREACH` itera con un `while (INDEX--)` sobre el pool. Si adentro llamás `de_entity_delete(ENTITY)`, el manager hace un swap con la última entidad activa y achica `size`. Pero el foreach ya había cacheado `INDEX` y `POOL` al inicio. Resultado: podés saltearte entidades o visitar la misma dos veces.
+The `DE_MANAGER_FOREACH` macro iterates with `while (INDEX--)` over the pool. If inside you call `de_entity_delete(ENTITY)`, the manager swaps with the last active entity and shrinks `size`. But the foreach already cached `INDEX` and `POOL` at the start. Result: you might skip entities or visit the same one twice.
 
-**Regla de oro:** Nunca borres adentro de un `DE_MANAGER_FOREACH`. Si querés matar algo manualmente, hacelo **después** del foreach, o usá `de_manager_update()` y que el propio `state` devuelva `DE_STATE_DELETE`.
+**Golden rule:** Never delete inside a `DE_MANAGER_FOREACH`. If you want to kill something manually, do it **after** the foreach, or use `de_manager_update()` and let the entity's own `state` return `DE_STATE_DELETE`.
 
-### 3. "Creo 50 entidades y de repente `de_manager_new` devuelve `NULL`"
-El manager tiene tres zonas: `[activas][libres][pausadas]`. `de_manager_new` solo coge del medio. Si pausaste 40 entidades y tenés capacidad 50, solo te quedan 10 slots libres. Si `size == paused`, el antro está lleno.
+### 3. "I create 50 entities and suddenly `de_manager_new` returns `NULL`"
+The manager has three zones: `[active][free][paused]`. `de_manager_new` only takes from the middle. If you paused 40 entities and have capacity 50, you only have 10 free slots left. If `size == paused`, the club is full.
 
-**Fix:** Revisá `manager.paused - manager.size` para ver cuántos slots libres te quedan. Si pausás mucho, eventualmente te quedás sin lugar para crear cosas nuevas.
+**Fix:** Check `manager.paused - manager.size` to see how many free slots remain. If you pause a lot, eventually you run out of room for new stuff.
 
-### 4. "Guardo un puntero a `entity->data` y después la entidad explota"
-Los punteros a `data[]` son **estables solo para entidades pausadas**. Si la entidad está activa y `de_entity_delete` o `de_manager_update` la destruye, ese puntero que guardaste en tu `de_system` o en otra entidad ahora apunta a un cadáver (o peor, a otra entidad que ocupó ese slot).
+### 4. "I keep a pointer to `entity->data` and then the entity dies"
+Pointers to `data[]` are **stable only for paused entities**. If the entity is active and `de_entity_delete` or `de_manager_update` destroys it, that pointer you stored in your `de_system` or in another entity now points at a corpse (or worse, another entity that took that slot).
 
-**Fix:** Si un `de_system` necesita apuntar a datos de forma segura, asegurate de que la entidad esté **pausada** (`de_entity_pause`). O, mejor, regenerá los punteros del system cada frame desde el manager.
+**Fix:** If a `de_system` needs to point at data safely, make sure the entity is **paused** (`de_entity_pause`). Or better, rebuild the system's pointers every frame from the manager.
 
-### 5. "`de_system_remove` no encuentra nada"
-`de_system_remove(sys, ptr)` busca un grupo cuyo **primer** puntero (`pool[i]`) sea igual a `ptr`. Si guardaste `(pos, vel)` y querés borrar buscando por `vel`, no va a funcionar. Buscá siempre por el primer elemento del grupo.
+### 5. "`de_system_remove` finds nothing"
+`de_system_remove(sys, ptr)` looks for a group whose **first** pointer (`pool[i]`) equals `ptr`. If you stored `(pos, vel)` and try to search by `vel`, it won't work. Always search by the first element of the group.
 
-### 6. "Mi estado devuelve `0` y la entidad no se borra"
-`0` es `DE_STATE_DELETE`, pero si tu función devuelve `NULL` (que es `0`) sin querer, la entidad muere. Si tu estado devuelve un puntero a otra función, asegurate de que no sea `NULL`, `1` ni `2`, porque esos son los valores mágicos del engine.
+### 6. "My state returns `0` and the entity doesn't die"
+`0` **is** `DE_STATE_DELETE`, but if your function accidentally returns `NULL` (which is `0`), the entity dies. If your state returns a pointer to another function, make sure it's not `NULL`, `1`, or `2`, because those are the engine's magic values.
 
-### 7. "`de_manager_new` me da entidades con basura en `data[]`"
-Darken **no inicializa tu payload**. Te da la entidad con `state = DE_STATE_DELETE`, `destructor = 0`, `tag = 0`, pero el `data[]` tiene lo que quedó del anterior inquilino. Si no inicializás tus campos, vas a tener valores random.
+### 7. "`de_manager_new` gives me entities with garbage in `data[]`"
+Darken **does not initialize your payload**. It gives you the entity with `state = DE_STATE_DELETE`, `destructor = 0`, `tag = 0`, but `data[]` has whatever the previous tenant left behind. If you don't initialize your fields, you'll get random values.
 
-### 8. "Uso `uint16_t` para todo y se me desborda el índice"
-El `slot`, `size`, `capacity`, etc. son `uint16_t`. Si hacés `slot - 1` cuando `slot` es `0`, te vas al carajo (underflow a 65535). El engine ya maneja esto internamente, pero si tocas índices a mano, cuidado con los bordes.
+### 8. "I use `uint16_t` for everything and the index overflows"
+`slot`, `size`, `capacity`, etc. are `uint16_t`. If you do `slot - 1` when `slot` is `0`, you're in trouble (underflow to 65535). The engine handles this internally, but if you touch indices by hand, watch the edges.
 
-### 9. "Pauso una entidad y sigue apareciendo en mi `DE_MANAGER_FOREACH`"
-`DE_MANAGER_FOREACH` solo recorre la zona activa `[0, size)`. Si pausaste algo, se movió a `[paused, capacity)`. No debería aparecer... a menos que estés iterando a mano sobre `pool[]` sin fijarte en los límites.
+### 9. "I pause an entity and it still shows up in my `DE_MANAGER_FOREACH`"
+`DE_MANAGER_FOREACH` only walks the active zone `[0, size)`. If you paused something, it moved to `[paused, capacity)`. It shouldn't show up... unless you're iterating over `pool[]` manually without checking boundaries.
 
-### 10. "Mi `de_system` tiene `capacity` raro"
-`de_system_init` recibe `capacity_groups` (cuántos grupos querés) y `params` (cuántos punteros por grupo). La capacidad **total** de punteros es `groups * params`. Si reservás `DE_SYSTEM_STORAGE(sys, 10, 3)`, tenés lugar para 10 grupos de 3 punteros, no para 30 grupos.
+### 10. "My `de_system` has weird `capacity`"
+`de_system_init` receives `capacity_groups` (how many groups you want) and `params` (how many pointers per group). The **total** pointer capacity is `groups * params`. If you reserve `DE_SYSTEM_STORAGE(sys, 10, 3)`, you have room for 10 groups of 3 pointers, not 30 groups.
 
 ---
 
-**Resumen para no olvidar:**
+**Summary to remember:**
 
-| ✅ Hacé esto | ❌ No hagas esto |
+| ✅ Do this | ❌ Don't do this |
 |---|---|
-| `#define DARKEN_IMPLEMENTATION` en un solo `.c` | Olvidarte y llorar con linker errors |
-| Borrar entidades devolviendo `DE_STATE_DELETE` desde el `state` | Llamar `de_entity_delete` adentro de un `DE_MANAGER_FOREACH` |
-| Pausar entidades si querés punteros estables a su `data` | Guardar punteros a `data` de entidades activas |
-| Inicializar tu payload después de `de_manager_new` | Asumir que `data[]` viene en cero |
-| Usar `de_system_remove` buscando por el **primer** puntero del grupo | Buscar por el segundo, tercero, etc. |
+| `#define DARKEN_IMPLEMENTATION` in exactly one `.c` | Forget it and cry at linker errors |
+| Delete entities by returning `DE_STATE_DELETE` from their `state` | Call `de_entity_delete` inside a `DE_MANAGER_FOREACH` |
+| Pause entities if you want stable pointers to their `data` | Keep pointers to `data` of active entities |
+| Initialize your payload after `de_manager_new` | Assume `data[]` comes zeroed |
+| Use `de_system_remove` searching by the **first** pointer of the group | Search by the second, third, etc. |
 
-Con estas reglas, Darken es prácticamente imposible de romper. O bueno, más difícil. Un poco. 🎮
+With these rules, Darken is practically impossible to break. Or well, harder. A bit. 🎮
