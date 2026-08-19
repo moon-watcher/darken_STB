@@ -132,6 +132,14 @@ struct de_system
 #define DE_STATE_IS_ACTIVE(S) ((S) > ((de_state)2))
 
 /* ============================================================================
+ * ENTITY ZONE CHECKING MACROS
+ * ============================================================================ */
+
+#define DE_ENTITY_IN_ACTIVE(E) ((E)->slot < (E)->owner->size)
+#define DE_ENTITY_IN_PAUSED(E) ((E)->slot >= (E)->owner->paused)
+#define DE_ENTITY_IN_FREE(E) (!DE_ENTITY_IN_ACTIVE(E) && !DE_ENTITY_IN_PAUSED(E))
+
+/* ============================================================================
  * ENTITY API
  * ============================================================================ */
 
@@ -327,27 +335,23 @@ void *de_entity_update(de_entity $)
 
 uint16_t de_entity_pause(de_entity $)
 {
-    de_manager manager = $->owner;
-    uint16_t slot = $->slot;
-    uint16_t size = manager->size;
-    uint16_t paused = manager->paused;
-
-    if (slot >= size)
+    if (!DE_ENTITY_IN_ACTIVE($))
         return 0;
 
-    // Shrink active zone from the right and fill the vacated slot
-    size = --manager->size;
+    de_manager manager = $->owner;
+    de_entity *pool = manager->pool;
+    uint16_t slot = $->slot;
+    uint16_t size = --manager->size;     // Shrink active zone from the right and fill the vacated slot
+    uint16_t paused = --manager->paused; // Grow paused zone from the left and place entity at the new boundary
 
     if (slot != size)
     {
-        de_entity entity = manager->pool[size];
-        manager->pool[slot] = entity;
+        de_entity entity = pool[size];
+        pool[slot] = entity;
         entity->slot = slot;
     }
 
-    // Grow paused zone from the left and place entity at the new boundary
-    paused = --manager->paused;
-    manager->pool[paused] = $;
+    pool[paused] = $;
     $->slot = paused;
 
     return 1;
@@ -355,76 +359,74 @@ uint16_t de_entity_pause(de_entity $)
 
 uint16_t de_entity_resume(de_entity $)
 {
+    if (!DE_ENTITY_IN_PAUSED($))
+        return 0;
+
     de_manager manager = $->owner;
+    de_entity *pool = manager->pool;
     uint16_t slot = $->slot;
     uint16_t size = manager->size;
     uint16_t paused = manager->paused;
 
-    if (slot < paused)
-        return 0;
-
     // Shrink paused zone from the left and fill the vacated slot
     if (slot != paused)
     {
-        de_entity entity = manager->pool[paused];
-        manager->pool[slot] = entity;
+        de_entity entity = pool[paused];
+        pool[slot] = entity;
         entity->slot = slot;
     }
 
-    ++manager->paused;
-
     // Grow active zone from the right and place entity at the new boundary
-    manager->pool[size] = $;
+    pool[size] = $;
     $->slot = size;
+
     ++manager->size;
+    ++manager->paused;
 
     return 1;
 }
 
 uint16_t de_entity_delete(de_entity $)
 {
-    de_manager manager = $->owner;
+    if (DE_ENTITY_IN_FREE($))
+        return 0;
 
-    if ($->slot >= manager->paused)
+    de_manager manager = $->owner;
+    de_entity *pool = manager->pool;
+
+    if (DE_STATE_IS_ACTIVE($->destructor))
+        $->destructor($->data);
+
+    if (DE_ENTITY_IN_PAUSED($))
     {
-        if ($->destructor)
-            $->destructor($->data);
+        uint16_t paused = manager->paused;
 
         // Was paused: shrink paused zone from the left slot rejoins the free zone
-        if ($->slot != manager->paused)
-            _de_entity_swap($, manager->pool[manager->paused]);
+        if ($->slot != paused)
+            _de_entity_swap($, pool[paused]);
 
         ++manager->paused;
-
-        return 1;
     }
-
-    if ($->slot < manager->size)
+    else
     {
-        if ($->destructor)
-            $->destructor($->data);
-
-        --manager->size;
+        uint16_t size = --manager->size;
 
         // Was active: shrink active zone from the right slot rejoins the free zone
-        if ($->slot != manager->size)
-            _de_entity_swap($, manager->pool[manager->size]);
-
-        return 1;
+        if ($->slot != size)
+            _de_entity_swap($, pool[size]);
     }
 
-    return 0;
+    return 1;
 }
 
 uint16_t de_entity_move_front(de_entity $)
 {
     de_manager manager = $->owner;
-    uint16_t slot = $->slot;
-    uint16_t size = manager->size;
+    uint16_t size = manager->size - 1;
 
-    if (slot < size && slot != size - 1)
+    if (DE_ENTITY_IN_ACTIVE($) && $->slot != size)
     {
-        _de_entity_swap($, manager->pool[size - 1]);
+        _de_entity_swap($, manager->pool[size]);
         return 1;
     }
 
@@ -433,13 +435,9 @@ uint16_t de_entity_move_front(de_entity $)
 
 uint16_t de_entity_move_back(de_entity $)
 {
-    de_manager manager = $->owner;
-    uint16_t slot = $->slot;
-    uint16_t size = manager->size;
-
-    if (slot < size && slot != 0)
+    if (DE_ENTITY_IN_ACTIVE($) && $->slot != 0)
     {
-        _de_entity_swap($, manager->pool[0]);
+        _de_entity_swap($, $->owner->pool[0]);
         return 1;
     }
 
