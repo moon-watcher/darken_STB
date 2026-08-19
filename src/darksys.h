@@ -10,8 +10,6 @@
  *
  * GNU C note:
  * - This header uses GNU C extensions (__attribute__ and statement expressions).
- * - 4-byte align boundary because Darksys targets GCC and the Motorola 68000.
- * - 16-bit members preference for optimal 68K performance.
  *
  *
  *
