@@ -12,6 +12,16 @@
  * - This header uses GNU C extensions (__attribute__ and statement expressions).
  * - 4-byte align boundary because Darksys targets GCC and the Motorola 68000.
  * - 16-bit members preference for optimal 68K performance.
+ *
+ *
+ *
+ * System: Flat packed pool of data pointers.
+ *
+ * The pool is organized in groups of 'params' pointers. Each group can hold
+ * the pointers associated with one processed item/entity.
+ *
+ * Pool Layout (params=2):
+ *    [e0.a][e0.b][e1.a][e1.b][e2.a][e2.b]...
  */
 
 #ifndef DARKSYS_H
@@ -21,15 +31,6 @@
 
 typedef struct de_system *de_system;
 
-/**
- * System: Flat packed pool of data pointers.
- *
- * The pool is organized in groups of 'params' pointers. Each group can hold
- * the pointers associated with one processed item/entity.
- *
- * Pool Layout (params=2):
- *    [e0.a][e0.b][e1.a][e1.b][e2.a][e2.b]...
- */
 struct de_system
 {
     void **pool;
@@ -39,10 +40,11 @@ struct de_system
     uint16_t params;
 };
 
-#define DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS) _DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS)
-#define DE_SYSTEM_ARGS(NAME) _DE_SYSTEM_ARGS(NAME)
+#define DE_SYSTEM_STORAGE _DE_SYSTEM_STORAGE
+#define DE_SYSTEM_ARGS _DE_SYSTEM_ARGS
 #define DE_SYSTEM_ADD(...) _DE_CONCAT(_DE_SYSTEM_ADD_, _DE_ADD_NARGS(__VA_ARGS__))(__VA_ARGS__)
 #define DE_SYSTEM_FOREACH(...) _DE_CONCAT(_DE_SYSTEM_FOREACH_, _DE_FOREACH_NARGS(__VA_ARGS__))(__VA_ARGS__)
+#define DE_SYSTEM_ITERATOR(...) _DE_CONCAT(_DE_SYSTEM_ITERATOR_, _DE_FOREACH_NARGS(__VA_ARGS__))(__VA_ARGS__)
 
 void de_system_init(de_system, void **, uint16_t, uint16_t);
 uint16_t de_system_remove(de_system, void *);
@@ -51,50 +53,12 @@ uint16_t de_system_remove(de_system, void *);
  * INTERNAL MACRO IMPLEMENTATIONS
  * ============================================================================ */
 
-// Ensures proper alignment between consecutive entities
-#define _DE_ENTITY_STRIDE(PAYLOAD) _DE_ALIGN4(sizeof(struct de_entity) + (PAYLOAD))
-
-/**
- * Align a byte count to a 4-byte boundary.
- *
- * The Motorola 68000 requires word alignment for word/long accesses.
- * Longword alignment keeps entity strides predictable and efficient.
- */
-#define _DE_ALIGN4(X) (((X) + 3U) & ~3U)
 #define _DE_ADD_NARGS(...) _DE_ADD_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1, 0)
 #define _DE_ADD_NARGS_I(_1, _2, _3, _4, _5, _6, N, ...) N
 #define _DE_FOREACH_NARGS(...) _DE_FOREACH_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1, 0, -1)
 #define _DE_FOREACH_NARGS_I(_1, _2, _3, _4, _5, _6, _7, N, ...) N
 #define _DE_CONCAT_INNER(A, B) A##B
 #define _DE_CONCAT(A, B) _DE_CONCAT_INNER(A, B)
-
-#define _DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)                                         \
-    struct                                                                                        \
-    {                                                                                             \
-        de_entity pool[(CAPACITY)];                                                               \
-        uint8_t data[(CAPACITY) * _DE_ENTITY_STRIDE((PAYLOAD_SIZE))] __attribute__((aligned(4))); \
-        uint16_t capacity;                                                                        \
-        uint16_t payload_size;                                                                    \
-    } NAME = {                                                                                    \
-        .capacity = (CAPACITY),                                                                   \
-        .payload_size = (PAYLOAD_SIZE),                                                           \
-    }
-
-#define _DE_MANAGER_ARGS(NAME) \
-    (NAME).pool, (NAME).data, (NAME).capacity, (NAME).payload_size
-
-#define _DE_MANAGER_FOREACH(MANAGER, CODE)  \
-    do                                      \
-    {                                       \
-        uint16_t INDEX = (MANAGER)->size;   \
-        de_entity *POOL = (MANAGER)->pool;  \
-                                            \
-        while (INDEX--)                     \
-        {                                   \
-            de_entity ENTITY = POOL[INDEX]; \
-            CODE;                           \
-        }                                   \
-    } while (0)
 
 #define _DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS) \
     struct                                         \
@@ -152,6 +116,20 @@ uint16_t de_system_remove(de_system, void *);
 #define _DE_SYSTEM_FOREACH_3(SYSTEM, A, B, C, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; C = pool[2]; IT; })
 #define _DE_SYSTEM_FOREACH_4(SYSTEM, A, B, C, D, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; C = pool[2]; D = pool[3]; IT; })
 #define _DE_SYSTEM_FOREACH_5(SYSTEM, A, B, C, D, E, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; C = pool[2]; D = pool[3]; E = pool[4]; IT; })
+
+#define _DE_SYSTEM_ITERATOR(NAME, FOREACH, ...) \
+    void *NAME(de_system system)                \
+    {                                           \
+        FOREACH(system, __VA_ARGS__);           \
+        return DE_STATE_LOOP;                   \
+    }
+
+#define _DE_SYSTEM_ITERATOR_0(NAME, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_0, IT)
+#define _DE_SYSTEM_ITERATOR_1(NAME, A, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_1, A, IT)
+#define _DE_SYSTEM_ITERATOR_2(NAME, A, B, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_2, A, B, IT)
+#define _DE_SYSTEM_ITERATOR_3(NAME, A, B, C, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_3, A, B, C, IT)
+#define _DE_SYSTEM_ITERATOR_4(NAME, A, B, C, D, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_4, A, B, C, D, IT)
+#define _DE_SYSTEM_ITERATOR_5(NAME, A, B, C, D, E, IT) _DE_SYSTEM_ITERATOR(NAME, _DE_SYSTEM_FOREACH_5, A, B, C, D, E, IT)
 
 #endif // DARKSYS_H
 

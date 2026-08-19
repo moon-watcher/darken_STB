@@ -17,14 +17,14 @@
  *
  * Entity: Base object managed by the entity manager
  *
- * The entity structure serves as a container for user data with lifecycle  management. The flexible array member 
+ * The entity structure serves as a container for user data with lifecycle  management. The flexible array member
  * 'data[]' allows entities to have variable-sized payloads while maintaining contiguous memory layout.
  *
- * The stride between entities is pre-calculated during manager initialization to enable O(1) access to any entity 
+ * The stride between entities is pre-calculated during manager initialization to enable O(1) access to any entity
  * by index.
  *
  * An entity's own memory address (this struct) never moves once allocated by de_manager_init(). What moves between
- * the manager's zones is only the *pointer* to it inside de_manager.pool[]. This is what makes it safe to keep a 
+ * the manager's zones is only the *pointer* to it inside de_manager.pool[]. This is what makes it safe to keep a
  * raw pointer into entity->data even while the entity gets paused/resumed/reordered.
  *
  *
@@ -89,7 +89,6 @@ struct de_manager
     uint16_t paused;
 };
 
-// Special state values used for entity control
 #define DE_STATE_DELETE ((void *)0)
 #define DE_STATE_LOOP ((void *)1)
 #define DE_STATE_PAUSE ((void *)2)

@@ -1,6 +1,6 @@
 #include <genesis.h>
 
-#include "../darken.h"
+#include "../../darken.h"
 #include "benchmarks.h"
 
 struct MyComponent
@@ -10,12 +10,12 @@ struct MyComponent
 };
 
 static volatile u32 g_frameCounter = 0;
-static void bench_vblank_cb(void) { g_frameCounter++; }
+static void de_bench_vblank_cb(void) { g_frameCounter++; }
 static u32 bench_start(void) { return g_frameCounter; }
 static u32 bench_frames_elapsed(u32 start) { return g_frameCounter - start; }
 #define BENCH_REPS 2000
 
-static void bench_create_destroy(void)
+static void de_bench_create_destroy(void)
 {
     struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 32, sizeof(struct MyComponent));
@@ -31,13 +31,13 @@ static void bench_create_destroy(void)
     kprintf("create+reset 32 entidades x%d reps: %ld frames", BENCH_REPS, frames);
 }
 
-static void *bench_state_fn(void *data)
+static void *de_bench_state_fn(void *data)
 {
     (void)data;
     return DE_STATE_LOOP;
 }
 
-static void bench_update(void)
+static void de_bench_update(void)
 {
     struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 32, sizeof(struct MyComponent));
@@ -45,7 +45,7 @@ static void bench_update(void)
     for (u16 i = 0; i < 32; ++i)
     {
         de_entity e = de_manager_new(&m);
-        e->state = (de_state)bench_state_fn;
+        e->state = (de_state)de_bench_state_fn;
     }
     u32 t0 = bench_start();
     for (u32 r = 0; r < BENCH_REPS; ++r)
@@ -54,7 +54,7 @@ static void bench_update(void)
     kprintf("de_manager_update, 32 entidades x%d reps: %ld frames", BENCH_REPS, frames);
 }
 
-static void bench_apply(void)
+static void de_bench_apply(void)
 {
     struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 32, sizeof(struct MyComponent));
@@ -78,7 +78,7 @@ static void bench_apply(void)
     kprintf("create32+applyAll(borrar pares)+reset x%d reps: %ld frames", BENCH_REPS, frames);
 }
 
-static void bench_create_destroy_128(void)
+static void de_bench_create_destroy_128(void)
 {
     struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 128, sizeof(struct MyComponent));
@@ -94,7 +94,7 @@ static void bench_create_destroy_128(void)
     kprintf("create+reset 128 entidades x500 reps: %ld frames", frames);
 }
 
-static void bench_create_destroy_256(void)
+static void de_bench_create_destroy_256(void)
 {
     struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 256, sizeof(struct MyComponent));
@@ -110,7 +110,7 @@ static void bench_create_destroy_256(void)
     kprintf("create+reset 256 entidades x250 reps: %ld frames", frames);
 }
 
-static void bench_update_128(void)
+static void de_bench_update_128(void)
 {
     struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 128, sizeof(struct MyComponent));
@@ -118,7 +118,7 @@ static void bench_update_128(void)
     for (u16 i = 0; i < 128; ++i)
     {
         de_entity e = de_manager_new(&m);
-        e->state = (de_state)bench_state_fn;
+        e->state = (de_state)de_bench_state_fn;
     }
     u32 t0 = bench_start();
     for (u32 r = 0; r < 500; ++r)
@@ -127,7 +127,7 @@ static void bench_update_128(void)
     kprintf("de_manager_update, 128 entidades x500 reps: %ld frames", frames);
 }
 
-static void bench_update_256(void)
+static void de_bench_update_256(void)
 {
     struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 256, sizeof(struct MyComponent));
@@ -135,7 +135,7 @@ static void bench_update_256(void)
     for (u16 i = 0; i < 256; ++i)
     {
         de_entity e = de_manager_new(&m);
-        e->state = (de_state)bench_state_fn;
+        e->state = (de_state)de_bench_state_fn;
     }
     u32 t0 = bench_start();
     for (u32 r = 0; r < 250; ++r)
@@ -144,7 +144,7 @@ static void bench_update_256(void)
     kprintf("de_manager_update, 256 entidades x250 reps: %ld frames", frames);
 }
 
-static void bench_swap(void)
+static void de_bench_swap(void)
 {
     struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 2, sizeof(struct MyComponent));
@@ -158,48 +158,14 @@ static void bench_swap(void)
     kprintf("de_entity_swap x50000: %ld frames (comentado)", frames);
 }
 
-static void *bench_noop(void *data)
+static void *de_bench_noop(void *data)
 {
     (void)data;
     return DE_STATE_LOOP;
 }
 
-static void *bench_system_state(void *data)
-{
-    struct MyComponent *c = (struct MyComponent *)data;
-    c->x += 1;
-    c->y += 2;
-    return DE_STATE_LOOP;
-}
 
-static void bench_systems_vs_individual(void)
-{
-    kprintf("========== BENCHMARK SISTEMAS ==========");
-    struct de_manager m_ind;
-    DE_MANAGER_STORAGE(m_ind_storage, 32, sizeof(struct MyComponent));
-    de_manager_init(&m_ind, DE_MANAGER_ARGS(m_ind_storage));
-    for (u16 i = 0; i < 32; ++i)
-    {
-        de_entity e = de_manager_new(&m_ind);
-        e->state = (de_state)bench_system_state;
-    }
-    u32 t0 = bench_start();
-    for (u32 r = 0; r < BENCH_REPS; ++r)
-        de_manager_update(&m_ind);
-    u32 frames_ind = bench_frames_elapsed(t0);
-    kprintf("update INDIVIDUAL (32 ent x%d reps): %ld frames", BENCH_REPS, frames_ind);
-    struct de_manager m_sys;
-    DE_MANAGER_STORAGE(m_sys_storage, 32, sizeof(struct MyComponent));
-    de_manager_init(&m_sys, DE_MANAGER_ARGS(m_sys_storage));
-    for (u16 i = 0; i < 32; ++i)
-    {
-        de_entity e = de_manager_new(&m_sys);
-        e->state = (de_state)bench_noop;
-    }
-    kprintf("=======================================");
-}
-
-static void bench_memory_overhead(void)
+static void de_bench_memory_overhead(void)
 {
     kprintf("========== MEMORIA ==========");
     u16 stride16 = _DE_ENTITY_STRIDE(16);
@@ -229,21 +195,18 @@ static void bench_memory_overhead(void)
     kprintf("==============================");
 }
 
-void run_benchmarks(void)
+void de_run_benchmarks(void)
 {
-    BLASTEM_PROFIL_START
-    SYS_setVIntCallback(bench_vblank_cb);
-    bench_memory_overhead();
+    SYS_setVIntCallback(de_bench_vblank_cb);
+    de_bench_memory_overhead();
     kprintf("========== BENCHMARKS ==========");
-    bench_create_destroy();
-    bench_update();
-    bench_apply();
-    bench_create_destroy_128();
-    bench_create_destroy_256();
-    bench_update_128();
-    bench_update_256();
-    bench_swap();
-    bench_systems_vs_individual();
+    de_bench_create_destroy();
+    de_bench_update();
+    de_bench_apply();
+    de_bench_create_destroy_128();
+    de_bench_create_destroy_256();
+    de_bench_update_128();
+    de_bench_update_256();
+    de_bench_swap();
     kprintf("=================================");
-    BLASTEM_PROFIL_END
 }
