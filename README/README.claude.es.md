@@ -793,11 +793,11 @@ El manager es dueño del ciclo de vida y del orden. La entidad es dueña de su e
 typedef void *(*de_state)(void *);
 
 typedef struct de_entity *de_entity;   /* ya es un puntero */
-typedef struct struct de_manager de_manager;
+typedef struct de_manager de_manager;
 typedef struct de_system  de_system;
 
 struct de_entity  { de_state state, destructor; de_manager manager; uint16_t slot, tag; uint8_t data[]; };
-struct struct de_manager { de_entity *pool; uint16_t capacity, active, paused; };
+struct de_manager { de_entity *pool; uint16_t capacity, active, paused; };
 struct de_system  { void **pool, **end; uint16_t capacity, size, params; };
 ```
 

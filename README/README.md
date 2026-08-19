@@ -1247,7 +1247,7 @@ The implementation does not claim that every operation is universally optimal fo
 typedef void *(*de_state)(void *);
 
 typedef struct de_entity *de_entity;
-typedef struct struct de_manager de_manager;
+typedef struct de_manager de_manager;
 typedef struct de_system de_system;
 ```
 
