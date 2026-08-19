@@ -135,9 +135,9 @@ struct de_system
  * ENTITY ZONE CHECKING MACROS
  * ============================================================================ */
 
-#define DE_ENTITY_IN_ACTIVE(E) ((E)->slot < (E)->owner->size)
-#define DE_ENTITY_IN_PAUSED(E) ((E)->slot >= (E)->owner->paused)
-#define DE_ENTITY_IN_FREE(E) (!DE_ENTITY_IN_ACTIVE(E) && !DE_ENTITY_IN_PAUSED(E))
+#define DE_ENTITY_IS_ACTIVE(E) ((E)->slot < (E)->owner->size)
+#define DE_ENTITY_IS_PAUSED(E) ((E)->slot >= (E)->owner->paused)
+#define DE_ENTITY_IS_FREE(E) (!DE_ENTITY_IS_ACTIVE(E) && !DE_ENTITY_IS_PAUSED(E))
 
 /* ============================================================================
  * ENTITY API
@@ -335,7 +335,7 @@ void *de_entity_update(de_entity $)
 
 uint16_t de_entity_pause(de_entity $)
 {
-    if (!DE_ENTITY_IN_ACTIVE($))
+    if (!DE_ENTITY_IS_ACTIVE($))
         return 0;
 
     de_manager manager = $->owner;
@@ -359,7 +359,7 @@ uint16_t de_entity_pause(de_entity $)
 
 uint16_t de_entity_resume(de_entity $)
 {
-    if (!DE_ENTITY_IN_PAUSED($))
+    if (!DE_ENTITY_IS_PAUSED($))
         return 0;
 
     de_manager manager = $->owner;
@@ -388,33 +388,17 @@ uint16_t de_entity_resume(de_entity $)
 
 uint16_t de_entity_delete(de_entity $)
 {
-    if (DE_ENTITY_IN_FREE($))
+    if (DE_ENTITY_IS_FREE($))
         return 0;
-
-    de_manager manager = $->owner;
-    de_entity *pool = manager->pool;
 
     if (DE_STATE_IS_ACTIVE($->destructor))
         $->destructor($->data);
 
-    if (DE_ENTITY_IN_PAUSED($))
-    {
-        uint16_t paused = manager->paused;
+    de_manager manager = $->owner;
+    uint16_t slot = DE_ENTITY_IS_PAUSED($) ? manager->paused++ : --manager->size;
 
-        // Was paused: shrink paused zone from the left slot rejoins the free zone
-        if ($->slot != paused)
-            _de_entity_swap($, pool[paused]);
-
-        ++manager->paused;
-    }
-    else
-    {
-        uint16_t size = --manager->size;
-
-        // Was active: shrink active zone from the right slot rejoins the free zone
-        if ($->slot != size)
-            _de_entity_swap($, pool[size]);
-    }
+    if ($->slot != slot)
+        _de_entity_swap($, manager->pool[slot]);
 
     return 1;
 }
@@ -424,7 +408,7 @@ uint16_t de_entity_move_front(de_entity $)
     de_manager manager = $->owner;
     uint16_t size = manager->size - 1;
 
-    if (DE_ENTITY_IN_ACTIVE($) && $->slot != size)
+    if (DE_ENTITY_IS_ACTIVE($) && $->slot != size)
     {
         _de_entity_swap($, manager->pool[size]);
         return 1;
@@ -435,7 +419,7 @@ uint16_t de_entity_move_front(de_entity $)
 
 uint16_t de_entity_move_back(de_entity $)
 {
-    if (DE_ENTITY_IN_ACTIVE($) && $->slot != 0)
+    if (DE_ENTITY_IS_ACTIVE($) && $->slot != 0)
     {
         _de_entity_swap($, $->owner->pool[0]);
         return 1;
@@ -531,21 +515,25 @@ void de_system_init(de_system $, void **storage, uint16_t capacity_groups, uint1
 uint16_t de_system_remove(de_system $, void *first)
 {
     uint16_t params = $->params;
+    void **pool = $->pool;
+    uint16_t i = $->size;
 
-    for (uint16_t i = 0; i < $->size; i += params)
-        if ($->pool[i] == first)
-        {
-            $->size -= params;
+    while (i)
+    {
+        i -= params;
 
-            // Compact if not last group
-            if (i != $->size)
-                for (uint16_t j = 0; j < params; ++j)
-                    $->pool[i + j] = $->pool[$->size + j];
+        if (pool[i] != first)
+            continue;
 
-            $->end -= params;
+        uint16_t size = $->size -= params;
+        $->end -= params;
 
-            return 1;
-        }
+        if (i != size)
+            while (params--)
+                pool[i + params] = pool[size + params];
+
+        return 1;
+    }
 
     return 0;
 }
