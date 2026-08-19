@@ -18,7 +18,8 @@
 #define BENCH_GET_TIME_US() (0u)
 #endif
 
-static inline uint32_t get_time_us(void) {
+static inline uint32_t get_time_us(void)
+{
     return (uint32_t)BENCH_GET_TIME_US();
 }
 
@@ -29,47 +30,54 @@ static inline uint32_t get_time_us(void) {
 static int g_tests_run = 0;
 static int g_tests_failed = 0;
 
-#define CHECK(cond)                                                       \
-    do {                                                                  \
-        g_tests_run++;                                                    \
-        if (!(cond)) {                                                    \
-            g_tests_failed++;                                             \
-            kprintf("FAIL %s:%d: %s", __FILE__, __LINE__, #cond);         \
-        }                                                                 \
+#define CHECK(cond)                                               \
+    do                                                            \
+    {                                                             \
+        g_tests_run++;                                            \
+        if (!(cond))                                              \
+        {                                                         \
+            g_tests_failed++;                                     \
+            kprintf("FAIL %s:%d: %s", __FILE__, __LINE__, #cond); \
+        }                                                         \
     } while (0)
 
 #define TEST(name) static void name(void)
-#define RUN_TEST(name)                                                    \
-    do {                                                                  \
-        kprintf("Running %s", #name);                                     \
-        name();                                                           \
+#define RUN_TEST(name)                \
+    do                                \
+    {                                 \
+        kprintf("Running %s", #name); \
+        name();                       \
     } while (0)
 
 /* ============================================================================
  * TEST DATA TYPES AND STATE FUNCTIONS
  * ============================================================================ */
 
-typedef struct {
+typedef struct
+{
     int value;
     int updates;
 } TestData;
 
 static int g_destructor_calls = 0;
 
-static void *test_destructor(void *data) {
+static void *test_destructor(void *data)
+{
     (void)data;
     g_destructor_calls++;
     return DE_STATE_DELETE;
 }
 
-static void *state_inc(void *data) {
+static void *state_inc(void *data)
+{
     TestData *d = (TestData *)data;
     d->value++;
     d->updates++;
     return DE_STATE_LOOP;
 }
 
-static void *state_pause_after_1(void *data) {
+static void *state_pause_after_1(void *data)
+{
     TestData *d = (TestData *)data;
     d->value++;
     if (d->value >= 1)
@@ -77,7 +85,8 @@ static void *state_pause_after_1(void *data) {
     return DE_STATE_LOOP;
 }
 
-static void *state_delete_after_1(void *data) {
+static void *state_delete_after_1(void *data)
+{
     TestData *d = (TestData *)data;
     d->value++;
     if (d->value >= 1)
@@ -98,12 +107,14 @@ static struct de_manager test_mgr;
 DE_SYSTEM_STORAGE(test_sys_storage, TEST_SYS_CAPACITY, TEST_SYS_PARAMS);
 static struct de_system test_sys;
 
-static void init_test_manager(void) {
+static void init_test_manager(void)
+{
     de_manager_init(&test_mgr, DE_MANAGER_ARGS(test_mgr_storage));
     g_destructor_calls = 0;
 }
 
-static void init_test_system(void) {
+static void init_test_system(void)
+{
     de_system_init(&test_sys, DE_SYSTEM_ARGS(test_sys_storage));
 }
 
@@ -111,13 +122,15 @@ static void init_test_system(void) {
  * TESTS
  * ============================================================================ */
 
-TEST(test_manager_init) {
+TEST(test_manager_init)
+{
     init_test_manager();
     CHECK(test_mgr.size == 0);
     CHECK(test_mgr.paused == TEST_MGR_CAPACITY);
 }
 
-TEST(test_entity_new) {
+TEST(test_entity_new)
+{
     init_test_manager();
     de_entity e = de_manager_new(&test_mgr);
     CHECK(e != 0);
@@ -128,9 +141,11 @@ TEST(test_entity_new) {
     CHECK(test_mgr.size == 1);
 }
 
-TEST(test_entity_new_full) {
+TEST(test_entity_new_full)
+{
     init_test_manager();
-    for (uint16_t i = 0; i < TEST_MGR_CAPACITY; i++) {
+    for (uint16_t i = 0; i < TEST_MGR_CAPACITY; i++)
+    {
         de_entity e = de_manager_new(&test_mgr);
         CHECK(e != 0);
     }
@@ -138,7 +153,8 @@ TEST(test_entity_new_full) {
     CHECK(e == 0);
 }
 
-TEST(test_entity_exec) {
+TEST(test_entity_exec)
+{
     init_test_manager();
     de_entity e = de_manager_new(&test_mgr);
     TestData *d = (TestData *)e->data;
@@ -153,7 +169,8 @@ TEST(test_entity_exec) {
     CHECK(e->state == state_inc);
 }
 
-TEST(test_entity_update_loop) {
+TEST(test_entity_update_loop)
+{
     init_test_manager();
     de_entity e = de_manager_new(&test_mgr);
     TestData *d = (TestData *)e->data;
@@ -168,7 +185,8 @@ TEST(test_entity_update_loop) {
     CHECK(e->state == state_inc);
 }
 
-TEST(test_entity_update_pause_transition) {
+TEST(test_entity_update_pause_transition)
+{
     init_test_manager();
     de_entity e = de_manager_new(&test_mgr);
     TestData *d = (TestData *)e->data;
@@ -183,7 +201,8 @@ TEST(test_entity_update_pause_transition) {
 /* Test removed: test_entity_update_preserves_special_state
    because actual de_entity_update() does NOT preserve special states. */
 
-TEST(test_entity_pause_resume) {
+TEST(test_entity_pause_resume)
+{
     init_test_manager();
     de_entity e = de_manager_new(&test_mgr);
     e->state = state_inc;
@@ -202,7 +221,8 @@ TEST(test_entity_pause_resume) {
     CHECK(test_mgr.paused == paused_before);
 }
 
-TEST(test_entity_delete_active) {
+TEST(test_entity_delete_active)
+{
     init_test_manager();
     de_entity e = de_manager_new(&test_mgr);
     e->state = state_inc;
@@ -216,7 +236,8 @@ TEST(test_entity_delete_active) {
     CHECK(g_destructor_calls == 1);
 }
 
-TEST(test_entity_delete_paused) {
+TEST(test_entity_delete_paused)
+{
     init_test_manager();
     de_entity e = de_manager_new(&test_mgr);
     e->state = state_inc;
@@ -231,7 +252,8 @@ TEST(test_entity_delete_paused) {
     CHECK(g_destructor_calls == 1);
 }
 
-TEST(test_entity_move_front_back) {
+TEST(test_entity_move_front_back)
+{
     init_test_manager();
     de_entity e0 = de_manager_new(&test_mgr);
     de_entity e1 = de_manager_new(&test_mgr);
@@ -249,7 +271,8 @@ TEST(test_entity_move_front_back) {
     CHECK(e2->slot == 0);
 }
 
-TEST(test_manager_update_basic) {
+TEST(test_manager_update_basic)
+{
     init_test_manager();
     de_entity e0 = de_manager_new(&test_mgr);
     de_entity e1 = de_manager_new(&test_mgr);
@@ -257,8 +280,10 @@ TEST(test_manager_update_basic) {
     e1->state = state_inc;
     TestData *d0 = (TestData *)e0->data;
     TestData *d1 = (TestData *)e1->data;
-    d0->value = 0; d0->updates = 0;
-    d1->value = 0; d1->updates = 0;
+    d0->value = 0;
+    d0->updates = 0;
+    d1->value = 0;
+    d1->updates = 0;
 
     de_manager_update(&test_mgr);
     CHECK(d0->value == 1);
@@ -268,7 +293,8 @@ TEST(test_manager_update_basic) {
     CHECK(test_mgr.size == 2);
 }
 
-TEST(test_manager_update_pause_and_delete) {
+TEST(test_manager_update_pause_and_delete)
+{
     init_test_manager();
     de_entity e0 = de_manager_new(&test_mgr);
     de_entity e1 = de_manager_new(&test_mgr);
@@ -288,13 +314,14 @@ TEST(test_manager_update_pause_and_delete) {
 
     /* Second update: transitions processed */
     de_manager_update(&test_mgr);
-    CHECK(test_mgr.paused == TEST_MGR_CAPACITY - 1);  // e0 paused
-    CHECK(test_mgr.size == 0);                      // e1 deleted
-    CHECK(e0->slot >= test_mgr.paused);               // e0 in paused zone
+    CHECK(test_mgr.paused == TEST_MGR_CAPACITY - 1);                // e0 paused
+    CHECK(test_mgr.size == 0);                                      // e1 deleted
+    CHECK(e0->slot >= test_mgr.paused);                             // e0 in paused zone
     CHECK(e1->slot >= test_mgr.size && e1->slot < test_mgr.paused); // e1 in free zone
 }
 
-TEST(test_manager_reset) {
+TEST(test_manager_reset)
+{
     init_test_manager();
     de_entity e0 = de_manager_new(&test_mgr);
     de_entity e1 = de_manager_new(&test_mgr);
@@ -302,7 +329,7 @@ TEST(test_manager_reset) {
     e1->state = state_inc;
     e0->destructor = test_destructor;
     e1->destructor = test_destructor;
-    de_entity_pause(e1);  /* one active, one paused */
+    de_entity_pause(e1); /* one active, one paused */
 
     g_destructor_calls = 0;
     de_manager_reset(&test_mgr);
@@ -312,7 +339,8 @@ TEST(test_manager_reset) {
     CHECK(g_destructor_calls == 1);
 }
 
-TEST(test_system_init_add_remove) {
+TEST(test_system_init_add_remove)
+{
     init_test_system();
     CHECK(test_sys.size == 0);
     CHECK(test_sys.capacity == TEST_SYS_CAPACITY * TEST_SYS_PARAMS);
@@ -342,24 +370,36 @@ TEST(test_system_init_add_remove) {
     CHECK(sum == 3 + 4);
 }
 
-TEST(test_system_iterator_macro) {
+static uint16_t test_sys_iterator(de_system system)
+{
+    DE_SYSTEM_FOREACH(system, int *x, int *y, {
+        (*x) += 1;
+        (*y) += 2;
+    });
+
+    return 1234;
+}
+
+TEST(test_system_iterator_macro)
+{
     init_test_system();
     int a = 10, b = 20;
     int *pa = &a, *pb = &b;
     DE_SYSTEM_ADD(&test_sys, pa, pb);
 
-    DE_SYSTEM_ITERATOR(test_sys_iterator, int *x, int *y, {
-        (*x) += 1;
-        (*y) += 2;
-    });
+    // DE_SYSTEM_ITERATOR(test_sys_iterator, int *x, int *y, {
+    //     (*x) += 1;
+    //     (*y) += 2;
+    // });
 
     void *result = test_sys_iterator(&test_sys);
-    CHECK(result == DE_STATE_LOOP);
+    CHECK(result == 1234);
     CHECK(a == 11);
     CHECK(b == 22);
 }
 
-TEST(test_manager_iterate_macro) {
+TEST(test_manager_iterate_macro)
+{
     init_test_manager();
     de_entity e0 = de_manager_new(&test_mgr);
     de_entity e1 = de_manager_new(&test_mgr);
@@ -390,17 +430,22 @@ static struct de_manager bench_mgr;
 DE_SYSTEM_STORAGE(bench_sys_storage, BENCH_SYS_CAPACITY, BENCH_SYS_PARAMS);
 static struct de_system bench_sys;
 
-static void bench_entity_new_delete(void) {
+static void bench_entity_new_delete(void)
+{
     const int ITER = 100;
     de_manager_init(&bench_mgr, DE_MANAGER_ARGS(bench_mgr_storage));
     uint32_t t0 = get_time_us();
 
-    for (int i = 0; i < ITER; i++) {
-        for (int j = 0; j < BENCH_MGR_CAPACITY; j++) {
+    for (int i = 0; i < ITER; i++)
+    {
+        for (int j = 0; j < BENCH_MGR_CAPACITY; j++)
+        {
             de_entity e = de_manager_new(&bench_mgr);
-            if (e) e->state = state_inc;
+            if (e)
+                e->state = state_inc;
         }
-        for (int j = 0; j < BENCH_MGR_CAPACITY; j++) {
+        for (int j = 0; j < BENCH_MGR_CAPACITY; j++)
+        {
             de_entity_delete(bench_mgr.pool[bench_mgr.size - 1]);
         }
     }
@@ -410,17 +455,20 @@ static void bench_entity_new_delete(void) {
     kprintf("entity_new+delete: %lu us/op", us_per_op);
 }
 
-static void bench_manager_update(void) {
+static void bench_manager_update(void)
+{
     const int ITER = 100;
     de_manager_init(&bench_mgr, DE_MANAGER_ARGS(bench_mgr_storage));
-    for (int i = 0; i < BENCH_MGR_CAPACITY; i++) {
+    for (int i = 0; i < BENCH_MGR_CAPACITY; i++)
+    {
         de_entity e = de_manager_new(&bench_mgr);
         e->state = state_inc;
         ((TestData *)e->data)->value = 0;
     }
     uint32_t t0 = get_time_us();
 
-    for (int i = 0; i < ITER; i++) {
+    for (int i = 0; i < ITER; i++)
+    {
         de_manager_update(&bench_mgr);
     }
     uint32_t t1 = get_time_us();
@@ -428,14 +476,16 @@ static void bench_manager_update(void) {
     kprintf("manager_update (%d entities): %lu us/update", BENCH_MGR_CAPACITY, us_per_update);
 }
 
-static void bench_entity_pause_resume(void) {
+static void bench_entity_pause_resume(void)
+{
     const int ITER = 100;
     de_manager_init(&bench_mgr, DE_MANAGER_ARGS(bench_mgr_storage));
     de_entity e = de_manager_new(&bench_mgr);
     e->state = state_inc;
     uint32_t t0 = get_time_us();
 
-    for (int i = 0; i < ITER; i++) {
+    for (int i = 0; i < ITER; i++)
+    {
         de_entity_pause(e);
         de_entity_resume(e);
     }
@@ -444,12 +494,14 @@ static void bench_entity_pause_resume(void) {
     kprintf("entity_pause+resume: %lu us/op", us_per_op);
 }
 
-static void bench_system_add_remove(void) {
+static void bench_system_add_remove(void)
+{
     const int ITER = 100;
     de_system_init(&bench_sys, DE_SYSTEM_ARGS(bench_sys_storage));
     uint32_t t0 = get_time_us();
 
-    for (int i = 0; i < ITER; i++) {
+    for (int i = 0; i < ITER; i++)
+    {
         int a = i, b = i + 1;
         int *pa = &a, *pb = &b;
         DE_SYSTEM_ADD(&bench_sys, pa, pb);
@@ -460,10 +512,12 @@ static void bench_system_add_remove(void) {
     kprintf("system_add+remove: %lu us/op", us_per_op);
 }
 
-static void bench_system_foreach(void) {
+static void bench_system_foreach(void)
+{
     const int ITER = 10;
     de_system_init(&bench_sys, DE_SYSTEM_ARGS(bench_sys_storage));
-    for (int i = 0; i < BENCH_SYS_CAPACITY; i++) {
+    for (int i = 0; i < BENCH_SYS_CAPACITY; i++)
+    {
         int a = i, b = i + 1;
         int *pa = &a, *pb = &b;
         DE_SYSTEM_ADD(&bench_sys, pa, pb);
@@ -471,7 +525,8 @@ static void bench_system_foreach(void) {
     volatile int sink = 0;
     uint32_t t0 = get_time_us();
 
-    for (int i = 0; i < ITER; i++) {
+    for (int i = 0; i < ITER; i++)
+    {
         DE_SYSTEM_FOREACH(&bench_sys, int *x, int *y, {
             sink += *x + *y;
         });
@@ -481,17 +536,20 @@ static void bench_system_foreach(void) {
     kprintf("system_foreach (%d groups): %lu us/iter", BENCH_SYS_CAPACITY, us_per_iter);
 }
 
-static void bench_manager_iterate(void) {
+static void bench_manager_iterate(void)
+{
     const int ITER = 100;
     de_manager_init(&bench_mgr, DE_MANAGER_ARGS(bench_mgr_storage));
-    for (int i = 0; i < BENCH_MGR_CAPACITY; i++) {
+    for (int i = 0; i < BENCH_MGR_CAPACITY; i++)
+    {
         de_entity e = de_manager_new(&bench_mgr);
         e->state = state_inc;
     }
     volatile int count = 0;
     uint32_t t0 = get_time_us();
 
-    for (int i = 0; i < ITER; i++) {
+    for (int i = 0; i < ITER; i++)
+    {
         DE_MANAGER_FOREACH(&bench_mgr, {
             count++;
         });
@@ -507,7 +565,8 @@ static void bench_manager_iterate(void) {
  * MAIN
  * ============================================================================ */
 
-int run_ds_test(void) {
+int run_ds_test(void)
+{
     kprintf("========= Darken Entity System Tests =========");
 
     RUN_TEST(test_manager_init);
@@ -531,7 +590,8 @@ int run_ds_test(void) {
     kprintf("Tests run:    %d", g_tests_run);
     kprintf("Tests failed: %d", g_tests_failed);
 
-    if (g_tests_failed > 0) {
+    if (g_tests_failed > 0)
+    {
         kprintf("Some tests failed.");
         return 1;
     }
@@ -548,4 +608,3 @@ int run_ds_test(void) {
 
     return 0;
 }
-

@@ -26,7 +26,6 @@ static u16 g_testsRun = 0, g_testsPassed = 0;
         }                                 \
     } while (0)
 
-
 static int g_destructorCalls = 0;
 static void *my_destructor(void *data)
 {
@@ -240,18 +239,27 @@ typedef struct TestDeSystemEntity
     uint16_t frame;
 } TestDeSystemEntity;
 
-DE_SYSTEM_ITERATOR(test_de_system_movement, int16_t *x, int16_t *y, int16_t *vx, int16_t *vy, {
-    *x += *vx;
-    *y += *vy;
-});
+static void test_de_system_movement(de_system system)
+{
+    DE_SYSTEM_FOREACH(system, int16_t *x, int16_t *y, int16_t *vx, int16_t *vy, {
+        *x += *vx;
+        *y += *vy;
+    });
+}
 
-DE_SYSTEM_ITERATOR(test_de_system_physics, int16_t *vy, {
-    *vy += 1;
-});
+static void test_de_system_physics(de_system system)
+{
+    DE_SYSTEM_FOREACH(system, int16_t *vy, {
+        *vy += 1;
+    });
+}
 
-DE_SYSTEM_ITERATOR(test_de_system_frames, uint16_t *frame, {
-    *frame += 1;
-});
+static void test_de_system_frames(de_system system)
+{
+    DE_SYSTEM_FOREACH(system, uint16_t *frame, {
+        *frame += 1;
+    });
+}
 
 static void test_de_system_init_add(void)
 {
@@ -413,7 +421,7 @@ struct de_system sys;
 static void test_system_foreach_direct(void)
 {
     kprintf("-- test_system_foreach_direct --");
-    
+
     void *pool[12];
     de_system_init(&sys, pool, 3, 4);
     int a1 = 1, b1 = 2, c1 = 3, d1 = 4;
