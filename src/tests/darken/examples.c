@@ -76,7 +76,7 @@ void de_run_usage_example(void)
     de_manager_update(&g_manager);
     kprintf("--- Reset ---");
     de_manager_reset(&g_manager);
-    kprintf("Tamano final g_manager: %d", g_manager.size);
-    kprintf("Tamano final g_manager2: %d", g_manager2.size);
+    kprintf("Tamano final g_manager: %d", g_manager.entities.size);
+    kprintf("Tamano final g_manager2: %d", g_manager2.entities.size);
     kprintf("=====================================");
 }
