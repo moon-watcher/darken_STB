@@ -18,7 +18,7 @@ static u16 g_testsRun = 0, g_testsPassed = 0;
         if (cond)                         \
         {                                 \
             g_testsPassed++;              \
-            kprintf("  [PASS] %s", desc); \
+            /* kprintf("  [PASS] %s", desc); */ \
         }                                 \
         else                              \
         {                                 \

@@ -37,7 +37,7 @@ static int g_tests_failed = 0;
         if (!(cond))                                              \
         {                                                         \
             g_tests_failed++;                                     \
-            kprintf("FAIL %s:%d: %s", __FILE__, __LINE__, #cond); \
+            kprintf("  [FAIL] %s:%d: %s", __FILE__, __LINE__, #cond); \
         }                                                         \
     } while (0)
 
@@ -45,7 +45,7 @@ static int g_tests_failed = 0;
 #define RUN_TEST(name)                \
     do                                \
     {                                 \
-        kprintf("Running %s", #name); \
+        /* kprintf("Running %s", #name); */ \
         name();                       \
     } while (0)
 
@@ -162,8 +162,8 @@ TEST(test_entity_exec)
     d->updates = 0;
     e->state = state_inc;
 
-    void *result = de_entity_exec(e);
-    CHECK(result == DE_STATE_LOOP);
+    de_entity_exec(e);
+    CHECK(e->state == DE_STATE_LOOP);
     CHECK(d->value == 1);
     CHECK(d->updates == 1);
     CHECK(e->state == state_inc);
@@ -178,8 +178,8 @@ TEST(test_entity_update_loop)
     d->updates = 0;
     e->state = state_inc;
 
-    void *result = de_entity_update(e);
-    CHECK(result == DE_STATE_LOOP);
+    de_entity_update(e);
+    CHECK(e->state == DE_STATE_LOOP);
     CHECK(d->value == 1);
     CHECK(d->updates == 1);
     CHECK(e->state == state_inc);
@@ -193,8 +193,8 @@ TEST(test_entity_update_pause_transition)
     d->value = 0;
     e->state = state_pause_after_1;
 
-    void *result = de_entity_update(e);
-    CHECK(result == DE_STATE_PAUSE);
+    de_entity_update(e);
+    CHECK(e->state == DE_STATE_PAUSE);
     CHECK(e->state == DE_STATE_PAUSE);
 }
 

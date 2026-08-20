@@ -17,7 +17,7 @@ static u16 g_testsRun = 0, g_testsPassed = 0;
         if (cond)                         \
         {                                 \
             g_testsPassed++;              \
-            kprintf("  [PASS] %s", desc); \
+            /* kprintf("  [PASS] %s", desc); */ \
         }                                 \
         else                              \
         {                                 \
@@ -74,7 +74,7 @@ static void *de_state_walk(void *data)
     struct MyComponent *c = (struct MyComponent *)data;
     c->x += 1;
     ++g_walkCalls;
-    kprintf("------------walk------------");
+    // kprintf("------------walk------------");
     return DE_STATE_LOOP;
 }
 static void *de_state_once_then_idle(void *data)
