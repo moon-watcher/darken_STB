@@ -45,6 +45,7 @@ struct de_system
 
 void de_system_init(de_system, void **, uint16_t, uint16_t);
 uint16_t de_system_remove(de_system, void *);
+void de_system_clear(de_system);
 
 /* ============================================================================
  * INTERNAL MACRO IMPLEMENTATIONS
@@ -87,18 +88,19 @@ uint16_t de_system_remove(de_system, void *);
         ok;                                            \
     })
 
-#define _DE_SYSTEM_FOREACH(SYSTEM, IT)      \
-    do                                      \
-    {                                       \
-        void **pool = (SYSTEM)->pool;       \
-        void **end = (SYSTEM)->end;         \
-        uint16_t params = (SYSTEM)->params; \
-                                            \
-        while (pool < end)                  \
-        {                                   \
-            IT;                             \
-            pool += params;                 \
-        }                                   \
+#define _DE_SYSTEM_FOREACH(SYSTEM, CODE) \
+    do                                   \
+    {                                    \
+        de_system sys = (SYSTEM);        \
+        void **pool = sys->pool;         \
+        void **end = sys->end;           \
+        uint16_t params = sys->params;   \
+                                         \
+        while (pool < end)               \
+        {                                \
+            CODE;                        \
+            pool += params;              \
+        }                                \
     } while (0)
 
 #define _DE_SYSTEM_ADD_1(SYS, A) _DE_SYSTEM_ADD(SYS, 1, pool[0] = (void *)(A);)
@@ -155,6 +157,12 @@ uint16_t de_system_remove(de_system $, void *first)
     }
 
     return 0;
+}
+
+void de_system_clear(de_system $)
+{
+    $->end = $->pool;
+    $->size = 0;
 }
 
 #endif // DARKSYS_IMPLEMENTATION

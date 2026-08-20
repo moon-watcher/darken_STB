@@ -271,6 +271,10 @@ uint16_t de_entity_delete(de_entity $)
 uint16_t de_entity_move_front(de_entity $)
 {
     de_manager manager = $->owner;
+
+    if (manager->size == 0)
+        return 0;
+
     uint16_t size = manager->size - 1;
 
     if (DE_ENTITY_IS_ACTIVE($) && $->slot != size)
