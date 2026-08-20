@@ -72,49 +72,49 @@ void de_system_clear(de_system);
 #define _DE_SYSTEM_ARGS(NAME) \
     (NAME).pool, (NAME).capacity, (NAME).params
 
-#define _DE_SYSTEM_ADD(SYSTEM, ARGS, ...)              \
-    ({                                                 \
-        de_system system = (SYSTEM);                   \
-        uint16_t ok = 0;                               \
-                                                       \
-        if (system->size + (ARGS) <= system->capacity) \
-        {                                              \
-            void **pool = system->end;                 \
-            __VA_ARGS__                                \
-            system->size += (ARGS);                    \
-            system->end += (ARGS);                     \
-            ok = 1;                                    \
-        }                                              \
-        ok;                                            \
+#define _DE_SYSTEM_ADD(SYSTEM, ARGS, ...)      \
+    ({                                         \
+        de_system _s = (SYSTEM);               \
+        uint16_t _r = 0;                       \
+                                               \
+        if (_s->size + (ARGS) <= _s->capacity) \
+        {                                      \
+            void **_p = _s->end;               \
+            __VA_ARGS__                        \
+            _s->size += (ARGS);                \
+            _s->end += (ARGS);                 \
+            _r = 1;                            \
+        }                                      \
+        _r;                                    \
     })
 
-#define _DE_SYSTEM_FOREACH(SYSTEM, CODE) \
-    do                                   \
-    {                                    \
-        de_system sys = (SYSTEM);        \
-        void **pool = sys->pool;         \
-        void **end = sys->end;           \
-        uint16_t params = sys->params;   \
-                                         \
-        while (pool < end)               \
-        {                                \
-            CODE;                        \
-            pool += params;              \
-        }                                \
+#define _DE_SYSTEM_FOREACH(SYSTEM, IT) \
+    do                                 \
+    {                                  \
+        de_system _s = (SYSTEM);       \
+        void **_p = _s->pool;          \
+        void **_e = _s->end;           \
+        uint16_t _c = _s->params;      \
+                                       \
+        while (_p < _e)                \
+        {                              \
+            IT;                        \
+            _p += _c;                  \
+        }                              \
     } while (0)
 
-#define _DE_SYSTEM_ADD_1(SYS, A) _DE_SYSTEM_ADD(SYS, 1, pool[0] = (void *)(A);)
-#define _DE_SYSTEM_ADD_2(SYS, A, B) _DE_SYSTEM_ADD(SYS, 2, pool[0] = (void *)(A); pool[1] = (void *)(B);)
-#define _DE_SYSTEM_ADD_3(SYS, A, B, C) _DE_SYSTEM_ADD(SYS, 3, pool[0] = (void *)(A); pool[1] = (void *)(B); pool[2] = (void *)(C);)
-#define _DE_SYSTEM_ADD_4(SYS, A, B, C, D) _DE_SYSTEM_ADD(SYS, 4, pool[0] = (void *)(A); pool[1] = (void *)(B); pool[2] = (void *)(C); pool[3] = (void *)(D);)
-#define _DE_SYSTEM_ADD_5(SYS, A, B, C, D, E) _DE_SYSTEM_ADD(SYS, 5, pool[0] = (void *)(A); pool[1] = (void *)(B); pool[2] = (void *)(C); pool[3] = (void *)(D); pool[4] = (void *)(E);)
+#define _DE_SYSTEM_ADD_1(SYS, A) _DE_SYSTEM_ADD(SYS, 1, _p[0] = (void *)(A);)
+#define _DE_SYSTEM_ADD_2(SYS, A, B) _DE_SYSTEM_ADD(SYS, 2, _p[0] = (void *)(A); _p[1] = (void *)(B);)
+#define _DE_SYSTEM_ADD_3(SYS, A, B, C) _DE_SYSTEM_ADD(SYS, 3, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C);)
+#define _DE_SYSTEM_ADD_4(SYS, A, B, C, D) _DE_SYSTEM_ADD(SYS, 4, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D);)
+#define _DE_SYSTEM_ADD_5(SYS, A, B, C, D, E) _DE_SYSTEM_ADD(SYS, 5, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D); _p[4] = (void *)(E);)
 
 #define _DE_SYSTEM_FOREACH_0(SYSTEM, IT) _DE_SYSTEM_FOREACH(SYSTEM, { IT; })
-#define _DE_SYSTEM_FOREACH_1(SYSTEM, A, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; IT; })
-#define _DE_SYSTEM_FOREACH_2(SYSTEM, A, B, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; IT; })
-#define _DE_SYSTEM_FOREACH_3(SYSTEM, A, B, C, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; C = pool[2]; IT; })
-#define _DE_SYSTEM_FOREACH_4(SYSTEM, A, B, C, D, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; C = pool[2]; D = pool[3]; IT; })
-#define _DE_SYSTEM_FOREACH_5(SYSTEM, A, B, C, D, E, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = pool[0]; B = pool[1]; C = pool[2]; D = pool[3]; E = pool[4]; IT; })
+#define _DE_SYSTEM_FOREACH_1(SYSTEM, A, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = _p[0]; IT; })
+#define _DE_SYSTEM_FOREACH_2(SYSTEM, A, B, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = _p[0]; B = _p[1]; IT; })
+#define _DE_SYSTEM_FOREACH_3(SYSTEM, A, B, C, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = _p[0]; B = _p[1]; C = _p[2]; IT; })
+#define _DE_SYSTEM_FOREACH_4(SYSTEM, A, B, C, D, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = _p[0]; B = _p[1]; C = _p[2]; D = _p[3]; IT; })
+#define _DE_SYSTEM_FOREACH_5(SYSTEM, A, B, C, D, E, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = _p[0]; B = _p[1]; C = _p[2]; D = _p[3]; E = _p[4]; IT; })
 
 #endif // DARKSYS_H
 

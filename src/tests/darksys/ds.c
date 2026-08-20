@@ -384,8 +384,7 @@ TEST(test_system_iterator_macro)
 {
     init_test_system();
     int a = 10, b = 20;
-    int *pa = &a, *pb = &b;
-    DE_SYSTEM_ADD(&test_sys, pa, pb);
+    DE_SYSTEM_ADD(&test_sys, &a, &b);
 
     // DE_SYSTEM_ITERATOR(test_sys_iterator, int *x, int *y, {
     //     (*x) += 1;
