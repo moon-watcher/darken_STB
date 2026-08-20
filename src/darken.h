@@ -262,16 +262,16 @@ inline void de_manager_init(de_manager $, de_entity *pool, void *param_storage, 
     }
 }
 
-de_entity de_manager_new(de_manager $)
+inline de_entity de_manager_new(de_manager $)
 {
     if ($->size >= $->paused)
         return 0;
 
     de_entity entity = $->pool[$->size];
-    entity->owner = $;
-    entity->slot = $->size++;
     entity->state = DE_STATE_DELETE;
     entity->destructor = 0;
+    entity->owner = $;
+    entity->slot = $->size++;
     entity->tag = 0;
 
     return entity;
