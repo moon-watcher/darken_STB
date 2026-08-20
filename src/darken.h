@@ -55,27 +55,13 @@
  * Receives entity->data and returns either another state callback or one of the DE_STATE_* control values.
  */
 
-/**
- * darken.h — Darken (DARKula ENgine) 2.0 Entity System
- *
- * Full documentation: README.md
- *
- * GNU C note:
- * - This header uses GNU C extensions (__attribute__ and statement expressions).
- * - 4-byte align boundary because Darken targets GCC and the Motorola 68000.
- * - 16-bit members preference for optimal 68K performance.
- */
-
-/**
- * darken.h — Darken (DARKula ENgine) 2.0 Entity System
- */
-
 #ifndef DARKEN_H
 #define DARKEN_H
 
 #include <stdint.h>
 
 typedef void *(*de_state)(void *);
+
 typedef struct de_entity *de_entity;
 typedef struct de_manager *de_manager;
 
@@ -91,12 +77,13 @@ struct de_entity
 
 struct de_manager
 {
-    struct de_manager_pool
+    struct
     {
         de_entity *entities;
         uint16_t capacity;
         uint16_t size;
     } pool;
+
     uint16_t paused;
 };
 
@@ -113,6 +100,7 @@ struct de_manager
 #define DE_ENTITY_IS_PAUSED(ENTITY) ((ENTITY)->slot >= (ENTITY)->owner->paused)
 #define DE_ENTITY_IS_FREE(ENTITY) (!DE_ENTITY_IS_ACTIVE(ENTITY) && !DE_ENTITY_IS_PAUSED(ENTITY))
 
+/* Function prototypes */
 void de_entity_exec(de_entity);
 void de_entity_update(de_entity);
 void de_entity_pause(de_entity);
@@ -131,7 +119,7 @@ void de_manager_update(de_manager);
 void de_manager_reset(de_manager);
 
 /* ============================================================================
- * INTERNAL MACROS
+ * INTERNAL MACRO IMPLEMENTATIONS
  * ============================================================================ */
 
 #define _DE_ALIGN4(X) (((X) + 3U) & ~3U)
@@ -177,32 +165,33 @@ void de_manager_reset(de_manager);
 #ifdef DARKEN_IMPLEMENTATION
 
 /* ============================================================================
- * Intercambio genérico de slots (recibe pool + dos índices)
+ * Generic slot swap – replaces old _de_swap
  * ============================================================================ */
-static inline void _de_swap_slots(struct de_manager_pool *pool, uint16_t i, uint16_t j)
+static inline void _de_swap_slots(de_manager m, uint16_t i, uint16_t j)
 {
     if (i == j)
         return;
+    de_entity *pool = m->pool.entities;
+    de_entity tmp = pool[i];
+    pool[i] = pool[j];
+    pool[j] = tmp;
 
-    de_entity *entities = pool->entities;
-    de_entity tmp = entities[i];
-    entities[i] = entities[j];
-    entities[j] = tmp;
+    if (pool[i])
+        pool[i]->slot = i;
 
-    if (entities[i])
-        entities[i]->slot = i;
-    if (entities[j])
-        entities[j]->slot = j;
+    if (pool[j])
+        pool[j]->slot = j;
 }
 
 /* ============================================================================
- * Operaciones con entidades
+ * Entity operations
  * ============================================================================ */
 
 inline void de_entity_exec(de_entity $)
 {
     _DE_ASSERT(DE_ENTITY_IS_ACTIVE($), );
     _DE_ASSERT(DE_STATE_IS_ACTIVE($->state), );
+
     $->state($->data);
 }
 
@@ -210,7 +199,9 @@ inline void de_entity_update(de_entity $)
 {
     _DE_ASSERT(DE_ENTITY_IS_ACTIVE($), );
     _DE_ASSERT(DE_STATE_IS_ACTIVE($->state), );
+
     void *result = $->state($->data);
+
     if (!DE_STATE_IS_LOOP(result))
         $->state = result;
 }
@@ -218,23 +209,25 @@ inline void de_entity_update(de_entity $)
 inline void de_entity_pause(de_entity $)
 {
     _DE_ASSERT(DE_ENTITY_IS_ACTIVE($), );
-    de_manager m = $->owner;
-    uint16_t size = --m->pool.size;
-    uint16_t paused = --m->paused;
 
-    _de_swap_slots(&m->pool, $->slot, size);
-    _de_swap_slots(&m->pool, $->slot, paused);
+    de_manager m = $->owner;
+    uint16_t size = --m->pool.size; // nueva última activa
+    uint16_t paused = --m->paused;  // nueva primera pausada
+
+    _de_swap_slots(m, $->slot, size);
+    _de_swap_slots(m, $->slot, paused); // ahora $ está en size, se mueve a paused
 }
 
 inline void de_entity_resume(de_entity $)
 {
     _DE_ASSERT(DE_ENTITY_IS_PAUSED($), );
+
     de_manager m = $->owner;
     uint16_t size = m->pool.size;
     uint16_t paused = m->paused;
 
-    _de_swap_slots(&m->pool, $->slot, paused);
-    _de_swap_slots(&m->pool, $->slot, size);
+    _de_swap_slots(m, $->slot, paused);
+    _de_swap_slots(m, $->slot, size);
 
     ++m->pool.size;
     ++m->paused;
@@ -248,25 +241,25 @@ inline void de_entity_delete(de_entity $)
         $->destructor($->data);
 
     uint16_t size = --m->pool.size;
-    _de_swap_slots(&m->pool, $->slot, size);
+    _de_swap_slots(m, $->slot, size);
 }
 
 inline void de_entity_move_front(de_entity $)
 {
     _DE_ASSERT(DE_ENTITY_IS_ACTIVE($), );
-    de_manager m = $->owner;
-    _de_swap_slots(&m->pool, $->slot, m->pool.size - 1);
+
+    _de_swap_slots($->owner, $->slot, $->owner->pool.size - 1);
 }
 
 inline void de_entity_move_back(de_entity $)
 {
     _DE_ASSERT(DE_ENTITY_IS_ACTIVE($), );
     de_manager m = $->owner;
-    _de_swap_slots(&m->pool, $->slot, 0);
+    _de_swap_slots(m, $->slot, 0);
 }
 
 /* ============================================================================
- * Gestión del manager
+ * Manager lifecycle
  * ============================================================================ */
 
 inline void de_manager_init(de_manager $, de_entity *pool, void *param_storage,
@@ -283,9 +276,11 @@ inline void de_manager_init(de_manager $, de_entity *pool, void *param_storage,
     for (uint16_t i = 0; i < capacity; ++i)
     {
         de_entity entity = (de_entity)storage;
+
         pool[i] = entity;
         entity->owner = $;
         entity->slot = i;
+
         storage += stride;
     }
 }
@@ -318,17 +313,17 @@ inline void de_manager_update(de_manager $)
         if (DE_STATE_IS_ACTIVE(state))
         {
             state = state(entity->data);
+
             if (!DE_STATE_IS_LOOP(state))
                 entity->state = state;
         }
+
         else if (DE_STATE_IS_PAUSED(state))
-        {
             de_entity_pause(entity);
-        }
+
         else if (DE_STATE_IS_DELETED(state))
-        {
+
             de_entity_delete(entity);
-        }
     }
 }
 
