@@ -20,7 +20,7 @@
 #ifndef DARKSYS_H
 #define DARKSYS_H
 
-#include <stdi nt.h>
+#include <stdint.h>
 
 typedef struct de_system *de_system;
 
