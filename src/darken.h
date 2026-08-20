@@ -1,11 +1,6 @@
 /**
  * darken.h — Darken (DARKula ENgine) 2.0 Entity System
  *
- * Public functions/types: de_*
- * Public macros:          DE_*
- * Internal functions:     _de_*
- * Internal macros:        _DE_*
- *
  * Full documentation: README.md
  *
  * GNU C note:
@@ -29,13 +24,12 @@
  *
  *
  *
- * Manager: Entity container and lifecycle manager.
- *
- * Maintains the pointer array in three logical zones:
+ * Manager: Entity container and lifecycle manager. Maintains the pointer array in three logical zones:
  *
  * Array Layout:
- *    [ active entities ][   free slots   ][ paused entities ]
- * 0             size      paused        capacity
+ *    [ active entities ][   free slots    ][ paused entities ]
+ *    |                 |                  |                  |
+ *    0                 size               paused             capacity
  *
  * The entity objects themselves live in the caller-provided storage block; * manager->pool contains pointers to
  * those fixed addresses.

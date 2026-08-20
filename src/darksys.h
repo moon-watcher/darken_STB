@@ -1,15 +1,10 @@
 /**
- * darksys.h — Darksys 2.0 Entity System
- *
- * Public functions/types: de_*
- * Public macros:          DE_*
- * Internal functions:     _de_*
- * Internal macros:        _DE_*
+ * darksys.h
  *
  * Full documentation: README.md
  *
  * GNU C note:
- * - This header uses GNU C extensions (__attribute__ and statement expressions).
+ * - This header uses GNU C statement expression.
  *
  *
  *
@@ -19,13 +14,13 @@
  * the pointers associated with one processed item/entity.
  *
  * Pool Layout (params=2):
- *    [e0.a][e0.b][e1.a][e1.b][e2.a][e2.b]...
+ *    [A.a, A.b] [B.a, B.b] [C.a, C.b]...
  */
 
 #ifndef DARKSYS_H
 #define DARKSYS_H
 
-#include <stdint.h>
+#include <stdi nt.h>
 
 typedef struct de_system *de_system;
 
