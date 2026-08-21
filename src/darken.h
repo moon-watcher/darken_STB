@@ -118,15 +118,13 @@ void de_manager_reset(de_manager);
 #define _DE_DATA(TYPE, VAR, ENTITY) \
     TYPE *VAR = (TYPE *)(ENTITY)->data;
 
-#define _DE_STATE_IS_DELETED(STATE) ((STATE) == ((de_state)0))
-#define _DE_STATE_IS_LOOP(STATE) ((STATE) == ((de_state)1))
-#define _DE_STATE_IS_PAUSED(STATE) ((STATE) == ((de_state)2))
-#define _DE_STATE_IS_ACTIVE(STATE) ((STATE) > ((de_state)2))
-#define _DE_STATE_IS_UPDATABLE(STATE) (!_DE_STATE_IS_LOOP(STATE))
+#define _DE_STATE_IS_DELETED(STATE) ((STATE) == (de_state)0)
+#define _DE_STATE_IS_UPDATABLE(STATE) ((STATE) != (de_state)1)
+#define _DE_STATE_IS_PAUSED(STATE) ((STATE) == (de_state)2)
+#define _DE_STATE_IS_ACTIVE(STATE) ((STATE) > (de_state)2)
 
 #define _DE_ENTITY_IS_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->owner->size)
 #define _DE_ENTITY_IS_PAUSED(ENTITY) ((ENTITY)->slot >= (ENTITY)->owner->paused)
-#define _DE_ENTITY_IS_FREE(ENTITY) (!_DE_ENTITY_IS_ACTIVE(ENTITY) && !_DE_ENTITY_IS_PAUSED(ENTITY))
 
 /**
  * Align a byte count to a 4-byte boundary.
@@ -274,14 +272,7 @@ inline de_entity de_manager_new(de_manager $)
 {
     _DE_ASSERT($->size < $->paused, 0);
 
-    de_entity entity = $->pool[$->size];
-
-    entity->state = DE_STATE_DELETE;
-    entity->destructor = 0;
-
-    ++$->size;
-
-    return entity;
+    return $->pool[$->size++];
 }
 
 inline void de_manager_update(de_manager $)
