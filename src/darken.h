@@ -165,6 +165,10 @@ void de_manager_reset(de_manager);
 
 #endif // DARKEN_H
 
+/* ============================================================================
+ * IMPLEMENTATION
+ * ============================================================================ */
+
 #ifdef DARKEN_IMPLEMENTATION
 
 static inline void _de_swap(de_entity *pool, uint16_t i, uint16_t j)
