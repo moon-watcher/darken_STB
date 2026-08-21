@@ -28,7 +28,6 @@
  *
  * Array Layout:
  *    [ active entities ][   free slots    ][ paused entities ]
- *    |                 |                  |                  |
  *    0                 size               paused             capacity
  *
  * The entity objects themselves live in the caller-provided storage block; * manager->pool contains pointers to
@@ -74,8 +73,8 @@ struct de_entity
     // Public
     de_state state;
     de_state destructor;
-    uint32_t tag;        // available to the user
-    uint16_t usr;        // available to the user
+    uint32_t tag; // available to the user
+    uint16_t usr; // available to the user
     uint8_t data[];
 };
 
@@ -276,11 +275,11 @@ inline de_entity de_manager_new(de_manager $)
     _DE_ASSERT($->size < $->paused, 0);
 
     de_entity entity = $->pool[$->size];
+
     entity->state = DE_STATE_DELETE;
     entity->destructor = 0;
-    entity->owner = $;
-    entity->slot = $->size++;
-    entity->tag = 0;
+
+    ++$->size;
 
     return entity;
 }
