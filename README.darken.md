@@ -1,126 +1,216 @@
-# Darken (DARKula ENgine) 2.0 — Entity System
+# Darken — DARKula ENgine 2.0 Entity System
 
-`darken.h` is a **single-header library** (stb-style, declarations and implementation in the same file, implementation enabled via `DARKEN_IMPLEMENTATION`) that implements an **entity system** for games written in C.
+`darken.h` is a fixed-capacity, allocation-free entity manager built around a tiny finite-state-machine convention. It's aimed at constrained/retro targets (the header explicitly calls out 4-byte alignment and the Motorola 68000), but builds fine on any GCC/Clang target.
 
-Key design points:
+## Design at a glance
 
-- **No dynamic memory**: all memory (the pointer pool + the entities' data) is provided by the caller, typically statically, via the `DE_MANAGER_STORAGE` macro.
-- **Fixed capacity**: each `de_manager` manages a maximum number of entities defined up front.
-- **Stable addresses**: an entity's memory address never moves once allocated. Only the array of pointers (`manager->pool[]`) gets reordered. This is why it's safe to keep a raw pointer into `entity->data` even while the entity is paused, resumed, or reordered.
-- Designed for resource-constrained targets (the code's own comments mention GCC + Motorola 68000): 4-byte alignment and 16-bit fields.
-- Uses GNU C extensions (`__attribute__`), so it requires GCC/Clang — not strict standard C.
-
-## Core concept: Entity + Manager
-
-- **Entity (`de_entity`)**: a container for user data (`data[]`, variable size) plus a "state machine" built from function pointers.
-- **Manager (`de_manager`)**: an array (`pool`) of pointers to entities, divided into three contiguous zones that get reordered by swapping pointers (never by moving memory):
+- Entities live in one caller-provided, contiguous block of memory, sized and aligned up front. Once placed there by `de_manager_init`, an entity's own address **never moves** for the lifetime of the manager.
+- What *does* move is a pointer to that entity inside `manager->pool[]` — the manager reorders these pointers (via O(1) swaps) to keep three logical zones packed:
 
 ```
-[  active  ][   free   ][  paused  ]
-0           size        paused      capacity
+[ active entities ][   free slots   ][ paused entities ]
+0                  size              paused             capacity
 ```
 
-| Zone | Range | Description |
-|---|---|---|
-| **Active** | `[0, size)` | Updated every frame (`de_manager_update`) and iterated with `DE_MANAGER_FOREACH`. Freely created/deleted. |
-| **Free** | `[size, paused)` | Slots with no entity assigned. This is where `de_manager_new()` pulls the next available entity from. |
-| **Paused** | `[paused, capacity)` | Outside the update loop. `de_manager_new()` never reuses these slots, so their `data` pointers stay valid and untouched until explicitly resumed or deleted. |
+- **Active** `[0, size)`: touched every `de_manager_update()`, visited by `DE_MANAGER_FOREACH`. Entities are freely created and deleted here.
+- **Free** `[size, paused)`: unused slots; `de_manager_new()` claims the next one here.
+- **Paused** `[paused, capacity)`: parked out of the update loop and out of `DE_MANAGER_FOREACH`. `de_manager_new()` never hands out a slot from here, so a paused entity's address and `data` payload stay untouched until it's explicitly resumed or deleted.
 
-## An entity's state machine
+Because an entity's address is stable, it's safe to keep a raw pointer into `entity->data` even while the entity gets paused, resumed, or reordered elsewhere in the pool.
+
+## Compatibility / build
+
+- Uses `__attribute__((aligned(4)))` and C's `inline` keyword — GCC/Clang oriented, matching the 68000 4-byte-alignment requirement called out in the header.
+- Single-header "implementation macro" pattern: `#define DARKEN_IMPLEMENTATION` before including it in the translation unit(s) that need the function bodies.
+- **Linkage subtlety:** unlike `darksys.h` (whose implementation functions are plain, non-`inline`), every function under `DARKEN_IMPLEMENTATION` here is declared `inline` **without** `static`. Plain C99 `inline` (no `static`) needs an external, non-inline definition to exist in exactly one translation unit, or you can hit "undefined reference" / "multiple definition" errors at link time depending on the compiler and `-std=` flags (GNU89 vs. C99 inline semantics differ). If you run into link errors around these functions, either keep `DARKEN_IMPLEMENTATION` consistent across every file that includes the header, add your own `static`, or provide one non-inline instantiation.
+
+## The state machine convention
+
+An entity's behavior is one function pointer, `de_state`, i.e. `void *(*)(void *)`. It receives the entity's own `data` payload and returns one of:
+
+| Return value | Meaning |
+|---|---|
+| a real function pointer | become this state next update |
+| `DE_STATE_LOOP` (`(void*)1`) | keep the *current* state — shorthand for "return myself" without needing a self-reference |
+| `DE_STATE_PAUSE` (`(void*)2`) | move the entity to the paused zone |
+| `DE_STATE_DELETE` (`(void*)0`) | delete the entity |
+
+Internally, "is this state pointer a real function, or one of the three sentinels" is decided with `state > (de_state)2`. This is a fast, common trick in small/retro engines, but it relies on ordinary function-pointer addresses always comparing greater than the small integers 0/1/2 once cast to the same pointer type — true on every mainstream flat-address-space target (including the 68000 this header targets), but not something strict ISO C guarantees in general (pointer relational comparisons across unrelated values have limited defined behavior). Worth knowing if this is ever ported to an unusual architecture.
+
+### ⚠️ Deletion and pause are deferred by one update cycle
+
+This is the single most important behavioral detail to internalize. Look at what `de_manager_update()` does per entity:
 
 ```c
-typedef void *(*de_state)(void *);
+de_state state = entity->state;
+
+if (_DE_STATE_IS_ACTIVE(state)) {             // state is a real function pointer
+    state = state(entity->data);              // call it
+    if (_DE_STATE_IS_UPDATABLE(state))        // result isn't LOOP
+        entity->state = state;                // store the sentinel / next state
+}
+else if (_DE_STATE_IS_PAUSED(state))          // state was already a sentinel from a PRIOR update
+    de_entity_pause(entity);
+else if (_DE_STATE_IS_DELETED(state))
+    de_entity_delete(entity);
 ```
 
-A "state" is a function that receives `entity->data` and returns either **another state function** (the entity stays active and that becomes its next state), or one of these **control values**:
+When a state function returns `DE_STATE_DELETE` or `DE_STATE_PAUSE`, that value is only *stored* into `entity->state` during this call — the entity is **not** removed or paused yet. It's still sitting in the active zone, will still be visited by `DE_MANAGER_FOREACH`, and calling `de_entity_exec`/`de_entity_update` on it will now silently no-op (its state no longer passes `_DE_STATE_IS_ACTIVE`). The actual `de_entity_pause`/`de_entity_delete` call — the one that physically removes it from the active zone — only happens the *next* time `de_manager_update()` runs and re-reads that stored sentinel.
 
-| Value | Meaning |
-|---|---|
-| `DE_STATE_DELETE` (`0`) | Requests the entity be deleted. |
-| `DE_STATE_LOOP` (`1`) | "Stay as you are": doesn't overwrite `entity->state`, so the function doesn't need to return itself. |
-| `DE_STATE_PAUSE` (`2`) | Requests the entity be paused. |
+Practical implications:
 
-`_DE_STATE_IS_ACTIVE` simply checks that the pointer is `> 2`, i.e. a real function address (a pointer-tagging trick: no valid function lives at addresses 0, 1, or 2).
+- Expect a one-update lag between "a state function returned `DE_STATE_DELETE`" and the entity actually disappearing from the manager.
+- If you act on entities via `DE_MANAGER_FOREACH` right after `de_manager_update()` in the same frame (e.g. to render them), an entity that "died" this frame will still show up once more. Order your update/render passes accordingly, or check `entity->state` yourself if that one-frame ghost matters.
+- This is also *why* `de_manager_update()` walks the active zone **backward** (from `size - 1` down to `0`): a same-pass swap-removal only ever touches indices at or below the current position, so a backward loop can never disturb entities it hasn't visited yet. Follow the same pattern (iterate backward) in any custom loop that deletes or pauses entities as it goes.
 
-⚠️ **Important — one-frame delay**: when a state function returns `PAUSE` or `DELETE`, the manager only stores that value in `entity->state` that frame. The entity is physically moved out of its zone (actually paused/deleted) on the **next** call to `de_manager_update`, once that control value is detected.
-
-## Typical entity lifecycle
-
-1. `de_manager_new(mgr)` → the entity enters the active zone with `state = DE_STATE_DELETE` (the default).
-2. The caller **must** assign `entity->state` (and optionally `destructor`, `tag`, and fill in `data`) before the next call to `de_manager_update`.
-3. If it doesn't, since the state isn't active, this is interpreted as a delete request and the entity **self-deletes** on the next update. It's a safety net against half-initialized entities.
-4. Every `de_manager_update` runs each active entity's state function and applies transitions (new state / pause / delete).
-5. An entity can also be paused, resumed, or deleted directly (without going through a state function's return value) by calling `de_entity_pause`, `de_entity_resume`, or `de_entity_delete`; these take effect **immediately**, with no one-frame delay.
-
-## Structures
+## Data structures
 
 ```c
-struct de_entity {
-    de_state  state;      // current state/behavior (or a control value)
-    de_state  destructor; // optional callback on deletion
-    de_manager owner;     // owning manager
-    uint16_t  slot;       // current index in owner->pool[]
-    uint16_t  tag;        // free-form field for the caller to classify entity type
-    uint8_t   data[];     // user payload, variable size
+struct de_entity
+{
+    de_state state;      // current behavior / FSM state
+    de_state destructor; // called with entity->data on delete, if > 2 (a real pointer)
+    de_manager owner;    // back-pointer to the manager
+    uint16_t slot;       // current index into owner->pool[]
+    uint16_t tag;        // free-form user field; only touched (reset to 0) by de_manager_new
+    uint8_t data[];      // flexible payload, sized by DE_MANAGER_STORAGE's PAYLOAD_SIZE
 };
 
-struct de_manager {
-    de_entity *pool;      // array of pointers (what actually gets reordered)
-    uint16_t   capacity;  // total pool size
-    uint16_t   size;      // number of active entities (boundary of the active zone)
-    uint16_t   paused;    // boundary between the free zone and the paused zone
+struct de_manager
+{
+    de_entity *pool;     // capacity pointers into the entity storage block
+    uint16_t capacity;
+    uint16_t size;       // active-zone boundary
+    uint16_t paused;     // paused-zone boundary
 };
 ```
 
-`capacity`/`size`/`paused` are `uint16_t` → up to 65535 entities per manager.
+## Public API
 
-## Query macros
+### Entity lifecycle
 
-| Macro | Checks |
-|---|---|
-| `_DE_STATE_IS_DELETED(s)` | `s == DE_STATE_DELETE` |
-| `_DE_STATE_IS_LOOP(s)` | `s == DE_STATE_LOOP` |
-| `_DE_STATE_IS_PAUSED(s)` | `s == DE_STATE_PAUSE` |
-| `_DE_STATE_IS_ACTIVE(s)` | `s` is a real function pointer |
-| `_DE_ENTITY_IS_ACTIVE(e)` | `e` is in the active zone |
-| `_DE_ENTITY_IS_PAUSED(e)` | `e` is in the paused zone |
-| `_DE_ENTITY_IS_FREE(e)` | `e` is neither active nor paused (a free slot) |
+#### `void de_entity_exec(de_entity e)`
 
-## Declaration macros (user-facing API)
+Calls `e->state(e->data)` once and **discards the result** — `e->state` is left untouched no matter what the call returns. Useful for triggering the entity's current handler as a one-off (e.g. dispatching an event to it) without affecting its normal state progression. No-ops silently if `e` isn't active or its state isn't a real function pointer.
 
-| Macro | Purpose |
-|---|---|
-| `DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)` | Declares a variable `NAME` with **all storage embedded**: a `pool[CAPACITY]` array plus a byte buffer for the entities' data (4-byte aligned), no `malloc`. This is the recommended way to allocate a manager. |
-| `DE_MANAGER_ARGS(NAME)` | Expands to the 4 arguments (`pool, data, capacity, payload_size`) that `de_manager_init` needs, taken from a variable created with `DE_MANAGER_STORAGE`. Typical use: `de_manager_init(&mgr, DE_MANAGER_ARGS(storage));` |
-| `DE_MANAGER_FOREACH(manager, CODE)` | Iterates the **active** entities (back to front, safe against deletions performed inside `CODE`). Inside `CODE`, the variable `ENTITY` is available. |
+#### `void de_entity_update(de_entity e)`
 
-## Functions — Entity
+Calls `e->state(e->data)` and stores the result into `e->state` unless it's `DE_STATE_LOOP`. This is the single-entity version of what `de_manager_update()` does for the whole active zone — **except** it does not act on `DE_STATE_PAUSE`/`DE_STATE_DELETE` results itself. If you call this directly (instead of going through `de_manager_update()`) and the state function returns `DE_STATE_DELETE`/`DE_STATE_PAUSE`, that sentinel just gets stored — the entity is not actually paused or deleted. It will appear "stuck" (subsequent `de_entity_exec`/`de_entity_update` calls become no-ops, since their guards now fail) until something explicitly calls `de_entity_pause`/`de_entity_delete` on it, or until a later `de_manager_update()` pass sweeps it.
 
-| Function | What it does |
-|---|---|
-| `de_entity_exec(e)` | Runs `e`'s current state (passing it `e->data`) and returns the result, **without** applying the transition. Returns `0` if `e` isn't active. |
-| `de_entity_update(e)` | Like `de_entity_exec`, but also updates `e->state` with the result (unless it's `LOOP`). Meant for manually "ticking" a single entity outside the normal update loop; should only be called on active entities. |
-| `de_entity_pause(e)` | Moves `e` from the active zone to the paused zone, immediately. No-op (returns `0`) if `e` wasn't active. |
-| `de_entity_resume(e)` | Moves `e` from the paused zone back to the active zone, immediately. No-op if `e` wasn't paused. |
-| `de_entity_delete(e)` | Calls `destructor` (if it's an active pointer) and frees `e`'s slot (works whether `e` was active or paused). No-op if `e` was already free. |
-| `de_entity_move_front(e)` | Reorders `e` within the active zone to the slot processed **first** by `de_manager_update`/`DE_MANAGER_FOREACH`. Useful for controlling execution/draw order. |
-| `de_entity_move_back(e)` | Reorders `e` within the active zone to the slot processed **last**. |
+#### `void de_entity_pause(de_entity e)`
 
-## Functions — Manager
+Moves an **active** entity into the paused zone via two O(1) swaps. No-ops if `e` isn't currently active (including if it's already paused, or still free/unclaimed).
 
-| Function | What it does |
-|---|---|
-| `de_manager_init(mgr, pool, storage, capacity, bytes)` | Initializes the manager: slices `storage` into aligned chunks of `header + bytes` and links them into `pool[]`. Afterward, all entities start out free (`size = 0`, `paused = capacity`). Typically called as `de_manager_init(&mgr, DE_MANAGER_ARGS(storage_var));`. |
-| `de_manager_new(mgr)` | Claims an entity from the free zone and moves it into the active zone with `state = DE_STATE_DELETE`, `destructor = 0`, `tag = 0`. Returns `NULL` if no free slots remain. **The caller must set `state` (and optionally `data`/`destructor`/`tag`) before the next `de_manager_update`.** |
-| `de_manager_update(mgr)` | The main "tick": runs each active entity's state, applies whatever new state it returns, and processes any pause/delete requests pending from the previous call. Call this once per frame. |
-| `de_manager_reset(mgr)` | Deletes (destructors included) **all active entities** and empties the manager (`size = 0`, `paused = capacity`). |
+#### `void de_entity_resume(de_entity e)`
 
-## Notes and gotchas
+Moves a **paused** entity back into the active zone via two O(1) swaps. No-ops if `e` isn't currently paused.
 
-- **Delete-by-default**: if you don't assign an active state after `de_manager_new` before the next `de_manager_update`, the entity deletes itself.
-- **One-frame delay** for pauses/deletes requested *from inside* a state function (via `PAUSE`/`DELETE` return values). If you need it to take effect right away, call `de_entity_pause`/`de_entity_delete` directly.
-- **`de_manager_reset` does not call the destructor of paused entities** (it only walks the active zone via `DE_MANAGER_FOREACH`); if you have paused entities holding resources, resume them before resetting.
-- Pointers into `entity->data` stay stable as long as the entity exists (active or paused); they stop being valid once the entity is deleted, since its slot may get reused.
-- The size of the free zone doesn't change with `pause`/`resume` (only slots move between the active and paused zones); it does change with `new`/`delete`.
-- Requires compiling with GCC/Clang because of `__attribute__((aligned(4)))`.
-- To pull in the implementation, `#define DARKEN_IMPLEMENTATION` before a single `#include "darken.h"` in one `.c` file of your project.
+#### `void de_entity_delete(de_entity e)`
+
+Calls `e->destructor(e->data)` if a destructor is set (a real function pointer), then swap-removes `e` from the active zone into the free zone. **Only works on active entities** — a paused entity cannot be deleted directly; `de_entity_resume()` it first, then delete it, or the call will silently no-op.
+
+### Manager
+
+#### `DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)`
+
+Declares an anonymous-struct variable `NAME` holding:
+
+- `pool[CAPACITY]` — the `de_entity` pointer array (filled in by `de_manager_init`).
+- `data[...]` — a raw, 4-byte-aligned byte buffer sized `CAPACITY * stride`, where `stride = align4(sizeof(struct de_entity) + PAYLOAD_SIZE)`. This is where entities physically live, one fixed-size slot per capacity unit.
+
+Note that the entity header (`state`, `destructor`, `owner`, `slot`, `tag`) already consumes bytes out of every slot — `PAYLOAD_SIZE` only needs to cover your own data, but size your capacity/memory budget with `sizeof(struct de_entity)` overhead in mind, especially on memory-constrained targets.
+
+#### `DE_MANAGER_ARGS(NAME)`
+
+Expands to `(NAME).pool, (NAME).data, (NAME).capacity, (NAME).payload_size` — exactly the 4 trailing arguments `de_manager_init` expects.
+
+#### `void de_manager_init(de_manager m, de_entity *pool, void *storage, uint16_t capacity, uint16_t payload_size)`
+
+Places one entity at each stride offset in `storage`, records each one's fixed address in `pool[i]`, and sets `size = 0`, `paused = capacity` (everything starts in the free zone). Entities' `state`/`destructor`/`tag` are left uninitialized at this point — that's safe because nothing in the free zone is ever read until `de_manager_new()` claims and initializes it.
+
+#### `de_entity de_manager_new(de_manager m)`
+
+Claims the next free slot, resets `state = DE_STATE_DELETE`, `destructor = 0`, `tag = 0`, and returns it — or returns `0` (NULL) if the manager is full (`size == paused`, no free slots left). **Always check for NULL.**
+
+**⚠️ New entities default to `DE_STATE_DELETE`.** If you don't assign a real function to `entity->state` before the next `de_manager_update()`, the entity is simply deleted (with no destructor call, since `destructor` also defaults to `0`) on that very next update, without ever having run any logic. Configure `state` (and `destructor`/`tag`/payload as needed) immediately after `de_manager_new()` returns.
+
+**Object-pool reuse note:** the `data[]` payload of a reused slot is *not* cleared by `de_manager_new()` — it can still hold whatever the previous occupant left behind. Initialize every field your logic depends on; don't assume zeroed memory. If you need to detect "is this still logically the entity I remember," the `tag` field is available and reset to `0` on creation, but there's no built-in generation counter — you'd need to manage that scheme yourself (e.g. write an incrementing id into `tag` each time you create one, and compare it later).
+
+#### `void de_manager_update(de_manager m)`
+
+Runs one frame/tick: walks the active zone back-to-front, calls each active entity's state function (storing its result unless it's `DE_STATE_LOOP`), and — for entities already carrying a `DE_STATE_PAUSE`/`DE_STATE_DELETE` sentinel left over from a previous call — performs the actual pause/delete. See "Deletion and pause are deferred by one update cycle" above.
+
+#### `DE_MANAGER_FOREACH(m, code)`
+
+Iterates the **active zone only**, back-to-front, binding the fixed identifier `ENTITY` (a `de_entity`) for each one:
+
+```c
+DE_MANAGER_FOREACH(&manager, {
+    my_payload *p = (my_payload *)ENTITY->data;
+    draw(p);
+});
+```
+
+Paused entities are never visited. The loop's internal variables are fixed, capitalized names (`INDEX`, `POOL`, `ENTITY`) chosen to reduce (not eliminate) the chance of clashing with your own identifiers — avoid reusing those names inside `code`. The internal swap-removal pattern is proven safe for the manager's *own* self-mutating calls (`de_manager_update`, `de_manager_reset`); if your `code` block deletes or pauses entities *other than* `ENTITY` while inside a `DE_MANAGER_FOREACH`, treat it with the same caution as any other "mutate the container while iterating it" scenario — entries can be skipped or revisited.
+
+#### `void de_manager_reset(de_manager m)`
+
+Deletes every **active** entity (calling destructors via `de_entity_delete`) and then forces `size = 0`, `paused = capacity`.
+
+**⚠️ Paused entities are not destructed.** `DE_MANAGER_FOREACH` (used internally here) never visits the paused zone, so any entities you had paused are simply reclaimed into the free pool by the `paused = capacity` assignment — their `destructor` is never called. If paused entities in your game hold resources that need explicit cleanup, resume (or otherwise handle) them yourself before calling `de_manager_reset()`.
+
+## Usage example
+
+```c
+#define DARKEN_IMPLEMENTATION
+#include "darken.h"
+
+typedef struct { int x, hp; } enemy_data;
+
+void *enemy_idle(enemy_data *e) {
+    e->x++;
+    if (e->hp <= 0)
+        return DE_STATE_DELETE;
+    return DE_STATE_LOOP; /* keep running enemy_idle next update */
+}
+
+void enemy_cleanup(enemy_data *e) {
+    /* free anything e owns, log, etc. */
+    (void)e;
+}
+
+DE_MANAGER_STORAGE(storage, 64, sizeof(enemy_data));
+struct de_manager manager;
+
+void spawn_enemy(void) {
+    de_entity e = de_manager_new(&manager);
+    if (!e) return; /* pool full */
+
+    e->state = enemy_idle;
+    e->destructor = (de_state)enemy_cleanup;
+
+    enemy_data *d = (enemy_data *)e->data;
+    d->x = 0;
+    d->hp = 10;
+}
+
+void game_loop(void) {
+    de_manager_init(&manager, DE_MANAGER_ARGS(storage));
+
+    for (;;) {
+        de_manager_update(&manager);
+
+        DE_MANAGER_FOREACH(&manager, {
+            enemy_data *d = (enemy_data *)ENTITY->data;
+            /* draw d */
+            (void)d;
+        });
+    }
+}
+```
+
+## Other things worth knowing
+
+- **Guards are silent, not diagnostic.** `_DE_ASSERT` is just an early `return` on failure — no crash, no log. Calling an operation on an entity in the wrong zone (deleting a paused entity, resuming an active one, pausing an already-paused one, etc.) simply does nothing, which is safe but can hide logic bugs during development if return values / entity state aren't checked carefully.
+- **Capacity ceiling.** `capacity`, `size`, and `paused` are all `uint16_t`, so a single manager tops out at 65535 entities.
+- **`destructor` uses the same sentinel check as `state`.** Only values `> (de_state)2` are treated as callable; leaving `destructor` at its default `0` (or accidentally setting it to `DE_STATE_LOOP`/`DE_STATE_PAUSE`) means it is simply never called.

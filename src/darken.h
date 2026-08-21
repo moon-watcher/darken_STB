@@ -87,6 +87,8 @@ struct de_manager
  * PUBLIC API
  * ============================================================================ */
 
+#define DE_DATA _DE_DATA
+
 #define DE_STATE_DELETE ((void *)0)
 #define DE_STATE_LOOP ((void *)1)
 #define DE_STATE_PAUSE ((void *)2)
@@ -109,6 +111,9 @@ void de_manager_reset(de_manager);
 /* ============================================================================
  * INTERNAL MACRO IMPLEMENTATIONS
  * ============================================================================ */
+
+#define _DE_DATA(TYPE, VAR, ENTITY) \
+    TYPE *VAR = (TYPE *)(ENTITY)->data;
 
 #define _DE_STATE_IS_DELETED(STATE) ((STATE) == ((de_state)0))
 #define _DE_STATE_IS_LOOP(STATE) ((STATE) == ((de_state)1))
