@@ -32,7 +32,9 @@ struct de_system
     uint16_t params;
 };
 
-//
+/* ============================================================================
+ * PUBLIC API
+ * ============================================================================ */
 
 #define DE_SYSTEM_STORAGE _DE_SYSTEM_STORAGE
 #define DE_SYSTEM_ARGS _DE_SYSTEM_ARGS
