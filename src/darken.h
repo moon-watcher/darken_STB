@@ -31,7 +31,7 @@
  *    |                 |                  |                  |
  *    0                 size               paused             capacity
  *
- * The entity objects themselves live in the caller-provided storage block; * manager->pool.entities contains pointers to
+ * The entity objects themselves live in the caller-provided storage block; * manager->entities contains pointers to
  * those fixed addresses.
  *
  * - Active zone [0, size):
@@ -82,7 +82,7 @@ struct de_manager
         de_entity *entities;
         uint16_t capacity;
         uint16_t size;
-    } pool;
+    } ;
 
     uint16_t paused;
 };
@@ -96,7 +96,7 @@ struct de_manager
 #define DE_STATE_IS_PAUSED(STATE) ((STATE) == ((de_state)2))
 #define DE_STATE_IS_ACTIVE(STATE) ((STATE) > ((de_state)2))
 
-#define DE_ENTITY_IS_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->owner->pool.size)
+#define DE_ENTITY_IS_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->owner->size)
 #define DE_ENTITY_IS_PAUSED(ENTITY) ((ENTITY)->slot >= (ENTITY)->owner->paused)
 #define DE_ENTITY_IS_FREE(ENTITY) (!DE_ENTITY_IS_ACTIVE(ENTITY) && !DE_ENTITY_IS_PAUSED(ENTITY))
 
@@ -144,8 +144,8 @@ void de_manager_reset(de_manager);
 #define _DE_MANAGER_FOREACH(MANAGER, CODE)          \
     do                                              \
     {                                               \
-        uint16_t INDEX = (MANAGER)->pool.size;      \
-        de_entity *POOL = (MANAGER)->pool.entities; \
+        uint16_t INDEX = (MANAGER)->size;      \
+        de_entity *POOL = (MANAGER)->entities; \
         while (INDEX--)                             \
         {                                           \
             de_entity ENTITY = POOL[INDEX];         \
@@ -171,7 +171,7 @@ static inline void _de_swap_slots(de_manager m, uint16_t i, uint16_t j)
 {
     if (i == j)
         return;
-    de_entity *pool = m->pool.entities;
+    de_entity *pool = m->entities;
     de_entity tmp = pool[i];
     pool[i] = pool[j];
     pool[j] = tmp;
@@ -211,7 +211,7 @@ inline void de_entity_pause(de_entity $)
     _DE_ASSERT(DE_ENTITY_IS_ACTIVE($), );
 
     de_manager m = $->owner;
-    uint16_t size = --m->pool.size; // nueva última activa
+    uint16_t size = --m->size; // nueva última activa
     uint16_t paused = --m->paused;  // nueva primera pausada
 
     _de_swap_slots(m, $->slot, size);
@@ -223,13 +223,13 @@ inline void de_entity_resume(de_entity $)
     _DE_ASSERT(DE_ENTITY_IS_PAUSED($), );
 
     de_manager m = $->owner;
-    uint16_t size = m->pool.size;
+    uint16_t size = m->size;
     uint16_t paused = m->paused;
 
     _de_swap_slots(m, $->slot, paused);
     _de_swap_slots(m, $->slot, size);
 
-    ++m->pool.size;
+    ++m->size;
     ++m->paused;
 }
 
@@ -240,7 +240,7 @@ inline void de_entity_delete(de_entity $)
     if (DE_STATE_IS_ACTIVE($->destructor))
         $->destructor($->data);
 
-    uint16_t size = --m->pool.size;
+    uint16_t size = --m->size;
     _de_swap_slots(m, $->slot, size);
 }
 
@@ -248,7 +248,7 @@ inline void de_entity_move_front(de_entity $)
 {
     _DE_ASSERT(DE_ENTITY_IS_ACTIVE($), );
 
-    _de_swap_slots($->owner, $->slot, $->owner->pool.size - 1);
+    _de_swap_slots($->owner, $->slot, $->owner->size - 1);
 }
 
 inline void de_entity_move_back(de_entity $)
@@ -265,9 +265,9 @@ inline void de_entity_move_back(de_entity $)
 inline void de_manager_init(de_manager $, de_entity *pool, void *param_storage,
                             uint16_t capacity, uint16_t bytes)
 {
-    $->pool.entities = pool;
-    $->pool.capacity = capacity;
-    $->pool.size = 0;
+    $->entities = pool;
+    $->capacity = capacity;
+    $->size = 0;
     $->paused = capacity;
 
     uint16_t stride = _DE_ENTITY_STRIDE(bytes);
@@ -287,14 +287,14 @@ inline void de_manager_init(de_manager $, de_entity *pool, void *param_storage,
 
 inline de_entity de_manager_new(de_manager $)
 {
-    if ($->pool.size >= $->paused)
+    if ($->size >= $->paused)
         return 0;
 
-    de_entity entity = $->pool.entities[$->pool.size];
+    de_entity entity = $->entities[$->size];
     entity->state = DE_STATE_DELETE;
     entity->destructor = 0;
     entity->owner = $;
-    entity->slot = $->pool.size++;
+    entity->slot = $->size++;
     entity->tag = 0;
 
     return entity;
@@ -302,8 +302,8 @@ inline de_entity de_manager_new(de_manager $)
 
 inline void de_manager_update(de_manager $)
 {
-    uint16_t i = $->pool.size;
-    de_entity *pool = $->pool.entities;
+    uint16_t i = $->size;
+    de_entity *pool = $->entities;
 
     while (i--)
     {
@@ -330,8 +330,8 @@ inline void de_manager_update(de_manager $)
 inline void de_manager_reset(de_manager $)
 {
     DE_MANAGER_FOREACH($, de_entity_delete(ENTITY));
-    $->pool.size = 0;
-    $->paused = $->pool.capacity;
+    $->size = 0;
+    $->paused = $->capacity;
 }
 
 #endif /* DARKEN_IMPLEMENTATION */

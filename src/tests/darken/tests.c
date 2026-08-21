@@ -27,8 +27,8 @@ static u16 g_testsRun = 0, g_testsPassed = 0;
 
 static bool all_slots_aligned(de_manager mgr)
 {
-    for (uint16_t i = 0; i < mgr->pool.capacity; ++i)
-        if (((u32)mgr->pool.entities[i]) & 3)
+    for (uint16_t i = 0; i < mgr->capacity; ++i)
+        if (((u32)mgr->entities[i]) & 3)
             return FALSE;
     return TRUE;
 }
@@ -54,7 +54,7 @@ static void de_test_creation(void)
     struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 3, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
-    CHECK("manager empieza con size 0", m.pool.size == 0);
+    CHECK("manager empieza con size 0", m.size == 0);
     de_entity e0 = de_manager_new(&m);
     de_entity e1 = de_manager_new(&m);
     de_entity e2 = de_manager_new(&m);
@@ -63,7 +63,7 @@ static void de_test_creation(void)
     CHECK("new valida (2)", e1 != 0);
     CHECK("new valida (3)", e2 != 0);
     CHECK("new devuelve 0 al llenarse", e3 == 0);
-    CHECK("size == capacity", m.pool.size == 3);
+    CHECK("size == capacity", m.size == 3);
     CHECK("arranca en state delete", e0->state == DE_STATE_DELETE);
     CHECK("arranca con tag 0", e0->tag == 0);
 }
@@ -168,10 +168,10 @@ static void de_test_delete(void)
     c->state = (de_state)de_state_noop;
     a->state = DE_STATE_DELETE;
     de_manager_update(&m);
-    CHECK("delete via estado: size 2", m.pool.size == 2);
+    CHECK("delete via estado: size 2", m.size == 2);
     CHECK("delete via estado: destructor 1 vez", g_destructorCalls == 1);
     de_entity_delete(b);
-    CHECK("delete directo: size 1", m.pool.size == 1);
+    CHECK("delete directo: size 1", m.size == 1);
     CHECK("delete directo: destructor 2 veces", g_destructorCalls == 2);
 }
 
@@ -189,9 +189,9 @@ static void de_test_apply(void)
 
     // Iteración segura para borrar con swap-remove
     uint16_t idx = 0;
-    while (idx < m.pool.size)
+    while (idx < m.size)
     {
-        de_entity e = m.pool.entities[idx];
+        de_entity e = m.entities[idx];
         if (e->tag % 2 == 0)
         {
             de_entity_delete(e);
@@ -203,11 +203,11 @@ static void de_test_apply(void)
         }
     }
 
-    CHECK("quedan 2 entidades", m.pool.size == 2);
+    CHECK("quedan 2 entidades", m.size == 2);
     bool onlyOdd = TRUE;
-    for (uint16_t i = 0; i < m.pool.size; ++i)
+    for (uint16_t i = 0; i < m.size; ++i)
     {
-        if ((m.pool.entities[i]->tag % 2) == 0)
+        if ((m.entities[i]->tag % 2) == 0)
             onlyOdd = FALSE;
     }
     CHECK("quedan tags impares", onlyOdd);
@@ -226,7 +226,7 @@ static void de_test_reset(void)
         e->destructor = (de_state)de_my_destructor;
     }
     de_manager_reset(&m);
-    CHECK("reset: size 0", m.pool.size == 0);
+    CHECK("reset: size 0", m.size == 0);
     CHECK("reset: destructor 6 veces", g_destructorCalls == 6);
 }
 
@@ -249,9 +249,9 @@ static void de_test_destructor_abort(void)
     e->destructor = (de_state)de_state_abort_destructor;
     e->state = DE_STATE_DELETE;
     de_manager_update(&m);
-    CHECK("abort: size 1", m.pool.size == 1);
+    CHECK("abort: size 1", m.size == 1);
     CHECK("abort: destructor llamado", g_abortDestructorCalls == 1);
-    CHECK("abort: entidad viva", e->slot < m.pool.size);
+    CHECK("abort: entidad viva", e->slot < m.size);
     CHECK("abort: estado a loop", e->state == DE_STATE_LOOP);
 }
 
@@ -277,10 +277,10 @@ static void de_test_self_delete(void)
     de_manager_update(&m);
     CHECK("self-del f1: ejecutado 1 vez", g_selfKillCalls == 1);
     CHECK("self-del f1: marcada deleted", a->state == DE_STATE_DELETE);
-    CHECK("self-del f1: size aun 2", m.pool.size == 2);
+    CHECK("self-del f1: size aun 2", m.size == 2);
     de_manager_update(&m);
-    CHECK("self-del f2: size 1", m.pool.size == 1);
-    CHECK("self-del f2: queda b", m.pool.entities[0] == b);
+    CHECK("self-del f2: size 1", m.size == 1);
+    CHECK("self-del f2: queda b", m.entities[0] == b);
 }
 
 static void de_test_slot_stability(void)
@@ -297,18 +297,18 @@ static void de_test_slot_stability(void)
     de_entity_pause(e1);
     de_entity_pause(e3);
     bool stable = TRUE;
-    for (uint16_t i = 0; i < m.pool.size; ++i)
-        if (m.pool.entities[i]->slot != i)
+    for (uint16_t i = 0; i < m.size; ++i)
+        if (m.entities[i]->slot != i)
             stable = FALSE;
     CHECK("slots tras pausar", stable);
     CHECK("paused 2", m.paused == 2);
     de_entity_delete(e0);
     stable = TRUE;
-    for (uint16_t i = 0; i < m.pool.size; ++i)
-        if (m.pool.entities[i]->slot != i)
+    for (uint16_t i = 0; i < m.size; ++i)
+        if (m.entities[i]->slot != i)
             stable = FALSE;
     CHECK("slots tras delete", stable);
-    CHECK("size 1", m.pool.size == 1);
+    CHECK("size 1", m.size == 1);
 }
 
 static void de_test_delete_paused(void)
@@ -323,7 +323,7 @@ static void de_test_delete_paused(void)
     a->state = b->state = c->state = (de_state)de_state_noop;
     de_entity_pause(b);
     de_entity_delete(b);
-    CHECK("del pausado: size 2", m.pool.size == 2);
+    CHECK("del pausado: size 2", m.size == 2);
     CHECK("del pausado: paused 4", m.paused == 4);
     CHECK("del pausado: a activa", a->slot < m.paused); 
     CHECK("del pausado: c activa", c->slot < m.paused); 
@@ -350,7 +350,7 @@ static void de_test_apply_pause(void)
     }
 
     CHECK("apply pause: paused 3", m.paused == 3);
-    CHECK("apply pause: size 3", m.pool.size == 3);
+    CHECK("apply pause: size 3", m.size == 3);
     bool correct = TRUE;
     // Verificar que pares están en pausa y impares en activa
     for (int i = 0; i < 6; ++i)
@@ -381,7 +381,7 @@ static void de_test_reuse(void)
     de_entity e1 = de_manager_new(&m);
     CHECK("reuse: not null", e1 != 0);
     CHECK("reuse: slot 0", e1->slot == 0);
-    CHECK("reuse: size 1", m.pool.size == 1);
+    CHECK("reuse: size 1", m.size == 1);
     struct MyComponent *d1 = (struct MyComponent *)e1->data;
     CHECK("reuse: datos antiguos persisten", d1->x == 42);
 }
@@ -423,15 +423,15 @@ static void de_test_mixed_stress(void)
     g_stressCallsB = 0;
     de_manager_update(&m);
     CHECK("stress f2: 3 activas", g_stressCallsA + g_stressCallsB == 3);
-    CHECK("stress f2: size 3", m.pool.size == 3);
+    CHECK("stress f2: size 3", m.size == 3);
     de_entity_resume(e[1]);
     g_stressCallsA = 0;
     g_stressCallsB = 0;
     de_manager_update(&m);
     CHECK("stress f3: 4 activas", g_stressCallsA + g_stressCallsB == 4);
     bool ok = TRUE;
-    for (uint16_t i = 0; i < m.pool.size; ++i)
-        if (m.pool.entities[i]->slot != i)
+    for (uint16_t i = 0; i < m.size; ++i)
+        if (m.entities[i]->slot != i)
             ok = FALSE;
     CHECK("stress: slots ok", ok);
 }
@@ -465,9 +465,9 @@ static void de_test_empty_manager(void)
     struct de_manager m;
     DE_MANAGER_STORAGE(m_storage, 4, sizeof(struct MyComponent));
     de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
-    CHECK("empty: size 0", m.pool.size == 0);
+    CHECK("empty: size 0", m.size == 0);
     de_manager_update(&m);
-    CHECK("empty: size sigue 0", m.pool.size == 0);
+    CHECK("empty: size sigue 0", m.size == 0);
     CHECK("empty: paused 4", m.paused == 4);
 }
 
@@ -480,7 +480,7 @@ static void de_test_delete_last(void)
     de_entity e = de_manager_new(&m);
     e->state = (de_state)de_state_noop;
     de_entity_delete(e);
-    CHECK("last: size 0", m.pool.size == 0);
+    CHECK("last: size 0", m.size == 0);
     CHECK("last: paused 4", m.paused == 4);
 }
 
@@ -496,22 +496,22 @@ static void de_test_stress_capacity(void)
         ents[i] = de_manager_new(&m);
         CHECK("llenado completo", ents[i] != 0);
     }
-    CHECK("capacity 50", m.pool.size == 50);
+    CHECK("capacity 50", m.size == 50);
     for (int i = 0; i < 50; i += 2)
         de_entity_delete(ents[i]);
-    CHECK("tras borrar pares: size 25", m.pool.size == 25);
+    CHECK("tras borrar pares: size 25", m.size == 25);
     for (int i = 0; i < 10; ++i)
     {
         de_entity e = de_manager_new(&m);
         CHECK("rellenar huecos", e != 0);
     }
-    CHECK("size final 35", m.pool.size == 35);
+    CHECK("size final 35", m.size == 35);
     bool ok = TRUE;
-    for (uint16_t i = 0; i < m.pool.size; ++i)
+    for (uint16_t i = 0; i < m.size; ++i)
     {
-        if (m.pool.entities[i]->slot != i)
+        if (m.entities[i]->slot != i)
             ok = FALSE;
-        if (m.pool.entities[i]->owner != &m)
+        if (m.entities[i]->owner != &m)
             ok = FALSE;
     }
     CHECK("slots y manager correctos", ok);
@@ -532,18 +532,18 @@ static void de_test_stress_many_entities(void)
     }
     for (int i = 1; i < 20; i += 2)
         de_entity_delete(e[i]);
-    CHECK("many: size 10 tras borrar impares", m.pool.size == 10);
+    CHECK("many: size 10 tras borrar impares", m.size == 10);
     for (int i = 0; i < 5; ++i)
     {
         de_entity ne = de_manager_new(&m);
         ne->tag = 100 + i;
         ne->state = (de_state)de_state_noop;
     }
-    CHECK("many: size 15 tras recrear", m.pool.size == 15);
+    CHECK("many: size 15 tras recrear", m.size == 15);
     bool unique = TRUE;
-    for (uint16_t i = 0; i < m.pool.size; ++i)
-        for (uint16_t j = i + 1; j < m.pool.size; ++j)
-            if (m.pool.entities[i]->tag == m.pool.entities[j]->tag)
+    for (uint16_t i = 0; i < m.size; ++i)
+        for (uint16_t j = i + 1; j < m.size; ++j)
+            if (m.entities[i]->tag == m.entities[j]->tag)
                 unique = FALSE;
     CHECK("many: tags unicos", unique);
 }
@@ -563,18 +563,18 @@ static void de_test_stress_fragmentation(void)
     }
     for (int i = 1; i < 20; i += 2)
         de_entity_delete(e[i]);
-    CHECK("frag: size 10 tras borrar impares", m.pool.size == 10);
+    CHECK("frag: size 10 tras borrar impares", m.size == 10);
     for (int i = 0; i < 5; ++i)
     {
         de_entity ne = de_manager_new(&m);
         ne->tag = 100 + i;
         ne->state = (de_state)de_state_noop;
     }
-    CHECK("frag: size 15 tras recrear", m.pool.size == 15);
+    CHECK("frag: size 15 tras recrear", m.size == 15);
     bool unique = TRUE;
-    for (uint16_t i = 0; i < m.pool.size; ++i)
-        for (uint16_t j = i + 1; j < m.pool.size; ++j)
-            if (((de_entity)m.pool.entities[i])->tag == ((de_entity)m.pool.entities[j])->tag)
+    for (uint16_t i = 0; i < m.size; ++i)
+        for (uint16_t j = i + 1; j < m.size; ++j)
+            if (((de_entity)m.entities[i])->tag == ((de_entity)m.entities[j])->tag)
                 unique = FALSE;
     CHECK("frag: tags unicos tras recreacion", unique);
 }
@@ -629,7 +629,7 @@ static void de_test_entity_move_front_back(void)
     de_entity e3 = de_manager_new(&m);
     e0->state = e1->state = e2->state = e3->state = (de_state)de_state_front_back;
     de_entity_move_front(e1);
-    CHECK("move_front: e1 al final", e1->slot == m.pool.size - 1);
+    CHECK("move_front: e1 al final", e1->slot == m.size - 1);
     de_entity_move_back(e3);
     CHECK("move_back: e3 al principio activo", e3->slot == 0);
     g_frontBackCalls = 0;
@@ -677,9 +677,9 @@ static void de_test_delete_twice(void)
     e->destructor = (de_state)de_my_destructor;
     e->state = (de_state)de_state_noop;
     de_entity_delete(e);
-    CHECK("delete twice: size 0 tras primer delete", m.pool.size == 0);
+    CHECK("delete twice: size 0 tras primer delete", m.size == 0);
     de_entity_delete(e);
-    CHECK("delete twice: size sigue 0 (ya borrada)", m.pool.size == 0);
+    CHECK("delete twice: size sigue 0 (ya borrada)", m.size == 0);
     CHECK("delete twice: destructor 1 vez", g_destructorCalls == 1);
 }
 
@@ -728,7 +728,7 @@ static void de_test_manager_iterate_active_only(void)
         e->tag = i;
         e->state = (de_state)de_state_noop;
     }
-    de_entity_pause(m.pool.entities[1]);
+    de_entity_pause(m.entities[1]);
     uint16_t count = 0;
     DE_MANAGER_FOREACH(&m, { count++; });
     CHECK("iterate active: 3 entidades", count == 3);
@@ -746,18 +746,18 @@ static void de_test_apply_active_only(void)
         e->tag = i;
         e->state = (de_state)de_state_noop;
     }
-    de_entity_pause(m.pool.entities[0]);
-    de_entity_pause(m.pool.entities[2]);
+    de_entity_pause(m.entities[0]);
+    de_entity_pause(m.entities[2]);
     // Eliminar tag 1 manualmente
-    for (uint16_t i = 0; i < m.pool.size; ++i)
+    for (uint16_t i = 0; i < m.size; ++i)
     {
-        if (((de_entity) m.pool.entities[i])->tag == 1)
+        if (((de_entity) m.entities[i])->tag == 1)
         {
-            de_entity_delete(m.pool.entities[i]);
+            de_entity_delete(m.entities[i]);
             break;
         }
     }
-    CHECK("apply active: size 1", m.pool.size == 1);
+    CHECK("apply active: size 1", m.size == 1);
     bool foundTag1 = FALSE;
     DE_MANAGER_FOREACH(&m, { if (ENTITY->tag == 1) foundTag1 = TRUE; });
     CHECK("apply active: tag 1 borrado", !foundTag1);
@@ -784,7 +784,7 @@ static void de_test_destructor_state_change(void)
     e->destructor = (de_state)de_state_change_via_destructor;
     e->state = DE_STATE_DELETE;
     de_manager_update(&m);
-    CHECK("destructor change: size 1", m.pool.size == 1);
+    CHECK("destructor change: size 1", m.size == 1);
     CHECK("destructor change: llamado 1 vez", g_destructorChangeCalls == 1);
     CHECK("destructor change: estado cambiado a noop", e->state == (de_state)de_state_noop);
 }

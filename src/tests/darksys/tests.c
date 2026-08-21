@@ -148,8 +148,8 @@ static void test_entity_system_basic(void)
     CHECK("entity systems: physics modifica vy", p1->vy == 4 && p2->vy == 6);
     CHECK("entity systems: movement procesa ambas entidades", p1->x == 12 && p1->y == 24 && p2->x == 96 && p2->y == 206);
     CHECK("entity systems: frames procesa ambas entidades", p1->frame == 1 && p2->frame == 11);
-    CHECK("entity systems: manager de sistemas tiene 3 entidades", systems.pool.size == 3);
-    CHECK("entity systems: entidades normales siguen intactas", entities.pool.size == 2);
+    CHECK("entity systems: manager de sistemas tiene 3 entidades", systems.size == 3);
+    CHECK("entity systems: entidades normales siguen intactas", entities.size == 2);
 }
 
 static void test_entity_system_shared_data(void)
@@ -382,8 +382,8 @@ static void test_de_system_as_entities(void)
     CHECK("de_system entities: physics modifica vy", p1->vy == 4 && p2->vy == 6);
     CHECK("de_system entities: movement procesa ambas", p1->x == 12 && p1->y == 24 && p2->x == 96 && p2->y == 206);
     CHECK("de_system entities: frames procesa ambas", p1->frame == 1 && p2->frame == 11);
-    CHECK("de_system entities: manager contiene 3 sistemas", systems.pool.size == 3);
-    CHECK("de_system entities: manager de entidades intacto", entities.pool.size == 2);
+    CHECK("de_system entities: manager contiene 3 sistemas", systems.size == 3);
+    CHECK("de_system entities: manager de entidades intacto", entities.size == 2);
 }
 
 static void test_de_system_shared_payload(void)
