@@ -67,9 +67,12 @@ typedef struct de_manager *de_manager;
 
 struct de_entity
 {
+    // Private
+    de_manager _owner;
+
+    // Public
     de_state state;
     de_state destructor;
-    de_manager owner;
     uint16_t slot;
     uint16_t tag;
     uint8_t data[];
@@ -121,8 +124,8 @@ void de_manager_reset(de_manager);
 #define _DE_STATE_IS_ACTIVE(STATE) ((STATE) > ((de_state)2))
 #define _DE_STATE_IS_UPDATABLE(STATE) (!_DE_STATE_IS_LOOP(STATE))
 
-#define _DE_ENTITY_IS_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->owner->size)
-#define _DE_ENTITY_IS_PAUSED(ENTITY) ((ENTITY)->slot >= (ENTITY)->owner->paused)
+#define _DE_ENTITY_IS_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->_owner->size)
+#define _DE_ENTITY_IS_PAUSED(ENTITY) ((ENTITY)->slot >= (ENTITY)->_owner->paused)
 #define _DE_ENTITY_IS_FREE(ENTITY) (!_DE_ENTITY_IS_ACTIVE(ENTITY) && !_DE_ENTITY_IS_PAUSED(ENTITY))
 
 /**
@@ -214,15 +217,15 @@ inline void de_entity_pause(de_entity $)
 {
     _DE_ASSERT(_DE_ENTITY_IS_ACTIVE($), );
 
-    _de_swap($->owner->pool, $->slot, --$->owner->size);
-    _de_swap($->owner->pool, $->slot, --$->owner->paused);
+    _de_swap($->_owner->pool, $->slot, --$->_owner->size);
+    _de_swap($->_owner->pool, $->slot, --$->_owner->paused);
 }
 
 inline void de_entity_resume(de_entity $)
 {
     _DE_ASSERT(_DE_ENTITY_IS_PAUSED($), );
 
-    de_manager manager = $->owner;
+    de_manager manager = $->_owner;
 
     _de_swap(manager->pool, $->slot, manager->paused);
     _de_swap(manager->pool, $->slot, manager->size);
@@ -235,7 +238,7 @@ inline void de_entity_delete(de_entity $)
 {
     _DE_ASSERT(_DE_ENTITY_IS_ACTIVE($), );
 
-    de_manager manager = $->owner;
+    de_manager manager = $->_owner;
 
     if (_DE_STATE_IS_ACTIVE($->destructor))
         $->destructor($->data);
@@ -260,7 +263,7 @@ inline void de_manager_init(de_manager $, de_entity *pool, void *param_storage, 
         de_entity entity = (de_entity)storage;
 
         pool[i] = entity;
-        entity->owner = $;
+        entity->_owner = $;
         entity->slot = i;
 
         storage += stride;
@@ -274,7 +277,7 @@ inline de_entity de_manager_new(de_manager $)
     de_entity entity = $->pool[$->size];
     entity->state = DE_STATE_DELETE;
     entity->destructor = 0;
-    entity->owner = $;
+    entity->_owner = $;
     entity->slot = $->size++;
     entity->tag = 0;
 
@@ -321,12 +324,12 @@ inline void de_manager_reset(de_manager $)
 // {
 //     _DE_ASSERT(_DE_ENTITY_IS_ACTIVE($), );
 //
-//     _de_swap($->owner->pool, $->slot, $->owner->size - 1);
+//     _de_swap($->_owner->pool, $->slot, $->_owner->size - 1);
 // }
 
 // inline void de_entity_move_back(de_entity $)
 // {
 //     _DE_ASSERT(_DE_ENTITY_IS_ACTIVE($), );
 //
-//     _de_swap($->owner->pool, $->slot, 0);
+//     _de_swap($->_owner->pool, $->slot, 0);
 // }

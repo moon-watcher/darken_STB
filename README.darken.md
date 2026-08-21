@@ -28,12 +28,12 @@ Because an entity's address is stable, it's safe to keep a raw pointer into `ent
 
 An entity's behavior is one function pointer, `de_state`, i.e. `void *(*)(void *)`. It receives the entity's own `data` payload and returns one of:
 
-| Return value | Meaning |
-|---|---|
-| a real function pointer | become this state next update |
-| `DE_STATE_LOOP` (`(void*)1`) | keep the *current* state — shorthand for "return myself" without needing a self-reference |
-| `DE_STATE_PAUSE` (`(void*)2`) | move the entity to the paused zone |
-| `DE_STATE_DELETE` (`(void*)0`) | delete the entity |
+| Return value            | Meaning                                                                                   |
+| ----------------------- | ----------------------------------------------------------------------------------------- |
+| a real function pointer | become this state next update                                                             |
+| `DE_STATE_LOOP` (`1`)   | keep the *current* state — shorthand for "return myself" without needing a self-reference |
+| `DE_STATE_PAUSE` (`2`)  | move the entity to the paused zone                                                        |
+| `DE_STATE_DELETE` (`0`) | delete the entity                                                                         |
 
 Internally, "is this state pointer a real function, or one of the three sentinels" is decided with `state > (de_state)2`. This is a fast, common trick in small/retro engines, but it relies on ordinary function-pointer addresses always comparing greater than the small integers 0/1/2 once cast to the same pointer type — true on every mainstream flat-address-space target (including the 68000 this header targets), but not something strict ISO C guarantees in general (pointer relational comparisons across unrelated values have limited defined behavior). Worth knowing if this is ever ported to an unusual architecture.
 
@@ -44,13 +44,15 @@ This is the single most important behavioral detail to internalize. Look at what
 ```c
 de_state state = entity->state;
 
-if (_DE_STATE_IS_ACTIVE(state)) {             // state is a real function pointer
-    state = state(entity->data);              // call it
-    if (_DE_STATE_IS_UPDATABLE(state))        // result isn't LOOP
-        entity->state = state;                // store the sentinel / next state
+if (_DE_STATE_IS_ACTIVE(state)) {      // state is a real function pointer
+    state = state(entity->data);       // call it
+    if (_DE_STATE_IS_UPDATABLE(state)) // result isn't LOOP
+        entity->state = state;         // store the sentinel / next state
 }
-else if (_DE_STATE_IS_PAUSED(state))          // state was already a sentinel from a PRIOR update
+
+else if (_DE_STATE_IS_PAUSED(state))   // state was already a sentinel from a PRIOR update
     de_entity_pause(entity);
+    
 else if (_DE_STATE_IS_DELETED(state))
     de_entity_delete(entity);
 ```
@@ -86,6 +88,22 @@ struct de_manager
 ```
 
 ## Public API
+
+### Data access
+
+#### `DE_DATA(TYPE, VAR, ENTITY)`
+
+Declares a new pointer variable and points it at `ENTITY`'s payload, cast to `TYPE *`, in one line:
+
+```c
+DE_DATA(enemy_data, d, e); // equivalent to: enemy_data *d = (enemy_data *)e->data;
+```
+
+It expands to a plain declaration (`TYPE *VAR = (TYPE *)(ENTITY)->data;`) — unlike the macros in `darksys.h`, it is **not** a statement expression, so it must appear wherever a variable declaration is legal and it does not evaluate to a value.
+
+`ENTITY` must be a `de_entity` (or an expression yielding one) with a live `->data` payload — in practice that's the value returned by `de_manager_new()`, or the `ENTITY` identifier bound inside `DE_MANAGER_FOREACH`. It's purely a shorthand for the cast: it performs no type or bounds checking, so it's on you to pass a `TYPE` that actually matches the `PAYLOAD_SIZE`/layout the entity's manager was created with.
+
+**Not for use inside a `de_state` callback on its raw parameter.** A state function receives `void *data` directly (already `entity->data`, not an entity handle), so it has no `->data` to dereference — just cast that parameter to `TYPE *` yourself. `DE_DATA` is for the places where you're holding an actual `de_entity` (right after `de_manager_new()`, or as `ENTITY` inside `DE_MANAGER_FOREACH`) and want its typed payload without writing the cast by hand.
 
 ### Entity lifecycle
 
@@ -146,7 +164,7 @@ Iterates the **active zone only**, back-to-front, binding the fixed identifier `
 
 ```c
 DE_MANAGER_FOREACH(&manager, {
-    my_payload *p = (my_payload *)ENTITY->data;
+    DE_DATA(my_payload, p, ENTITY);
     draw(p);
 });
 ```
@@ -189,7 +207,7 @@ void spawn_enemy(void) {
     e->state = enemy_idle;
     e->destructor = (de_state)enemy_cleanup;
 
-    enemy_data *d = (enemy_data *)e->data;
+    DE_DATA(enemy_data, d, e);
     d->x = 0;
     d->hp = 10;
 }
@@ -201,7 +219,7 @@ void game_loop(void) {
         de_manager_update(&manager);
 
         DE_MANAGER_FOREACH(&manager, {
-            enemy_data *d = (enemy_data *)ENTITY->data;
+            DE_DATA(enemy_data, d, ENTITY);
             /* draw d */
             (void)d;
         });

@@ -335,7 +335,7 @@ void *ship_update(Entity *n)
     static int cooldown = 0;
     if (--cooldown <= 0) {
         cooldown = 10;
-        shoot(n->owner, n->pos, &renderer);  /* you'd pass renderer around */
+        shoot(n->_owner, n->pos, &renderer);  /* you'd pass renderer around */
     }
 
     return DE_STATE_LOOP;

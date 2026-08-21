@@ -511,7 +511,7 @@ static void de_test_stress_capacity(void)
     {
         if (m.pool[i]->slot != i)
             ok = FALSE;
-        if (m.pool[i]->owner != &m)
+        if (m.pool[i]->_owner != &m)
             ok = FALSE;
     }
     CHECK("slots y manager correctos", ok);
