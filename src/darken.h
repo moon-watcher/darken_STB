@@ -156,18 +156,18 @@ void de_manager_reset(de_manager);
         }                                   \
     } while (0)
 
-#define _DE_ASSERT(COND) \
-    do                   \
-    {                    \
-        if (!(COND))     \
-            return;      \
+#define _DE_ASSERT(COND, RET) \
+    do                        \
+    {                         \
+        if (!(COND))          \
+            return RET;       \
     } while (0)
 
 #endif // DARKEN_H
 
 #ifdef DARKEN_IMPLEMENTATION
 
-static inline void _de_swap_slots(de_entity *pool, uint16_t i, uint16_t j)
+static inline void _de_swap(de_entity *pool, uint16_t i, uint16_t j)
 {
     if (i == j)
         return;
@@ -181,16 +181,16 @@ static inline void _de_swap_slots(de_entity *pool, uint16_t i, uint16_t j)
 
 inline void de_entity_exec(de_entity $)
 {
-    _DE_ASSERT(DE_ENTITY_IS_ACTIVE($));
-    _DE_ASSERT(DE_STATE_IS_ACTIVE($->state));
+    _DE_ASSERT(DE_ENTITY_IS_ACTIVE($), );
+    _DE_ASSERT(DE_STATE_IS_ACTIVE($->state), );
 
     $->state($->data);
 }
 
 inline void de_entity_update(de_entity $)
 {
-    _DE_ASSERT(DE_ENTITY_IS_ACTIVE($));
-    _DE_ASSERT(DE_STATE_IS_ACTIVE($->state));
+    _DE_ASSERT(DE_ENTITY_IS_ACTIVE($), );
+    _DE_ASSERT(DE_STATE_IS_ACTIVE($->state), );
 
     void *result = $->state($->data);
 
@@ -200,20 +200,20 @@ inline void de_entity_update(de_entity $)
 
 inline void de_entity_pause(de_entity $)
 {
-    _DE_ASSERT(DE_ENTITY_IS_ACTIVE($));
+    _DE_ASSERT(DE_ENTITY_IS_ACTIVE($), );
 
-    _de_swap_slots($->owner->pool, $->slot, --$->owner->size);
-    _de_swap_slots($->owner->pool, $->slot, --$->owner->paused);
+    _de_swap($->owner->pool, $->slot, --$->owner->size);
+    _de_swap($->owner->pool, $->slot, --$->owner->paused);
 }
 
 inline void de_entity_resume(de_entity $)
 {
-    _DE_ASSERT(DE_ENTITY_IS_PAUSED($));
+    _DE_ASSERT(DE_ENTITY_IS_PAUSED($), );
 
     de_manager manager = $->owner;
 
-    _de_swap_slots(manager->pool, $->slot, manager->paused);
-    _de_swap_slots(manager->pool, $->slot, manager->size);
+    _de_swap(manager->pool, $->slot, manager->paused);
+    _de_swap(manager->pool, $->slot, manager->size);
 
     ++manager->paused;
     ++manager->size;
@@ -221,28 +221,28 @@ inline void de_entity_resume(de_entity $)
 
 inline void de_entity_delete(de_entity $)
 {
-    _DE_ASSERT(DE_ENTITY_IS_ACTIVE($));
+    _DE_ASSERT(DE_ENTITY_IS_ACTIVE($), );
 
     de_manager manager = $->owner;
 
     if (DE_STATE_IS_ACTIVE($->destructor))
         $->destructor($->data);
 
-    _de_swap_slots(manager->pool, $->slot, --manager->size);
+    _de_swap(manager->pool, $->slot, --manager->size);
 }
 
 inline void de_entity_move_front(de_entity $)
 {
-    _DE_ASSERT(DE_ENTITY_IS_ACTIVE($));
+    _DE_ASSERT(DE_ENTITY_IS_ACTIVE($), );
 
-    _de_swap_slots($->owner->pool, $->slot, $->owner->size - 1);
+    _de_swap($->owner->pool, $->slot, $->owner->size - 1);
 }
 
 inline void de_entity_move_back(de_entity $)
 {
-    _DE_ASSERT(DE_ENTITY_IS_ACTIVE($));
+    _DE_ASSERT(DE_ENTITY_IS_ACTIVE($), );
 
-    _de_swap_slots($->owner->pool, $->slot, 0);
+    _de_swap($->owner->pool, $->slot, 0);
 }
 
 //
@@ -271,8 +271,7 @@ inline void de_manager_init(de_manager $, de_entity *pool, void *param_storage, 
 
 inline de_entity de_manager_new(de_manager $)
 {
-    if ($->size >= $->paused)
-        return 0;
+    _DE_ASSERT($->size < $->paused, 0);
 
     de_entity entity = $->pool[$->size];
     entity->state = DE_STATE_DELETE;
