@@ -534,9 +534,9 @@ DE_STATE_PAUSE    /* Pause entity */
 ### Zone Query Macros
 
 ```c
-DE_ENTITY_IS_ACTIVE(e)
-DE_ENTITY_IS_PAUSED(e)
-DE_ENTITY_IS_FREE(e)
+_DE_ENTITY_IS_ACTIVE(e)
+_DE_ENTITY_IS_PAUSED(e)
+_DE_ENTITY_IS_FREE(e)
 ```
 
 ---

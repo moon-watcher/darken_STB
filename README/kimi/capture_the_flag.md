@@ -96,7 +96,7 @@ This code uses the **latest** `darken.h` API:
 |---------|-------|
 | `struct de_manager manager;` | Concrete struct, not pointer |
 | `struct de_system renderer;` | Concrete struct, not pointer |
-| `DE_ENTITY_IS_ACTIVE(e)` | Zone query macros |
+| `_DE_ENTITY_IS_ACTIVE(e)` | Zone query macros |
 | `DE_SYSTEM_FOREACH(sys, A, B, { code })` | Public variadic iteration |
 | `DE_SYSTEM_ITERATOR_2(name, A, B, { code })` | Generate system functions |
 | `void *foo(MyType *t)` | Typed state callbacks (cast to `de_state`) |

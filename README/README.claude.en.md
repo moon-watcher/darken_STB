@@ -227,10 +227,10 @@ A state callback receives `entity->data` (not the entity handle itself) and retu
 | `DE_STATE_PAUSE`  | `(void*)2` | Request pausing |
 
 ```c
-#define DE_STATE_IS_DELETED(S) ((S) == ((de_state)0))
-#define DE_STATE_IS_LOOP(S)    ((S) == ((de_state)1))
-#define DE_STATE_IS_PAUSED(S)  ((S) == ((de_state)2))
-#define DE_STATE_IS_ACTIVE(S)  ((S) >  ((de_state)2))
+#define _DE_STATE_IS_DELETED(S) ((S) == ((de_state)0))
+#define _DE_STATE_IS_LOOP(S)    ((S) == ((de_state)1))
+#define _DE_STATE_IS_PAUSED(S)  ((S) == ((de_state)2))
+#define _DE_STATE_IS_ACTIVE(S)  ((S) >  ((de_state)2))
 ```
 
 Any pointer value greater than `2` is treated as an executable callback. This assumes the linker never places code at addresses `0`–`2`, which holds in practice on the target ABI but is not something ISO C guarantees.
@@ -342,7 +342,7 @@ void  de_entity_move_back(de_entity);
 ```c
 void *de_entity_exec(de_entity $) {
     de_state state = $->state;
-    if (!DE_STATE_IS_ACTIVE(state)) return 0;
+    if (!_DE_STATE_IS_ACTIVE(state)) return 0;
     return state($->data);
 }
 ```****
@@ -354,7 +354,7 @@ Executes the current state **without** writing anything to `e->state`. If the st
 ```c
 void *de_entity_update(de_entity $) {
     de_state state = de_entity_exec($);
-    if (!DE_STATE_IS_LOOP(state)) $->state = state;
+    if (!_DE_STATE_IS_LOOP(state)) $->state = state;
     return state;
 }
 ```
@@ -832,7 +832,7 @@ Verified: compiling a call to `DE_ENTITY_STRIDE(16)` against the current header 
 ```c
 void *de_entity_update(de_entity $) {
     de_state state = de_entity_exec($);          /* returns 0 if $->state isn't a callback */
-    if (!DE_STATE_IS_LOOP(state)) $->state = state;   /* 0 is not LOOP, so it ALWAYS gets written */
+    if (!_DE_STATE_IS_LOOP(state)) $->state = state;   /* 0 is not LOOP, so it ALWAYS gets written */
     return state;
 }
 ```
@@ -841,7 +841,7 @@ If, at the moment `de_entity_update()` is called, the entity's `state` is alread
 
 Verified at runtime against the current header: starting from `entity->state = DE_STATE_PAUSE` and calling `de_entity_update(entity)`, the resulting state is `DE_STATE_DELETE`, not `DE_STATE_PAUSE`. This behavior is unchanged from earlier revisions of the header.
 
-**Practical implication:** `de_entity_update()` is only safe/useful on an entity that currently has an active callback assigned. Don't use it as a way to "advance" an entity that might be paused or already marked for deletion — use `de_entity_exec()` instead (which writes nothing), or check `DE_STATE_IS_ACTIVE(entity->state)` before calling it.
+**Practical implication:** `de_entity_update()` is only safe/useful on an entity that currently has an active callback assigned. Don't use it as a way to "advance" an entity that might be paused or already marked for deletion — use `de_entity_exec()` instead (which writes nothing), or check `_DE_STATE_IS_ACTIVE(entity->state)` before calling it.
 
 ### 19.3 `de_manager_reset` still does not destroy paused entities
 

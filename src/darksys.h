@@ -1,7 +1,7 @@
 /**
  * darksys.h
  *
- * Full documentation: README.md
+ * Full documentation: README.Darksys.md
  *
  * GNU C note:
  * - This header uses GNU C statement expression.
@@ -27,11 +27,12 @@ typedef struct de_system *de_system;
 struct de_system
 {
     void **pool;
-    void **end;
     uint16_t capacity;
     uint16_t size;
     uint16_t params;
 };
+
+//
 
 #define DE_SYSTEM_STORAGE _DE_SYSTEM_STORAGE
 #define DE_SYSTEM_ARGS _DE_SYSTEM_ARGS
@@ -67,49 +68,49 @@ void de_system_clear(de_system);
 #define _DE_SYSTEM_ARGS(NAME) \
     (NAME).pool, (NAME).capacity, (NAME).params
 
-#define _DE_SYSTEM_ADD(SYSTEM, ARGS, ...)      \
-    ({                                         \
-        de_system _s = (SYSTEM);               \
-        uint16_t _r = 0;                       \
-                                               \
-        if (_s->size + (ARGS) <= _s->capacity) \
-        {                                      \
-            void **_p = _s->end;               \
-            __VA_ARGS__                        \
-            _s->size += (ARGS);                \
-            _s->end += (ARGS);                 \
-            _r = 1;                            \
-        }                                      \
-        _r;                                    \
+#define _DE_SYSTEM_ADD(SYSTEM, ARGS, ...)                 \
+    ({                                                    \
+        de_system _system = (SYSTEM);                     \
+        uint16_t _return = 0;                             \
+                                                          \
+        if (_system->size + (ARGS) <= _system->capacity)  \
+        {                                                 \
+            void **_pool = _system->pool + _system->size; \
+            __VA_ARGS__                                   \
+            _system->size += (ARGS);                      \
+            _return = 1;                                  \
+        }                                                 \
+        _return;                                          \
     })
 
-#define _DE_SYSTEM_FOREACH(SYSTEM, IT) \
-    do                                 \
-    {                                  \
-        de_system _s = (SYSTEM);       \
-        void **_p = _s->pool;          \
-        void **_e = _s->end;           \
-        uint16_t _c = _s->params;      \
-                                       \
-        while (_p < _e)                \
-        {                              \
-            IT;                        \
-            _p += _c;                  \
-        }                              \
+#define _DE_SYSTEM_FOREACH(SYSTEM, IT)      \
+    do                                      \
+    {                                       \
+        de_system _system = (SYSTEM);       \
+        uint16_t _size = _system->size;     \
+        void **_pool = _system->pool;       \
+        uint16_t _params = _system->params; \
+                                            \
+        while (_size)                       \
+        {                                   \
+            IT;                             \
+            _pool += _params;               \
+            _size -= _params;               \
+        }                                   \
     } while (0)
 
-#define _DE_SYSTEM_ADD_1(SYS, A) _DE_SYSTEM_ADD(SYS, 1, _p[0] = (void *)(A);)
-#define _DE_SYSTEM_ADD_2(SYS, A, B) _DE_SYSTEM_ADD(SYS, 2, _p[0] = (void *)(A); _p[1] = (void *)(B);)
-#define _DE_SYSTEM_ADD_3(SYS, A, B, C) _DE_SYSTEM_ADD(SYS, 3, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C);)
-#define _DE_SYSTEM_ADD_4(SYS, A, B, C, D) _DE_SYSTEM_ADD(SYS, 4, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D);)
-#define _DE_SYSTEM_ADD_5(SYS, A, B, C, D, E) _DE_SYSTEM_ADD(SYS, 5, _p[0] = (void *)(A); _p[1] = (void *)(B); _p[2] = (void *)(C); _p[3] = (void *)(D); _p[4] = (void *)(E);)
+#define _DE_SYSTEM_ADD_1(SYS, A) _DE_SYSTEM_ADD(SYS, 1, _pool[0] = (void *)(A);)
+#define _DE_SYSTEM_ADD_2(SYS, A, B) _DE_SYSTEM_ADD(SYS, 2, _pool[0] = (void *)(A); _pool[1] = (void *)(B);)
+#define _DE_SYSTEM_ADD_3(SYS, A, B, C) _DE_SYSTEM_ADD(SYS, 3, _pool[0] = (void *)(A); _pool[1] = (void *)(B); _pool[2] = (void *)(C);)
+#define _DE_SYSTEM_ADD_4(SYS, A, B, C, D) _DE_SYSTEM_ADD(SYS, 4, _pool[0] = (void *)(A); _pool[1] = (void *)(B); _pool[2] = (void *)(C); _pool[3] = (void *)(D);)
+#define _DE_SYSTEM_ADD_5(SYS, A, B, C, D, E) _DE_SYSTEM_ADD(SYS, 5, _pool[0] = (void *)(A); _pool[1] = (void *)(B); _pool[2] = (void *)(C); _pool[3] = (void *)(D); _pool[4] = (void *)(E);)
 
 #define _DE_SYSTEM_FOREACH_0(SYSTEM, IT) _DE_SYSTEM_FOREACH(SYSTEM, { IT; })
-#define _DE_SYSTEM_FOREACH_1(SYSTEM, A, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = _p[0]; IT; })
-#define _DE_SYSTEM_FOREACH_2(SYSTEM, A, B, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = _p[0]; B = _p[1]; IT; })
-#define _DE_SYSTEM_FOREACH_3(SYSTEM, A, B, C, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = _p[0]; B = _p[1]; C = _p[2]; IT; })
-#define _DE_SYSTEM_FOREACH_4(SYSTEM, A, B, C, D, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = _p[0]; B = _p[1]; C = _p[2]; D = _p[3]; IT; })
-#define _DE_SYSTEM_FOREACH_5(SYSTEM, A, B, C, D, E, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = _p[0]; B = _p[1]; C = _p[2]; D = _p[3]; E = _p[4]; IT; })
+#define _DE_SYSTEM_FOREACH_1(SYSTEM, A, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = _pool[0]; IT; })
+#define _DE_SYSTEM_FOREACH_2(SYSTEM, A, B, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; IT; })
+#define _DE_SYSTEM_FOREACH_3(SYSTEM, A, B, C, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; C = _pool[2]; IT; })
+#define _DE_SYSTEM_FOREACH_4(SYSTEM, A, B, C, D, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; C = _pool[2]; D = _pool[3]; IT; })
+#define _DE_SYSTEM_FOREACH_5(SYSTEM, A, B, C, D, E, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; C = _pool[2]; D = _pool[3]; E = _pool[4]; IT; })
 
 #endif // DARKSYS_H
 
@@ -122,9 +123,8 @@ void de_system_clear(de_system);
 void de_system_init(de_system $, void **storage, uint16_t capacity_groups, uint16_t params)
 {
     $->pool = storage;
-    $->end = storage;
-    $->size = 0;
     $->capacity = capacity_groups * params;
+    $->size = 0;
     $->params = params;
 }
 
@@ -142,7 +142,6 @@ uint16_t de_system_remove(de_system $, void *first)
             continue;
 
         uint16_t size = $->size -= params;
-        $->end -= params;
 
         if (i != size)
             while (params--)
@@ -156,7 +155,6 @@ uint16_t de_system_remove(de_system $, void *first)
 
 void de_system_clear(de_system $)
 {
-    $->end = $->pool;
     $->size = 0;
 }
 

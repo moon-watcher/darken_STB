@@ -254,21 +254,21 @@ TEST(test_entity_delete_paused)
 
 TEST(test_entity_move_front_back)
 {
-    init_test_manager();
-    de_entity e0 = de_manager_new(&test_mgr);
-    de_entity e1 = de_manager_new(&test_mgr);
-    de_entity e2 = de_manager_new(&test_mgr);
-    e0->state = state_inc;
-    e1->state = state_inc;
-    e2->state = state_inc;
+    // init_test_manager();
+    // de_entity e0 = de_manager_new(&test_mgr);
+    // de_entity e1 = de_manager_new(&test_mgr);
+    // de_entity e2 = de_manager_new(&test_mgr);
+    // e0->state = state_inc;
+    // e1->state = state_inc;
+    // e2->state = state_inc;
 
-    de_entity_move_front(e0);
-    CHECK(test_mgr.pool[test_mgr.size - 1] == e0);
-    CHECK(e0->slot == test_mgr.size - 1);
+    // de_entity_move_front(e0);
+    // CHECK(test_mgr.pool[test_mgr.size - 1] == e0);
+    // CHECK(e0->slot == test_mgr.size - 1);
 
-    de_entity_move_back(e2);
-    CHECK(test_mgr.pool[0] == e2);
-    CHECK(e2->slot == 0);
+    // de_entity_move_back(e2);
+    // CHECK(test_mgr.pool[0] == e2);
+    // CHECK(e2->slot == 0);
 }
 
 TEST(test_manager_update_basic)

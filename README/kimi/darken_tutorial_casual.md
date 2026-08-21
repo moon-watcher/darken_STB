@@ -377,7 +377,7 @@ gcc -std=gnu99 main.c -o orbit && ./orbit
 | Make it move/change every frame | Assign a `state` and call `de_manager_update()` |
 | Make it disappear | The `state` returns `DE_STATE_DELETE` |
 | Process lots of data fast | `de_system` + `DE_SYSTEM_ITERATOR_*` or `DE_SYSTEM_FOREACH` |
-| Check if something is active | `DE_ENTITY_IS_ACTIVE(e)` |
+| Check if something is active | `_DE_ENTITY_IS_ACTIVE(e)` |
 | Reset everything | `de_manager_reset(&manager)` |
 
 ---

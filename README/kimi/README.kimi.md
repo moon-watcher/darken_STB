@@ -407,10 +407,10 @@ DE_SYSTEM_ITERATOR(physics_update, velocity, position, {
 | `DE_STATE_PAUSE` | `(void *)2` | Pausar la entidad. |
 
 Macros de comprobación:
-- `DE_STATE_IS_DELETED(s)` — ¿es 0?
-- `DE_STATE_IS_LOOP(s)` — ¿es 1?
-- `DE_STATE_IS_PAUSED(s)` — ¿es 2?
-- `DE_STATE_IS_ACTIVE(s)` — ¿es > 2? (es decir, un puntero de función válido).
+- `_DE_STATE_IS_DELETED(s)` — ¿es 0?
+- `_DE_STATE_IS_LOOP(s)` — ¿es 1?
+- `_DE_STATE_IS_PAUSED(s)` — ¿es 2?
+- `_DE_STATE_IS_ACTIVE(s)` — ¿es > 2? (es decir, un puntero de función válido).
 
 ### Utilidades
 

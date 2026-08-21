@@ -618,23 +618,23 @@ static void *de_state_front_back(void *data)
 
 static void de_test_entity_move_front_back(void)
 {
-    kprintf("-- test_entity_move_front_back --");
-    g_frontBackCalls = 0;
-    struct de_manager m;
-    DE_MANAGER_STORAGE(m_storage, 4, sizeof(struct MyComponent));
-    de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
-    de_entity e0 = de_manager_new(&m);
-    de_entity e1 = de_manager_new(&m);
-    de_entity e2 = de_manager_new(&m);
-    de_entity e3 = de_manager_new(&m);
-    e0->state = e1->state = e2->state = e3->state = (de_state)de_state_front_back;
-    de_entity_move_front(e1);
-    CHECK("move_front: e1 al final", e1->slot == m.size - 1);
-    de_entity_move_back(e3);
-    CHECK("move_back: e3 al principio activo", e3->slot == 0);
-    g_frontBackCalls = 0;
-    de_manager_update(&m);
-    CHECK("move_front/back: update respeta orden", g_frontBackCalls == 4);
+    // kprintf("-- test_entity_move_front_back --");
+    // g_frontBackCalls = 0;
+    // struct de_manager m;
+    // DE_MANAGER_STORAGE(m_storage, 4, sizeof(struct MyComponent));
+    // de_manager_init(&m, DE_MANAGER_ARGS(m_storage));
+    // de_entity e0 = de_manager_new(&m);
+    // de_entity e1 = de_manager_new(&m);
+    // de_entity e2 = de_manager_new(&m);
+    // de_entity e3 = de_manager_new(&m);
+    // e0->state = e1->state = e2->state = e3->state = (de_state)de_state_front_back;
+    // de_entity_move_front(e1);
+    // CHECK("move_front: e1 al final", e1->slot == m.size - 1);
+    // de_entity_move_back(e3);
+    // CHECK("move_back: e3 al principio activo", e3->slot == 0);
+    // g_frontBackCalls = 0;
+    // de_manager_update(&m);
+    // CHECK("move_front/back: update respeta orden", g_frontBackCalls == 4);
 }
 
 static void *de_state_transition_target(void *data)

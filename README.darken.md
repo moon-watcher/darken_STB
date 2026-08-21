@@ -40,7 +40,7 @@ A "state" is a function that receives `entity->data` and returns either **anothe
 | `DE_STATE_LOOP` (`1`) | "Stay as you are": doesn't overwrite `entity->state`, so the function doesn't need to return itself. |
 | `DE_STATE_PAUSE` (`2`) | Requests the entity be paused. |
 
-`DE_STATE_IS_ACTIVE` simply checks that the pointer is `> 2`, i.e. a real function address (a pointer-tagging trick: no valid function lives at addresses 0, 1, or 2).
+`_DE_STATE_IS_ACTIVE` simply checks that the pointer is `> 2`, i.e. a real function address (a pointer-tagging trick: no valid function lives at addresses 0, 1, or 2).
 
 ⚠️ **Important — one-frame delay**: when a state function returns `PAUSE` or `DELETE`, the manager only stores that value in `entity->state` that frame. The entity is physically moved out of its zone (actually paused/deleted) on the **next** call to `de_manager_update`, once that control value is detected.
 
@@ -78,13 +78,13 @@ struct de_manager {
 
 | Macro | Checks |
 |---|---|
-| `DE_STATE_IS_DELETED(s)` | `s == DE_STATE_DELETE` |
-| `DE_STATE_IS_LOOP(s)` | `s == DE_STATE_LOOP` |
-| `DE_STATE_IS_PAUSED(s)` | `s == DE_STATE_PAUSE` |
-| `DE_STATE_IS_ACTIVE(s)` | `s` is a real function pointer |
-| `DE_ENTITY_IS_ACTIVE(e)` | `e` is in the active zone |
-| `DE_ENTITY_IS_PAUSED(e)` | `e` is in the paused zone |
-| `DE_ENTITY_IS_FREE(e)` | `e` is neither active nor paused (a free slot) |
+| `_DE_STATE_IS_DELETED(s)` | `s == DE_STATE_DELETE` |
+| `_DE_STATE_IS_LOOP(s)` | `s == DE_STATE_LOOP` |
+| `_DE_STATE_IS_PAUSED(s)` | `s == DE_STATE_PAUSE` |
+| `_DE_STATE_IS_ACTIVE(s)` | `s` is a real function pointer |
+| `_DE_ENTITY_IS_ACTIVE(e)` | `e` is in the active zone |
+| `_DE_ENTITY_IS_PAUSED(e)` | `e` is in the paused zone |
+| `_DE_ENTITY_IS_FREE(e)` | `e` is neither active nor paused (a free slot) |
 
 ## Declaration macros (user-facing API)
 

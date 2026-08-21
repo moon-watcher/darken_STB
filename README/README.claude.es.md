@@ -161,10 +161,10 @@ Un callback de estado recibe `entity->data` (no la entidad completa) y devuelve,
 | `DE_STATE_PAUSE`  | `(void*)2` | Solicitar pausa           |
 
 ```c
-#define DE_STATE_IS_DELETED(S) ((S) == ((de_state)0))
-#define DE_STATE_IS_LOOP(S)    ((S) == ((de_state)1))
-#define DE_STATE_IS_PAUSED(S)  ((S) == ((de_state)2))
-#define DE_STATE_IS_ACTIVE(S)  ((S) >  ((de_state)2))
+#define _DE_STATE_IS_DELETED(S) ((S) == ((de_state)0))
+#define _DE_STATE_IS_LOOP(S)    ((S) == ((de_state)1))
+#define _DE_STATE_IS_PAUSED(S)  ((S) == ((de_state)2))
+#define _DE_STATE_IS_ACTIVE(S)  ((S) >  ((de_state)2))
 ```
 
 Cualquier valor de puntero mayor que `2` se considera un callback ejecutable. Esto asume que el enlazador nunca coloca código en las direcciones `0`–`2`, cierto en la práctica en el ABI de destino pero no garantizado por ISO C.
@@ -274,7 +274,7 @@ void  de_entity_move_back(de_entity);
 ```c
 void *de_entity_exec(de_entity $) {
     de_state s = $->state;
-    if (!DE_STATE_IS_ACTIVE(s)) return 0;
+    if (!_DE_STATE_IS_ACTIVE(s)) return 0;
     return s($->data);
 }
 ```
@@ -286,7 +286,7 @@ Ejecuta el estado actual **sin** escribir nada en `e->state`. Si el estado no es
 ```c
 void *de_entity_update(de_entity $) {
     de_state s = de_entity_exec($);
-    if (!DE_STATE_IS_LOOP(s)) $->state = s;
+    if (!_DE_STATE_IS_LOOP(s)) $->state = s;
     return s;
 }
 ```
@@ -710,7 +710,7 @@ Estos tres puntos se han verificado compilando y ejecutando código contra el he
 ```c
 void *de_entity_update(de_entity $) {
     de_state s = de_entity_exec($);          /* devuelve 0 si $->state no es un callback */
-    if (!DE_STATE_IS_LOOP(s)) $->state = s;   /* 0 no es LOOP, así que SIEMPRE se escribe */
+    if (!_DE_STATE_IS_LOOP(s)) $->state = s;   /* 0 no es LOOP, así que SIEMPRE se escribe */
     return s;
 }
 ```
@@ -719,7 +719,7 @@ Si en el momento de llamar a `de_entity_update()` el `state` de la entidad ya es
 
 Comprobado en tiempo de ejecución: partiendo de `entity->state = DE_STATE_PAUSE` y llamando a `de_entity_update(entity)`, el estado resultante es `de_state_delete`, no `DE_STATE_PAUSE`.
 
-**Implicación práctica:** `de_entity_update()` solo es segura/útil sobre una entidad que en ese instante tiene un callback activo asignado. No la uses como forma de "avanzar" una entidad que pueda estar en pausa o ya marcada para borrado — usa `de_entity_exec()` (que no escribe nada) o comprueba `DE_STATE_IS_ACTIVE(entity->state)` antes de llamar.
+**Implicación práctica:** `de_entity_update()` solo es segura/útil sobre una entidad que en ese instante tiene un callback activo asignado. No la uses como forma de "avanzar" una entidad que pueda estar en pausa o ya marcada para borrado — usa `de_entity_exec()` (que no escribe nada) o comprueba `_DE_STATE_IS_ACTIVE(entity->state)` antes de llamar.
 
 ### 18.2 `de_manager_reset` no destruye las entidades pausadas
 

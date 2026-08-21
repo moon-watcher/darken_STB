@@ -1,7 +1,7 @@
 /**
  * darken.h — Darken (DARKula ENgine) 2.0 Entity System
  *
- * Full documentation: README.md
+ * Full documentation: README.Darken.md
  *
  * GNU C note:
  * - This header uses GNU C extensions (__attribute__ and statement expressions).
@@ -83,26 +83,17 @@ struct de_manager
     uint16_t paused;
 };
 
+//
+
 #define DE_STATE_DELETE ((void *)0)
 #define DE_STATE_LOOP ((void *)1)
 #define DE_STATE_PAUSE ((void *)2)
-
-#define DE_STATE_IS_DELETED(STATE) ((STATE) == ((de_state)0))
-#define DE_STATE_IS_LOOP(STATE) ((STATE) == ((de_state)1))
-#define DE_STATE_IS_PAUSED(STATE) ((STATE) == ((de_state)2))
-#define DE_STATE_IS_ACTIVE(STATE) ((STATE) > ((de_state)2))
-
-#define DE_ENTITY_IS_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->owner->size)
-#define DE_ENTITY_IS_PAUSED(ENTITY) ((ENTITY)->slot >= (ENTITY)->owner->paused)
-#define DE_ENTITY_IS_FREE(ENTITY) (!DE_ENTITY_IS_ACTIVE(ENTITY) && !DE_ENTITY_IS_PAUSED(ENTITY))
 
 void de_entity_exec(de_entity);
 void de_entity_update(de_entity);
 void de_entity_pause(de_entity);
 void de_entity_resume(de_entity);
 void de_entity_delete(de_entity);
-void de_entity_move_front(de_entity);
-void de_entity_move_back(de_entity);
 
 #define DE_MANAGER_STORAGE _DE_MANAGER_STORAGE
 #define DE_MANAGER_ARGS _DE_MANAGER_ARGS
@@ -116,6 +107,16 @@ void de_manager_reset(de_manager);
 /* ============================================================================
  * INTERNAL MACRO IMPLEMENTATIONS
  * ============================================================================ */
+
+#define _DE_STATE_IS_DELETED(STATE) ((STATE) == ((de_state)0))
+#define _DE_STATE_IS_LOOP(STATE) ((STATE) == ((de_state)1))
+#define _DE_STATE_IS_PAUSED(STATE) ((STATE) == ((de_state)2))
+#define _DE_STATE_IS_ACTIVE(STATE) ((STATE) > ((de_state)2))
+#define _DE_STATE_IS_UPDATABLE(STATE) (!_DE_STATE_IS_LOOP(STATE))
+
+#define _DE_ENTITY_IS_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->owner->size)
+#define _DE_ENTITY_IS_PAUSED(ENTITY) ((ENTITY)->slot >= (ENTITY)->owner->paused)
+#define _DE_ENTITY_IS_FREE(ENTITY) (!_DE_ENTITY_IS_ACTIVE(ENTITY) && !_DE_ENTITY_IS_PAUSED(ENTITY))
 
 /**
  * Align a byte count to a 4-byte boundary.
@@ -185,26 +186,26 @@ static inline void _de_swap(de_entity *pool, uint16_t i, uint16_t j)
 
 inline void de_entity_exec(de_entity $)
 {
-    _DE_ASSERT(DE_ENTITY_IS_ACTIVE($), );
-    _DE_ASSERT(DE_STATE_IS_ACTIVE($->state), );
+    _DE_ASSERT(_DE_ENTITY_IS_ACTIVE($), );
+    _DE_ASSERT(_DE_STATE_IS_ACTIVE($->state), );
 
     $->state($->data);
 }
 
 inline void de_entity_update(de_entity $)
 {
-    _DE_ASSERT(DE_ENTITY_IS_ACTIVE($), );
-    _DE_ASSERT(DE_STATE_IS_ACTIVE($->state), );
+    _DE_ASSERT(_DE_ENTITY_IS_ACTIVE($), );
+    _DE_ASSERT(_DE_STATE_IS_ACTIVE($->state), );
 
     void *result = $->state($->data);
 
-    if (!DE_STATE_IS_LOOP(result))
+    if (_DE_STATE_IS_UPDATABLE(result))
         $->state = result;
 }
 
 inline void de_entity_pause(de_entity $)
 {
-    _DE_ASSERT(DE_ENTITY_IS_ACTIVE($), );
+    _DE_ASSERT(_DE_ENTITY_IS_ACTIVE($), );
 
     _de_swap($->owner->pool, $->slot, --$->owner->size);
     _de_swap($->owner->pool, $->slot, --$->owner->paused);
@@ -212,7 +213,7 @@ inline void de_entity_pause(de_entity $)
 
 inline void de_entity_resume(de_entity $)
 {
-    _DE_ASSERT(DE_ENTITY_IS_PAUSED($), );
+    _DE_ASSERT(_DE_ENTITY_IS_PAUSED($), );
 
     de_manager manager = $->owner;
 
@@ -225,28 +226,14 @@ inline void de_entity_resume(de_entity $)
 
 inline void de_entity_delete(de_entity $)
 {
-    _DE_ASSERT(DE_ENTITY_IS_ACTIVE($), );
+    _DE_ASSERT(_DE_ENTITY_IS_ACTIVE($), );
 
     de_manager manager = $->owner;
 
-    if (DE_STATE_IS_ACTIVE($->destructor))
+    if (_DE_STATE_IS_ACTIVE($->destructor))
         $->destructor($->data);
 
     _de_swap(manager->pool, $->slot, --manager->size);
-}
-
-inline void de_entity_move_front(de_entity $)
-{
-    _DE_ASSERT(DE_ENTITY_IS_ACTIVE($), );
-
-    _de_swap($->owner->pool, $->slot, $->owner->size - 1);
-}
-
-inline void de_entity_move_back(de_entity $)
-{
-    _DE_ASSERT(DE_ENTITY_IS_ACTIVE($), );
-
-    _de_swap($->owner->pool, $->slot, 0);
 }
 
 //
@@ -297,18 +284,18 @@ inline void de_manager_update(de_manager $)
         de_entity entity = pool[i];
         de_state state = entity->state;
 
-        if (DE_STATE_IS_ACTIVE(state))
+        if (_DE_STATE_IS_ACTIVE(state))
         {
             state = state(entity->data);
 
-            if (!DE_STATE_IS_LOOP(state))
+            if (_DE_STATE_IS_UPDATABLE(state))
                 entity->state = state;
         }
 
-        else if (DE_STATE_IS_PAUSED(state))
+        else if (_DE_STATE_IS_PAUSED(state))
             de_entity_pause(entity);
 
-        else if (DE_STATE_IS_DELETED(state))
+        else if (_DE_STATE_IS_DELETED(state))
             de_entity_delete(entity);
     }
 }
@@ -322,3 +309,17 @@ inline void de_manager_reset(de_manager $)
 }
 
 #endif // DARKEN_IMPLEMENTATION
+
+// inline void de_entity_move_front(de_entity $)
+// {
+//     _DE_ASSERT(_DE_ENTITY_IS_ACTIVE($), );
+//
+//     _de_swap($->owner->pool, $->slot, $->owner->size - 1);
+// }
+
+// inline void de_entity_move_back(de_entity $)
+// {
+//     _DE_ASSERT(_DE_ENTITY_IS_ACTIVE($), );
+//
+//     _de_swap($->owner->pool, $->slot, 0);
+// }
