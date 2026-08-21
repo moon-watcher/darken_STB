@@ -70,10 +70,10 @@ Practical implications:
 ```c
 struct de_entity
 {
+    // Public members
     de_state state;      // current behavior / FSM state
     de_state destructor; // called with entity->data on delete, if > 2 (a real pointer)
-    de_manager owner;    // back-pointer to the manager
-    uint16_t slot;       // current index into owner->pool[]
+    uint16_t slot;       // current index into manager's pool
     uint16_t tag;        // free-form user field; only touched (reset to 0) by de_manager_new
     uint8_t data[];      // flexible payload, sized by DE_MANAGER_STORAGE's PAYLOAD_SIZE
 };
@@ -136,7 +136,7 @@ Declares an anonymous-struct variable `NAME` holding:
 - `pool[CAPACITY]` — the `de_entity` pointer array (filled in by `de_manager_init`).
 - `data[...]` — a raw, 4-byte-aligned byte buffer sized `CAPACITY * stride`, where `stride = align4(sizeof(struct de_entity) + PAYLOAD_SIZE)`. This is where entities physically live, one fixed-size slot per capacity unit.
 
-Note that the entity header (`state`, `destructor`, `owner`, `slot`, `tag`) already consumes bytes out of every slot — `PAYLOAD_SIZE` only needs to cover your own data, but size your capacity/memory budget with `sizeof(struct de_entity)` overhead in mind, especially on memory-constrained targets.
+Note that the entity header (`state`, `destructor`, `slot`, `tag`) already consumes bytes out of every slot — `PAYLOAD_SIZE` only needs to cover your own data, but size your capacity/memory budget with `sizeof(struct de_entity)` overhead in mind, especially on memory-constrained targets.
 
 #### `DE_MANAGER_ARGS(NAME)`
 

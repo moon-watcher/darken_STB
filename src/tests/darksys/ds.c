@@ -137,7 +137,7 @@ TEST(test_entity_new)
     CHECK(e->slot == 0);
     CHECK(e->state == DE_STATE_DELETE);
     CHECK(e->tag == 0);
-    CHECK(e->_owner == &test_mgr);
+    CHECK(e->owner == &test_mgr);
     CHECK(test_mgr.size == 1);
 }
 
