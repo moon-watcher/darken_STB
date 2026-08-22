@@ -38,7 +38,7 @@ struct de_system
 
 #define DE_SYSTEM_STORAGE _DE_SYSTEM_STORAGE
 #define DE_SYSTEM_ARGS _DE_SYSTEM_ARGS
-#define DE_SYSTEM_FOREACH(...) _DE_FOREACH_DISPATCH(__VA_ARGS__)
+#define DE_SYSTEM_FOREACH(...) _DE_SYSTEM_FOREACH_DISPATCH(__VA_ARGS__)
 
 void de_system_init(de_system, void **, uint16_t, uint16_t);
 uint16_t de_system_add(de_system, ...);
@@ -49,7 +49,7 @@ void de_system_clear(de_system);
  * INTERNAL MACRO IMPLEMENTATIONS
  * ============================================================================ */
 
-#define _DE_FOREACH_DISPATCH(...) _DE_SYSTEM_CONCAT(_DE_SYSTEM_FOREACH_, _DE_SYSTEM_NARGS(__VA_ARGS__))(__VA_ARGS__)
+#define _DE_SYSTEM_FOREACH_DISPATCH(...) _DE_SYSTEM_CONCAT(_DE_SYSTEM_FOREACH_, _DE_SYSTEM_NARGS(__VA_ARGS__))(__VA_ARGS__)
 
 #define _DE_SYSTEM_NARGS(...) _DE_SYSTEM_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1, 0, -1)
 #define _DE_SYSTEM_NARGS_I(_1, _2, _3, _4, _5, _6, _7, N, ...) N
