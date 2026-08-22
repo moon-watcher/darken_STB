@@ -26,13 +26,6 @@ static u16 g_testsRun = 0, g_testsPassed = 0;
         }                                 \
     } while (0)
 
-static int g_destructorCalls = 0;
-static void *my_destructor(void *data)
-{
-    (void)data;
-    ++g_destructorCalls;
-    return DE_STATE_DELETE;
-}
 
 static void *state_noop(void *data)
 {

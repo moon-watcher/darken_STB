@@ -158,13 +158,6 @@ static void de_bench_swap(void)
     kprintf("de_entity_swap x50000: %ld frames (comentado)", frames);
 }
 
-static void *de_bench_noop(void *data)
-{
-    (void)data;
-    return DE_STATE_LOOP;
-}
-
-
 static void de_bench_memory_overhead(void)
 {
     kprintf("========== MEMORIA ==========");

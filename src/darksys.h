@@ -21,6 +21,7 @@
 #define DARKSYS_H
 
 #include <stdint.h>
+#include <stdarg.h>
 
 typedef struct de_system *de_system;
 
