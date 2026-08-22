@@ -292,7 +292,7 @@ de_system_init(g_hits, DE_SYSTEM_ARGS(hits_storage));
 Register a `{meteor payload, meteor entity}` pair every time we spawn one:
 
 ```c
-DE_SYSTEM_ADD(g_hits, m, e);
+de_system_add(g_hits, m, e);
 ```
 
 And check the whole pool each frame:
@@ -459,7 +459,7 @@ de_entity spawn_meteor(int16_t lane)
     e->destructor = meteor_destroyed;
     e->tag        = TAG_METEOR;
 
-    DE_SYSTEM_ADD(g_hits, m, e);
+    de_system_add(g_hits, m, e);
     g_meteors[g_meteor_count++] = e;
     return e;
 }
@@ -588,7 +588,7 @@ struct de_system  { void **pool, **end; uint16_t capacity, size, params; };
 | | |
 |---|---|
 | `de_system_init(s, storage, capacity_groups, params)` | one-time setup |
-| `DE_SYSTEM_ADD(s, ...)` | 1–5 pointers, must match `params` every time |
+| `de_system_add(s, ...)` | 1–5 pointers, must match `params` every time |
 | `DE_SYSTEM_FOREACH(s, ...)` | 0–5 output vars; safe to remove the *current* group, unsafe to remove a different one (§8) |
 | `de_system_remove(s, first)` | matches by first pointer, swap-removes (order not preserved) |
 

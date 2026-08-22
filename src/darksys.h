@@ -38,10 +38,10 @@ struct de_system
 
 #define DE_SYSTEM_STORAGE _DE_SYSTEM_STORAGE
 #define DE_SYSTEM_ARGS _DE_SYSTEM_ARGS
-#define DE_SYSTEM_ADD(...) _DE_CONCAT(_DE_SYSTEM_ADD_, _DE_ADD_NARGS(__VA_ARGS__))(__VA_ARGS__)
 #define DE_SYSTEM_FOREACH(...) _DE_CONCAT(_DE_SYSTEM_FOREACH_, _DE_FOREACH_NARGS(__VA_ARGS__))(__VA_ARGS__)
 
 void de_system_init(de_system, void **, uint16_t, uint16_t);
+uint16_t de_system_add(de_system, ...);
 uint16_t de_system_remove(de_system, void *);
 void de_system_clear(de_system);
 
@@ -49,8 +49,6 @@ void de_system_clear(de_system);
  * INTERNAL MACRO IMPLEMENTATIONS
  * ============================================================================ */
 
-#define _DE_ADD_NARGS(...) _DE_ADD_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1, 0)
-#define _DE_ADD_NARGS_I(_1, _2, _3, _4, _5, _6, N, ...) N
 #define _DE_FOREACH_NARGS(...) _DE_FOREACH_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1, 0, -1)
 #define _DE_FOREACH_NARGS_I(_1, _2, _3, _4, _5, _6, _7, N, ...) N
 #define _DE_CONCAT_INNER(A, B) A##B
@@ -70,21 +68,6 @@ void de_system_clear(de_system);
 #define _DE_SYSTEM_ARGS(NAME) \
     (NAME).pool, (NAME).capacity, (NAME).params
 
-#define _DE_SYSTEM_ADD(SYSTEM, ARGS, ...)                 \
-    ({                                                    \
-        de_system _system = (SYSTEM);                     \
-        uint16_t _return = 0;                             \
-                                                          \
-        if (_system->size + (ARGS) <= _system->capacity)  \
-        {                                                 \
-            void **_pool = _system->pool + _system->size; \
-            __VA_ARGS__                                   \
-            _system->size += (ARGS);                      \
-            _return = 1;                                  \
-        }                                                 \
-        _return;                                          \
-    })
-
 #define _DE_SYSTEM_FOREACH(SYSTEM, IT)      \
     do                                      \
     {                                       \
@@ -101,12 +84,6 @@ void de_system_clear(de_system);
         }                                   \
     } while (0)
 
-#define _DE_SYSTEM_ADD_1(SYS, A) _DE_SYSTEM_ADD(SYS, 1, _pool[0] = (void *)(A);)
-#define _DE_SYSTEM_ADD_2(SYS, A, B) _DE_SYSTEM_ADD(SYS, 2, _pool[0] = (void *)(A); _pool[1] = (void *)(B);)
-#define _DE_SYSTEM_ADD_3(SYS, A, B, C) _DE_SYSTEM_ADD(SYS, 3, _pool[0] = (void *)(A); _pool[1] = (void *)(B); _pool[2] = (void *)(C);)
-#define _DE_SYSTEM_ADD_4(SYS, A, B, C, D) _DE_SYSTEM_ADD(SYS, 4, _pool[0] = (void *)(A); _pool[1] = (void *)(B); _pool[2] = (void *)(C); _pool[3] = (void *)(D);)
-#define _DE_SYSTEM_ADD_5(SYS, A, B, C, D, E) _DE_SYSTEM_ADD(SYS, 5, _pool[0] = (void *)(A); _pool[1] = (void *)(B); _pool[2] = (void *)(C); _pool[3] = (void *)(D); _pool[4] = (void *)(E);)
-
 #define _DE_SYSTEM_FOREACH_0(SYSTEM, IT) _DE_SYSTEM_FOREACH(SYSTEM, { IT; })
 #define _DE_SYSTEM_FOREACH_1(SYSTEM, A, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = _pool[0]; IT; })
 #define _DE_SYSTEM_FOREACH_2(SYSTEM, A, B, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; IT; })
@@ -122,7 +99,7 @@ void de_system_clear(de_system);
 
 #ifdef DARKSYS_IMPLEMENTATION
 
-void de_system_init(de_system $, void **storage, uint16_t capacity_groups, uint16_t params)
+inline void de_system_init(de_system $, void **storage, uint16_t capacity_groups, uint16_t params)
 {
     $->pool = storage;
     $->capacity = capacity_groups * params;
@@ -130,7 +107,27 @@ void de_system_init(de_system $, void **storage, uint16_t capacity_groups, uint1
     $->params = params;
 }
 
-uint16_t de_system_remove(de_system $, void *first)
+inline uint16_t de_system_add(de_system $, ...)
+{
+    uint16_t size = $->size;
+    uint16_t params = $->params;
+
+    if (size + params > $->capacity)
+        return 0;
+
+    void **pool = $->pool + size;
+    $->size = size + params;
+
+    void *args;
+    va_start(args, $);
+
+    while (params--)
+        *pool++ = va_arg(args, void *);
+
+    return 1;
+}
+
+inline uint16_t de_system_remove(de_system $, void *first)
 {
     uint16_t params = $->params;
     void **pool = $->pool;
@@ -155,7 +152,7 @@ uint16_t de_system_remove(de_system $, void *first)
     return 0;
 }
 
-void de_system_clear(de_system $)
+inline void de_system_clear(de_system $)
 {
     $->size = 0;
 }

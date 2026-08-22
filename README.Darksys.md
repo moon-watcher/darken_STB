@@ -13,7 +13,7 @@ Think of it as a minimal "structure of tuples" store, useful for tracking auxili
 
 ## Compatibility / build
 
-- `DE_SYSTEM_ADD` expands to a GNU C **statement expression** (`({ ... })`), so this header needs GCC or Clang (or another compiler with that extension). It will not compile as strict ISO C on, e.g., MSVC.
+- `de_system_add` expands to a GNU C **statement expression** (`({ ... })`), so this header needs GCC or Clang (or another compiler with that extension). It will not compile as strict ISO C on, e.g., MSVC.
 - This is a single-header library in the classic "implementation macro" style: include the header normally wherever you need the declarations, and additionally `#define DARKSYS_IMPLEMENTATION` before **exactly one** `#include "darksys.h"` in the whole program. The implementation functions (`de_system_init`, `de_system_remove`, `de_system_clear`) are ordinary external functions with no `inline`/`static`, so defining `DARKSYS_IMPLEMENTATION` in more than one translation unit will cause "multiple definition" linker errors.
 
 ## Memory layout
@@ -78,15 +78,15 @@ de_system_init(&sys, DE_SYSTEM_ARGS(pairs_storage));
 
 Wires a `de_system` instance to a storage block, sets `size = 0`, and converts `capacity_groups` into the internal `capacity` (raw slot count) by multiplying by `params`. Must be called once before any other operation on `sys`.
 
-### `DE_SYSTEM_ADD(sys, ...)`
+### `de_system_add(sys, ...)`
 
 Appends one group. The number of trailing arguments (1 to 5) becomes the width of the group written:
 
 ```c
-DE_SYSTEM_ADD(&sys, ptr_a, ptr_b); // writes a 2-pointer group, evaluates to 1 or 0
+de_system_add(&sys, ptr_a, ptr_b); // writes a 2-pointer group, evaluates to 1 or 0
 ```
 
-It expands (via `_DE_SYSTEM_ADD_1` … `_DE_SYSTEM_ADD_5`, selected by counting `__VA_ARGS__`) into a statement expression that:
+It expands (via `_de_system_add_1` … `_de_system_add_5`, selected by counting `__VA_ARGS__`) into a statement expression that:
 
 1. Checks `size + N <= capacity`, where `N` is the literal number of arguments given *at this call site* (1–5).
 2. If there's room, writes the `N` pointers starting at `pool + size`, advances `size += N`, and evaluates to `1`.
@@ -94,7 +94,7 @@ It expands (via `_DE_SYSTEM_ADD_1` … `_DE_SYSTEM_ADD_5`, selected by counting 
 
 Always check the return value — a full pool silently drops the add.
 
-**⚠️ Important — argument count is not validated against `params`.** `N` above is a compile-time literal (how many values you wrote at the call site), completely independent from the runtime `params` value stored in `sys` during `de_system_init`. If you initialize a system with `params = 3` but call `DE_SYSTEM_ADD(&sys, a, b)` (2 args), the call happily writes 2 pointers and advances `size` by 2 — silently breaking the fixed-width grouping that `DE_SYSTEM_FOREACH` and `de_system_remove` both rely on (they stride by the *real* `params`). From that point on, every subsequent read is misaligned relative to the intended groups. There is no assertion or runtime check for this; it is entirely the caller's responsibility to always pass exactly `params` arguments to `DE_SYSTEM_ADD` for a given system.
+**⚠️ Important — argument count is not validated against `params`.** `N` above is a compile-time literal (how many values you wrote at the call site), completely independent from the runtime `params` value stored in `sys` during `de_system_init`. If you initialize a system with `params = 3` but call `de_system_add(&sys, a, b)` (2 args), the call happily writes 2 pointers and advances `size` by 2 — silently breaking the fixed-width grouping that `DE_SYSTEM_FOREACH` and `de_system_remove` both rely on (they stride by the *real* `params`). From that point on, every subsequent read is misaligned relative to the intended groups. There is no assertion or runtime check for this; it is entirely the caller's responsibility to always pass exactly `params` arguments to `de_system_add` for a given system.
 
 ### `DE_SYSTEM_FOREACH(sys, [a[, b[, c[, d[, e]]]]], code)`
 
@@ -107,7 +107,7 @@ DE_SYSTEM_FOREACH(&sys, a, b, {
 });
 ```
 
-The bind variables (`a`, `b`, …) must already be declared, with a type compatible with a plain assignment from `void *`, before the call — the macro only assigns to them (`a = pool[0];`), it doesn't declare them. It reads `sys->params` at runtime to know the stride, so it iterates correctly regardless of `params`'s value — as long as every `DE_SYSTEM_ADD` call for that system used matching width (see caveat above).
+The bind variables (`a`, `b`, …) must already be declared, with a type compatible with a plain assignment from `void *`, before the call — the macro only assigns to them (`a = pool[0];`), it doesn't declare them. It reads `sys->params` at runtime to know the stride, so it iterates correctly regardless of `params`'s value — as long as every `de_system_add` call for that system used matching width (see caveat above).
 
 Internally it uses `_system`, `_pool`, `_size`, `_params`, `_return` as temporary names inside a `do { } while(0)` block / statement expression. Avoid reusing those exact identifiers as your bind variables or inside `code`, since C macros aren't hygienic and you could shadow or clash with them.
 
@@ -135,7 +135,7 @@ void example(void)
     void *entity = (void *)0x1000;
     void *timer  = (void *)0x2000;
 
-    if (!DE_SYSTEM_ADD(&pairs, entity, timer))
+    if (!de_system_add(&pairs, entity, timer))
     {
         /* pool full: 32 groups already stored */
     }

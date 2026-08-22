@@ -72,9 +72,9 @@ The `de_state` interface also represents state callback pointers and special con
 
 The header contains `_DE_*` macros used only to implement the public convenience macros. In particular:
 
-- `_DE_ADD_NARGS` counts the data arguments supplied to `DE_SYSTEM_ADD`; the system pointer is excluded, so the supported range is 1–5 data pointers.
+- `_DE_ADD_NARGS` counts the data arguments supplied to `de_system_add`; the system pointer is excluded, so the supported range is 1–5 data pointers.
 - `_DE_FOREACH_NARGS` performs the equivalent selection for `DE_SYSTEM_FOREACH` and `DE_SYSTEM_ITERATOR`; the system pointer and final code block are excluded, so the supported range is 0–5 data variables.
-- `_DE_CONCAT` performs token concatenation so the public variadic macro can select `_DE_SYSTEM_ADD_1` … `_DE_SYSTEM_ADD_5`, or the corresponding foreach/iterator implementation.
+- `_DE_CONCAT` performs token concatenation so the public variadic macro can select `_de_system_add_1` … `_de_system_add_5`, or the corresponding foreach/iterator implementation.
 
 These helpers are implementation details. Application code should use the `DE_*` macros rather than calling `_DE_*` directly.
 
@@ -799,7 +799,7 @@ pool[]
 
 `size` and `capacity` are measured in pointer slots, while `params` defines the group width. Thus, if `params == 3`, a system containing four groups has `size == 12`, not `size == 4`.
 
-`end` points one element past the last used pointer. `DE_SYSTEM_ADD` writes new pointers at `end`, then advances both `size` and `end` by the number of pointers added. The pool therefore remains densely packed from `pool` through `end`.
+`end` points one element past the last used pointer. `de_system_add` writes new pointers at `end`, then advances both `size` and `end` by the number of pointers added. The pool therefore remains densely packed from `pool` through `end`.
 
 The system does not own the pointed-to objects. It stores only pointers. The lifetime of the entities/components represented by those pointers remains the caller's responsibility.
 
@@ -846,12 +846,12 @@ No heap allocation is performed.
 
 # 18. Adding system groups
 
-`DE_SYSTEM_ADD` accepts the system pointer first and then 1–5 data pointers. The macro writes those pointers consecutively at `system->end`, advances both `size` and `end`, and returns non-zero on success. If there is insufficient capacity for the complete group, it writes nothing and returns zero.
+`de_system_add` accepts the system pointer first and then 1–5 data pointers. The macro writes those pointers consecutively at `system->end`, advances both `size` and `end`, and returns non-zero on success. If there is insufficient capacity for the complete group, it writes nothing and returns zero.
 
 Use:
 
 ```c
-DE_SYSTEM_ADD(&physics, entity, velocity, position);
+de_system_add(&physics, entity, velocity, position);
 ```
 
 The first argument is the system pointer.
@@ -861,11 +861,11 @@ The remaining arguments are the pointers stored in one group.
 Up to five data pointers are supported:
 
 ```c
-DE_SYSTEM_ADD(&system, A);
-DE_SYSTEM_ADD(&system, A, B);
-DE_SYSTEM_ADD(&system, A, B, C);
-DE_SYSTEM_ADD(&system, A, B, C, D);
-DE_SYSTEM_ADD(&system, A, B, C, D, E);
+de_system_add(&system, A);
+de_system_add(&system, A, B);
+de_system_add(&system, A, B, C);
+de_system_add(&system, A, B, C, D);
+de_system_add(&system, A, B, C, D, E);
 ```
 
 The macro returns:
@@ -992,7 +992,7 @@ The convenience macros deliberately support a small fixed number of parameters:
 
 | Macro                | Supported data variables/pointers |
 | -------------------- | --------------------------------: |
-| `DE_SYSTEM_ADD`      |                               1–5 |
+| `de_system_add`      |                               1–5 |
 | `DE_SYSTEM_FOREACH`  |                               0–5 |
 | `DE_SYSTEM_ITERATOR` |                               0–5 |
 
@@ -1069,7 +1069,7 @@ de_system_init(&sys_movement, de_system_args(storage));
 struct Position { int16_t x, y; } position;
 struct Velocity { int16_t vx, vy; } velocity;
 
-DE_SYSTEM_ADD(&sys_movement, &position, &velocity);
+de_system_add(&sys_movement, &position, &velocity);
 ```
 
 ---
@@ -1166,7 +1166,7 @@ For systems:
 
 | Operation           | Complexity |
 | ------------------- | ---------: |
-| `DE_SYSTEM_ADD`     |       O(1) |
+| `de_system_add`     |       O(1) |
 | `DE_SYSTEM_FOREACH` |  O(groups) |
 | `de_system_remove`  |  O(groups) |
 | removal compaction  |  O(params) |
@@ -1346,7 +1346,7 @@ de_manager_foreach(M, CODE)
 
 DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS)
 de_system_args(NAME)
-DE_SYSTEM_ADD(...)
+de_system_add(...)
 DE_SYSTEM_FOREACH(...)
 DE_SYSTEM_ITERATOR(...)
 ```

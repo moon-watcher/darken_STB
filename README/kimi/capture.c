@@ -203,7 +203,7 @@ static de_entity create_entity(de_manager *m, de_system *ren,
     e->tag = (uint16_t)type;
 
     /* Register in render system: (x*, y*, sym*) */
-    DE_SYSTEM_ADD(ren, &d->x, &d->y, &d->symbol);
+    de_system_add(ren, &d->x, &d->y, &d->symbol);
 
     return e;
 }

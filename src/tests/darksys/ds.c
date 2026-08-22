@@ -349,9 +349,9 @@ TEST(test_system_init_add_remove)
     int a = 1, b = 2, c = 3, d = 4;
     int *pa = &a, *pb = &b, *pc = &c, *pd = &d;
 
-    CHECK(DE_SYSTEM_ADD(&test_sys, pa, pb) == 1);
+    CHECK(de_system_add(&test_sys, pa, pb) == 1);
     CHECK(test_sys.size == TEST_SYS_PARAMS);
-    CHECK(DE_SYSTEM_ADD(&test_sys, pc, pd) == 1);
+    CHECK(de_system_add(&test_sys, pc, pd) == 1);
     CHECK(test_sys.size == 2 * TEST_SYS_PARAMS);
 
     int sum = 0;
@@ -384,7 +384,7 @@ TEST(test_system_iterator_macro)
 {
     init_test_system();
     int a = 10, b = 20;
-    DE_SYSTEM_ADD(&test_sys, &a, &b);
+    de_system_add(&test_sys, &a, &b);
 
     // DE_SYSTEM_ITERATOR(test_sys_iterator, int *x, int *y, {
     //     (*x) += 1;
@@ -503,7 +503,7 @@ static void bench_system_add_remove(void)
     {
         int a = i, b = i + 1;
         int *pa = &a, *pb = &b;
-        DE_SYSTEM_ADD(&bench_sys, pa, pb);
+        de_system_add(&bench_sys, pa, pb);
         de_system_remove(&bench_sys, pa);
     }
     uint32_t t1 = get_time_us();
@@ -519,7 +519,7 @@ static void bench_system_foreach(void)
     {
         int a = i, b = i + 1;
         int *pa = &a, *pb = &b;
-        DE_SYSTEM_ADD(&bench_sys, pa, pb);
+        de_system_add(&bench_sys, pa, pb);
     }
     volatile int sink = 0;
     uint32_t t0 = get_time_us();

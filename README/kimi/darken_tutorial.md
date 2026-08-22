@@ -213,7 +213,7 @@ In `main`:
     de_system_init(&renderer, DE_SYSTEM_ARGS(render_sys));
 
     /* Every time we create a visible entity, register it */
-    DE_SYSTEM_ADD(&renderer, &data->pos);
+    de_system_add(&renderer, &data->pos);
 
     /* In the game loop, before or after update: */
     draw_system(&renderer);
@@ -273,7 +273,7 @@ void spawn_asteroid(de_manager m, de_system renderer)
     e->tag = TAG_ASTEROID;
 
     a->state = (de_state)asteroid_update;
-    DE_SYSTEM_ADD(renderer, &e->pos);
+    de_system_add(renderer, &e->pos);
 }
 ```
 
@@ -319,7 +319,7 @@ void shoot(de_manager m, Vec2 origin, de_system renderer)
     dat->life = 40;
 
     b->state = (de_state)bullet_update;
-    DE_SYSTEM_ADD(renderer, &dat->pos);
+    de_system_add(renderer, &dat->pos);
 }
 ```
 
@@ -465,7 +465,7 @@ DE_SYSTEM_ARGS(name)                              /* args for init */
 ```c
 DE_MANAGER_FOREACH(manager, code)   /* iterates active zone, defines ENTITY */
 
-DE_SYSTEM_ADD(system, ptr1, ...)    /* add pointer group */
+de_system_add(system, ptr1, ...)    /* add pointer group */
 
 /* Iterate a system inline, unpacking N pointers per group.
  * pool[0], pool[1], etc. are accessible inside code. */

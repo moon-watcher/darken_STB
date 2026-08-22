@@ -187,7 +187,7 @@ In `main`, initialize and use it:
     /* Every time we want a particle: */
     float *pos_x = &((Thing *)ship->data)->x;
     float *pos_y = &((Thing *)ship->data)->y;
-    DE_SYSTEM_ADD(&engine, pos_x, pos_y);  /* store pointers to ship position */
+    de_system_add(&engine, pos_x, pos_y);  /* store pointers to ship position */
 ```
 
 And in the loop:

@@ -47,7 +47,7 @@ Darken no es un ECS de archetypes. Es un gestor de entidades de capacidad fija s
 
 ## 2. Requisitos y plataforma
 
-- Compilador **GCC** (o compatible) con extensiones GNU C: el código usa `__attribute__((aligned(4)))` y *statement expressions* `({ ... })` dentro de `DE_SYSTEM_ADD`.
+- Compilador **GCC** (o compatible) con extensiones GNU C: el código usa `__attribute__((aligned(4)))` y *statement expressions* `({ ... })` dentro de `de_system_add`.
 - Única dependencia: `<stdint.h>`.
 - Objetivo declarado: **SGDK** (Sega Genesis Development Kit) sobre Motorola 68000, aunque el header compila igualmente en cualquier plataforma con GCC (se ha verificado en x86_64/Linux para este documento).
 - El tipo `de_state` representa tanto punteros a función como valores de control mediante `void *`, y varias comparaciones de puntero (`S > (de_state)2`) no son estrictamente ISO C portables. Es una decisión de diseño consciente para el ABI de destino, no un descuido.
@@ -393,7 +393,7 @@ Fija `pool = end = storage`, `size = 0`, `capacity = capacity_groups * params`, 
 
 Busca, avanzando de `params` en `params`, el grupo cuyo **primer** puntero sea exactamente `first`. Si lo encuentra: reduce `size` en `params`, y si el grupo encontrado no era el último, copia el último grupo sobre la posición eliminada (compactación tipo *swap-remove*, por lo que **no preserva el orden**). Devuelve `1`. Si no lo encuentra tras recorrer todo el pool, devuelve `0`.
 
-### `DE_SYSTEM_ADD` / `DE_SYSTEM_FOREACH` (macros)
+### `de_system_add` / `DE_SYSTEM_FOREACH` (macros)
 
 Ver [§11](#11-macros-públicas).
 
@@ -463,12 +463,12 @@ DE_SYSTEM_STORAGE(sys_storage, 32, 3);
 de_system_init(&sys, de_system_args(sys_storage));
 ```
 
-### `DE_SYSTEM_ADD(sys, ...)`
+### `de_system_add(sys, ...)`
 
 Añade un grupo de 1 a 5 punteros; el primer argumento es siempre el sistema:
 
 ```c
-uint16_t ok = DE_SYSTEM_ADD(&physics, entity, velocity, position); /* 1 = éxito, 0 = lleno */
+uint16_t ok = de_system_add(&physics, entity, velocity, position); /* 1 = éxito, 0 = lleno */
 ```
 
 ⚠️ El número de punteros pasado en **cada** llamada debe coincidir siempre con el `params` con el que se inicializó el sistema. Darken no lo valida: mezclar aridades en distintas llamadas sobre el mismo sistema desalinea silenciosamente el agrupamiento del pool, y tanto `DE_SYSTEM_FOREACH` como `de_system_remove` asumen grupos de tamaño uniforme.
@@ -580,7 +580,7 @@ Por eso `de_entity_move_front()` (lleva la entidad al índice más alto) hace qu
 
 | Operación           |                                                 Complejidad |
 | ------------------- | ----------------------------------------------------------: |
-| `DE_SYSTEM_ADD`     |                                                        O(1) |
+| `de_system_add`     |                                                        O(1) |
 | `DE_SYSTEM_FOREACH` |                                                   O(grupos) |
 | `de_system_remove`  | O(grupos) para la búsqueda + O(params) para la compactación |
 
@@ -652,7 +652,7 @@ DE_SYSTEM_STORAGE(sys_storage, 8, 2);
 de_system_init(&sys, de_system_args(sys_storage));
 
 for (int i = 0; i < 8; ++i)
-    DE_SYSTEM_ADD(&sys, &positions[i], &velocities[i]);
+    de_system_add(&sys, &positions[i], &velocities[i]);
 
 DE_SYSTEM_FOREACH(&sys, struct vec2 *pos, struct vec2 *vel,
 {
@@ -746,7 +746,7 @@ La operación de intercambio de dos entidades existe en el código (`_de_entity_
 
 No existe una función pública `de_entity_swap()`. El intercambio de dos entidades cualesquiera no forma parte de la API pública actual; solo se usa internamente como implementación de `pause`, `resume`, `delete`, `move_front` y `move_back`.
 
-### 18.4 Mismatch de aridad en `DE_SYSTEM_ADD` / `DE_SYSTEM_FOREACH` / `DE_SYSTEM_ITERATOR`
+### 18.4 Mismatch de aridad en `de_system_add` / `DE_SYSTEM_FOREACH` / `DE_SYSTEM_ITERATOR`
 
 Ninguna de estas macros comprueba en tiempo de compilación ni de ejecución que el número de punteros usado coincida con el `params` con el que se inicializó el sistema. Un desajuste no produce un error visible: simplemente descoloca el agrupamiento interno del pool de forma silenciosa, y las lecturas posteriores (`DE_SYSTEM_FOREACH`, `de_system_remove`) leerán punteros de otro grupo. Es responsabilidad exclusiva del usuario mantener la aridad constante para un mismo `de_system`.
 
@@ -841,7 +841,7 @@ struct de_system  { void **pool, **end; uint16_t capacity, size, params; };
 | `de_manager_foreach(M, CODE)`                      | Itera la zona activa hacia atrás (`INDEX`, `POOL`, `ENTITY`) |
 | `DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS)`        | Declara almacenamiento estático de sistema                   |
 | `de_system_args(NAME)`                             | Expande a los 3 argumentos de `de_system_init`               |
-| `DE_SYSTEM_ADD(sys, ...)`                          | Añade grupo de 1–5 punteros                                  |
+| `de_system_add(sys, ...)`                          | Añade grupo de 1–5 punteros                                  |
 | `DE_SYSTEM_FOREACH(sys, ...)`                      | Itera grupos, 0–5 variables de salida                        |
 | `DE_SYSTEM_ITERATOR(nombre, ...)`                  | Genera `void *nombre(de_system*)` a partir de un `FOREACH`   |
 

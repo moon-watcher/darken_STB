@@ -40,7 +40,7 @@ First one to touch the `$` wins. If an enemy touches you, you lose 1 of 3 lives 
 | **`de_state` (callbacks)** | Every entity has `game_state` as its callback. Movement, friction, and AI calls live inside it. |
 | **`de_system` (render)** | `render_sys` is a flat array of pointers `(x, y, symbol)`. It auto-updates because it points directly at entity fields. |
 | **`DE_MANAGER_FOREACH`** | Used in `check_collisions` to walk players and enemies without worrying about who died or who was just created. |
-| **`DE_SYSTEM_ADD`** | Every time we create an entity, we register it in the render system with its 3 pointers. |
+| **`de_system_add`** | Every time we create an entity, we register it in the render system with its 3 pointers. |
 | **`DE_SYSTEM_FOREACH`** | Used in `render_frame` to iterate the render system with 3 unpacked pointers per group. |
 
 ---
@@ -56,7 +56,7 @@ capture.c
 │   ├── ai_patroller()   → changes direction every 50 frames
 │   └── ai_blocker()     → blocks path to flag
 ├── game_state()         → de_state executed by de_manager_update()
-├── create_entity()      → factory using de_manager_new + DE_SYSTEM_ADD
+├── create_entity()      → factory using de_manager_new + de_system_add
 ├── check_collisions()   → nested DE_MANAGER_FOREACH (players vs enemies)
 ├── render_frame()       → draws via DE_SYSTEM_FOREACH
 └── main()               → game loop (~30 FPS)

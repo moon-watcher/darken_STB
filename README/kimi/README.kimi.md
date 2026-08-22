@@ -359,7 +359,7 @@ de_manager_foreach(my_manager, {
 
 ### Sistema — Añadir e iterar
 
-#### `DE_SYSTEM_ADD(sys, ...)`
+#### `de_system_add(sys, ...)`
 
 Añade un grupo de punteros al sistema. El primer argumento siempre es el puntero al sistema. Acepta de **1 a 5** punteros de datos adicionales.
 
@@ -367,7 +367,7 @@ Retorna `1` si tuvo éxito, `0` si el sistema está lleno.
 
 **Ejemplo:**
 ```c
-DE_SYSTEM_ADD(physics_system, entity_ptr, &velocity, &position);
+de_system_add(physics_system, entity_ptr, &velocity, &position);
 ```
 
 #### `DE_SYSTEM_FOREACH(sys, ...)`
@@ -543,7 +543,7 @@ de_system_init(&sys, de_system_args(sys_storage));
 
 /* Registrar pares de punteros */
 for (int i = 0; i < 8; ++i) {
-    DE_SYSTEM_ADD(&sys, &positions[i], &velocities[i]);
+    de_system_add(&sys, &positions[i], &velocities[i]);
 }
 
 /* Iterar y actualizar */
@@ -567,7 +567,7 @@ de_system_remove(&sys, &positions[3]);
 ## Notas de implementación
 
 - **Convención de nombres**: todo símbolo público utiliza el prefijo `de_` (funciones/tipos) o `DE_` (macros/constantes). Los símbolos internos utilizan `_de_` / `_DE_`.
-- **Macros variádicas**: `_DE_ADD_NARGS` e `_DE_FOREACH_NARGS` utilizan el truco de conteo de argumentos mediante expansión de macro para soportar sobrecarga de aridad en `DE_SYSTEM_ADD`, `DE_SYSTEM_FOREACH` y `DE_SYSTEM_ITERATOR`.
-- **Statement expressions**: `_DE_SYSTEM_ADD` usa la sintaxis `({ ... })` de GNU C para poder retornar un valor desde una macro compleja.
+- **Macros variádicas**: `_DE_ADD_NARGS` e `_DE_FOREACH_NARGS` utilizan el truco de conteo de argumentos mediante expansión de macro para soportar sobrecarga de aridad en `de_system_add`, `DE_SYSTEM_FOREACH` y `DE_SYSTEM_ITERATOR`.
+- **Statement expressions**: `_de_system_add` usa la sintaxis `({ ... })` de GNU C para poder retornar un valor desde una macro compleja.
 - **Sin gestión de errores de memoria**: si el almacenamiento proporcionado es insuficiente, el comportamiento es indefinido. El usuario es responsable de calcular correctamente los tamaños.
 - **Capacidad 16-bit**: todos los contadores (`capacity`, `active`, `paused`, `size`) son `uint16_t` para optimizar el rendimiento en el Motorola 68000.
