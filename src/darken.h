@@ -28,7 +28,6 @@
  *
  * Array Layout:
  *    [ active entities ][   free slots    ][ paused entities ]
- *    |                 |                  |                  |
  *    0                 size               paused             capacity
  *
  * The entity objects themselves live in the caller-provided storage block; * manager->pool contains pointers to
@@ -119,15 +118,13 @@ void de_manager_reset(de_manager);
 #define _DE_DATA(TYPE, VAR, ENTITY) \
     TYPE *VAR = (TYPE *)(ENTITY)->data;
 
-#define _DE_STATE_IS_DELETED(STATE) ((STATE) == ((de_state)0))
-#define _DE_STATE_IS_LOOP(STATE) ((STATE) == ((de_state)1))
-#define _DE_STATE_IS_PAUSED(STATE) ((STATE) == ((de_state)2))
-#define _DE_STATE_IS_ACTIVE(STATE) ((STATE) > ((de_state)2))
-#define _DE_STATE_IS_UPDATABLE(STATE) (!_DE_STATE_IS_LOOP(STATE))
+#define _DE_STATE_IS_DELETED(STATE) ((STATE) == (de_state)0)
+#define _DE_STATE_IS_UPDATABLE(STATE) ((STATE) != (de_state)1)
+#define _DE_STATE_IS_PAUSED(STATE) ((STATE) == (de_state)2)
+#define _DE_STATE_IS_ACTIVE(STATE) ((STATE) > (de_state)2)
 
 #define _DE_ENTITY_IS_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->owner->size)
 #define _DE_ENTITY_IS_PAUSED(ENTITY) ((ENTITY)->slot >= (ENTITY)->owner->paused)
-#define _DE_ENTITY_IS_FREE(ENTITY) (!_DE_ENTITY_IS_ACTIVE(ENTITY) && !_DE_ENTITY_IS_PAUSED(ENTITY))
 
 /**
  * Align a byte count to a 4-byte boundary.
@@ -195,26 +192,6 @@ static inline void _de_swap(de_entity *pool, uint16_t i, uint16_t j)
     pool[j]->slot = j;
 }
 
-static inline void _de_relocate(de_entity *pool, uint16_t from, uint16_t via, uint16_t to)
-{
-    de_entity moved = pool[from];
-
-    if (via != from)
-    {
-        pool[from] = pool[via];
-        pool[from]->slot = from;
-    }
-
-    if (to != via)
-    {
-        pool[via] = pool[to];
-        pool[via]->slot = via;
-    }
-
-    pool[to] = moved;
-    moved->slot = to;
-}
-
 inline void de_entity_exec(de_entity $)
 {
     _DE_ASSERT(_DE_STATE_IS_ACTIVE($->state), );
@@ -236,16 +213,21 @@ inline void de_entity_pause(de_entity $)
 {
     _DE_ASSERT(_DE_ENTITY_IS_ACTIVE($), );
 
-    de_manager manager = $->owner;
-    _de_relocate(manager->pool, $->slot, --manager->size, --manager->paused);
+    _de_swap($->owner->pool, $->slot, --$->owner->size);
+    _de_swap($->owner->pool, $->slot, --$->owner->paused);
 }
 
 inline void de_entity_resume(de_entity $)
 {
     _DE_ASSERT(_DE_ENTITY_IS_PAUSED($), );
 
+    _de_swap($->owner->pool, $->slot, $->owner->paused);
+    _de_swap($->owner->pool, $->slot, $->owner->size);
+
     de_manager manager = $->owner;
-    _de_relocate(manager->pool, $->slot, manager->paused++, manager->size++);
+
+    ++manager->paused;
+    ++manager->size;
 }
 
 inline void de_entity_delete(de_entity $)
@@ -326,17 +308,3 @@ inline void de_manager_reset(de_manager $)
 }
 
 #endif // DARKEN_IMPLEMENTATION
-
-// inline void de_entity_move_front(de_entity $)
-// {
-//     _DE_ASSERT(_DE_ENTITY_IS_ACTIVE($), );
-//
-//     _de_swap($->owner->pool, $->slot, $->owner->size - 1);
-// }
-
-// inline void de_entity_move_back(de_entity $)
-// {
-//     _DE_ASSERT(_DE_ENTITY_IS_ACTIVE($), );
-//
-//     _de_swap($->owner->pool, $->slot, 0);
-// }
