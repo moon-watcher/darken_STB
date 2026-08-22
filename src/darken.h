@@ -119,7 +119,7 @@ void de_manager_reset(de_manager);
     TYPE *VAR = (TYPE *)(ENTITY)->data;
 
 #define _DE_STATE_IS_DELETED(STATE) ((STATE) == (de_state)0)
-#define _DE_STATE_IS_UPDATABLE(STATE) ((STATE) != (de_state)1)
+#define _DE_STATE_IS_LOOP(STATE) ((STATE) == (de_state)1)
 #define _DE_STATE_IS_PAUSED(STATE) ((STATE) == (de_state)2)
 #define _DE_STATE_IS_ACTIVE(STATE) ((STATE) > (de_state)2)
 
@@ -136,6 +136,15 @@ void de_manager_reset(de_manager);
 
 // Ensures proper alignment between consecutive entities
 #define _DE_ENTITY_STRIDE(PAYLOAD) _DE_ALIGN4(sizeof(struct de_entity) + (PAYLOAD))
+
+#define _DE_ENTITY_UPDATE(ENTITY)                   \
+    do                                              \
+    {                                               \
+        void *result = ENTITY->state(ENTITY->data); \
+                                                    \
+        if (!_DE_STATE_IS_LOOP(result))             \
+            ENTITY->state = result;                 \
+    } while (0)
 
 #define _DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)                                         \
     struct                                                                                        \
@@ -203,10 +212,7 @@ inline void de_entity_update(de_entity $)
 {
     _DE_ASSERT(_DE_STATE_IS_ACTIVE($->state), );
 
-    void *result = $->state($->data);
-
-    if (_DE_STATE_IS_UPDATABLE(result))
-        $->state = result;
+    _DE_ENTITY_UPDATE($);
 }
 
 inline void de_entity_pause(de_entity $)
@@ -284,12 +290,7 @@ inline void de_manager_update(de_manager $)
         de_state state = entity->state;
 
         if (_DE_STATE_IS_ACTIVE(state))
-        {
-            state = state(entity->data);
-
-            if (_DE_STATE_IS_UPDATABLE(state))
-                entity->state = state;
-        }
+            _DE_ENTITY_UPDATE(entity);
 
         else if (_DE_STATE_IS_PAUSED(state))
             de_entity_pause(entity);
