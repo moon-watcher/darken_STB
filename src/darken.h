@@ -115,6 +115,12 @@ void de_manager_reset(de_manager);
  * INTERNAL MACRO IMPLEMENTATIONS
  * ============================================================================ */
 
+#define _DE_BLOCK(CODE) \
+    do                  \
+    {                   \
+        CODE            \
+    } while (0)
+
 #define _DE_DATA(TYPE, VAR, ENTITY) \
     TYPE *VAR = (TYPE *)(ENTITY)->data;
 
@@ -137,32 +143,23 @@ void de_manager_reset(de_manager);
 // Ensures proper alignment between consecutive entities
 #define _DE_ENTITY_STRIDE(PAYLOAD) _DE_ALIGN4(sizeof(struct de_entity) + (PAYLOAD))
 
-#define _DE_ENTITY_UPDATE(ENTITY)                   \
-    do                                              \
-    {                                               \
-        void *result = ENTITY->state(ENTITY->data); \
-                                                    \
-        if (!_DE_STATE_IS_LOOP(result))             \
-            ENTITY->state = result;                 \
-    } while (0)
+#define _DE_ENTITY_UPDATE(ENTITY) _DE_BLOCK(    \
+    void *result = ENTITY->state(ENTITY->data); \
+                                                \
+    if (!_DE_STATE_IS_LOOP(result))             \
+        ENTITY->state = result;)
 
-#define _DE_ENTITY_PAUSE(ENTITY)                                              \
-    do                                                                        \
-    {                                                                         \
-        _de_swap(ENTITY->owner->pool, ENTITY->slot, --ENTITY->owner->size);   \
-        _de_swap(ENTITY->owner->pool, ENTITY->slot, --ENTITY->owner->paused); \
-    } while (0)
+#define _DE_ENTITY_PAUSE(ENTITY) _DE_BLOCK(                             \
+    _de_swap(ENTITY->owner->pool, ENTITY->slot, --ENTITY->owner->size); \
+    _de_swap(ENTITY->owner->pool, ENTITY->slot, --ENTITY->owner->paused);)
 
-#define _DE_ENTITY_DELETE(ENTITY)                               \
-    do                                                          \
-    {                                                           \
-        de_manager manager = ENTITY->owner;                     \
-                                                                \
-        if (_DE_STATE_IS_ACTIVE(ENTITY->destructor))            \
-            ENTITY->destructor(ENTITY->data);                   \
-                                                                \
-        _de_swap(manager->pool, ENTITY->slot, --manager->size); \
-    } while (0)
+#define _DE_ENTITY_DELETE(ENTITY) _DE_BLOCK(     \
+    de_manager manager = ENTITY->owner;          \
+                                                 \
+    if (_DE_STATE_IS_ACTIVE(ENTITY->destructor)) \
+        ENTITY->destructor(ENTITY->data);        \
+                                                 \
+    _de_swap(manager->pool, ENTITY->slot, --manager->size);)
 
 #define _DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)                                         \
     struct                                                                                        \
@@ -179,25 +176,17 @@ void de_manager_reset(de_manager);
 #define _DE_MANAGER_ARGS(NAME) \
     (NAME).pool, (NAME).data, (NAME).capacity, (NAME).payload_size
 
-#define _DE_MANAGER_FOREACH(MANAGER, CODE)  \
-    do                                      \
-    {                                       \
-        uint16_t INDEX = (MANAGER)->size;   \
-        de_entity *POOL = (MANAGER)->pool;  \
-                                            \
-        while (INDEX--)                     \
-        {                                   \
-            de_entity ENTITY = POOL[INDEX]; \
-            CODE;                           \
-        }                                   \
-    } while (0)
+#define _DE_MANAGER_FOREACH(MANAGER, CODE) _DE_BLOCK( \
+    uint16_t INDEX = (MANAGER)->size;                 \
+    de_entity *POOL = (MANAGER)->pool;                \
+                                                      \
+    while (INDEX--) {                                 \
+        de_entity ENTITY = POOL[INDEX];               \
+        CODE;                                         \
+    })
 
-#define _DE_ASSERT(COND, RET) \
-    do                        \
-    {                         \
-        if (!(COND))          \
-            return RET;       \
-    } while (0)
+#define _DE_ASSERT(COND, RET) _DE_BLOCK( \
+    if (!(COND)) return RET;)
 
 #endif // DARKEN_H
 
