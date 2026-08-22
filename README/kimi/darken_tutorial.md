@@ -57,7 +57,7 @@ The function receives the entity's data and returns what to do next:
 
 ### Systems: Flat-Packed Arrays
 
-A `de_system` is a flat pool of pointers. If you have a "position + velocity" system, you store contiguous pairs `(pos*, vel*)`. Iteration is cache-friendly and trivial.
+A `darksys` is a flat pool of pointers. If you have a "position + velocity" system, you store contiguous pairs `(pos*, vel*)`. Iteration is cache-friendly and trivial.
 
 ---
 
@@ -192,16 +192,16 @@ It traverses **only the active zone** `[0, size)` backwards:
 
 Iterating entities one by one with `DE_MANAGER_FOREACH` is fine, but for rendering we want a specialized **system** with flat pointers and cache-friendly layout.
 
-We define a `de_system` that stores pointers to `Vec2` (positions) for drawing.
+We define a `darksys` that stores pointers to `Vec2` (positions) for drawing.
 
 ```c
 /* Rendering system: 1 parameter (pointer to Vec2) */
-DE_SYSTEM_STORAGE(render_sys, 64, 1);
+DARKSYS_STORAGE(render_sys, 64, 1);
 
 /* Generate a system function that draws entities.
- * DE_SYSTEM_ITERATOR_1 creates: void *draw_system(de_system system)
+ * DARKSYS_ITERATOR_1 creates: void *draw_system(darksys system)
  * with one unpacked pointer per group: Vec2 *pos = pool[0] */
-DE_SYSTEM_ITERATOR_1(draw_system, Vec2 *pos, {
+DARKSYS_ITERATOR_1(draw_system, Vec2 *pos, {
     printf("\033[%d;%dH*", (int)pos->y, (int)pos->x);
 })
 ```
@@ -209,11 +209,11 @@ DE_SYSTEM_ITERATOR_1(draw_system, Vec2 *pos, {
 In `main`:
 
 ```c
-    struct de_system renderer;
-    de_system_init(&renderer, DE_SYSTEM_ARGS(render_sys));
+    struct darksys renderer;
+    darksys_init(&renderer, DARKSYS_ARGS(render_sys));
 
     /* Every time we create a visible entity, register it */
-    de_system_add(&renderer, &data->pos);
+    darksys_add(&renderer, &data->pos);
 
     /* In the game loop, before or after update: */
     draw_system(&renderer);
@@ -224,7 +224,7 @@ In `main`:
 - **Manager**: manages lifecycle (create, destroy, pause).
 - **System**: processes data. It is a flat array of pointers to the components you care about.
 
-You can have multiple systems: one for physics, one for AI, one for sound. Each with its own `de_system`.
+You can have multiple systems: one for physics, one for AI, one for sound. Each with its own `darksys`.
 
 ---
 
@@ -261,7 +261,7 @@ void *asteroid_update(Entity *e)
 Spawner function:
 
 ```c
-void spawn_asteroid(de_manager m, de_system renderer)
+void spawn_asteroid(de_manager m, darksys renderer)
 {
     de_entity a = de_manager_new(m);
     if (!a) return;
@@ -273,7 +273,7 @@ void spawn_asteroid(de_manager m, de_system renderer)
     e->tag = TAG_ASTEROID;
 
     a->state = (de_state)asteroid_update;
-    de_system_add(renderer, &e->pos);
+    darksys_add(renderer, &e->pos);
 }
 ```
 
@@ -308,7 +308,7 @@ void *bullet_update(Bullet *b)
     return DE_STATE_LOOP;
 }
 
-void shoot(de_manager m, Vec2 origin, de_system renderer)
+void shoot(de_manager m, Vec2 origin, darksys renderer)
 {
     de_entity b = de_manager_new(m);
     if (!b) return;
@@ -319,7 +319,7 @@ void shoot(de_manager m, Vec2 origin, de_system renderer)
     dat->life = 40;
 
     b->state = (de_state)bullet_update;
-    de_system_add(renderer, &dat->pos);
+    darksys_add(renderer, &dat->pos);
 }
 ```
 
@@ -409,7 +409,7 @@ de_entity_resume(some_asteroid);  /* Back to active zone */
 
 ### Why is this powerful?
 
-A `de_system` can keep pointing to `entity->data` of a paused entity. For example, a rendering system can keep drawing it (frozen in ice) while logic stops processing it.
+A `darksys` can keep pointing to `entity->data` of a paused entity. For example, a rendering system can keep drawing it (frozen in ice) while logic stops processing it.
 
 > **Golden rule:** Never keep pointers to `data[]` of active entities that might get destroyed. It *is* safe for paused entities.
 
@@ -447,7 +447,7 @@ de_manager_reset(&manager);  /* Deletes all active and paused */
 typedef void *(*de_state)(void *);
 typedef struct de_entity *de_entity;
 typedef struct de_manager *de_manager;
-typedef struct de_system *de_system;
+typedef struct darksys *darksys;
 ```
 
 ### Storage Macros
@@ -456,8 +456,8 @@ typedef struct de_system *de_system;
 DE_MANAGER_STORAGE(name, capacity, payload_size)  /* declare static memory */
 DE_MANAGER_ARGS(name)                             /* args for init */
 
-DE_SYSTEM_STORAGE(name, capacity, params)         /* declare static pool */
-DE_SYSTEM_ARGS(name)                              /* args for init */
+DARKSYS_STORAGE(name, capacity, params)         /* declare static pool */
+DARKSYS_ARGS(name)                              /* args for init */
 ```
 
 ### Iteration Macros
@@ -465,13 +465,13 @@ DE_SYSTEM_ARGS(name)                              /* args for init */
 ```c
 DE_MANAGER_FOREACH(manager, code)   /* iterates active zone, defines ENTITY */
 
-de_system_add(system, ptr1, ...)    /* add pointer group */
+darksys_add(system, ptr1, ...)    /* add pointer group */
 
 /* Iterate a system inline, unpacking N pointers per group.
  * pool[0], pool[1], etc. are accessible inside code. */
-DE_SYSTEM_FOREACH(system, code)
-DE_SYSTEM_FOREACH(system, A, code)       /* A = pool[0] */
-DE_SYSTEM_FOREACH(system, A, B, code)    /* A = pool[0], B = pool[1] */
+DARKSYS_FOREACH(system, code)
+DARKSYS_FOREACH(system, A, code)       /* A = pool[0] */
+DARKSYS_FOREACH(system, A, B, code)    /* A = pool[0], B = pool[1] */
 /* ... up to 5 pointers */
 ```
 
@@ -479,20 +479,20 @@ DE_SYSTEM_FOREACH(system, A, B, code)    /* A = pool[0], B = pool[1] */
 
 ```c
 /* Generate a de_state function that iterates a system.
- * NAME will be: void *NAME(de_system system) */
-DE_SYSTEM_ITERATOR_0(NAME, code)
-DE_SYSTEM_ITERATOR_1(NAME, A, code)       /* A = pool[0] */
-DE_SYSTEM_ITERATOR_2(NAME, A, B, code)    /* A = pool[0], B = pool[1] */
+ * NAME will be: void *NAME(darksys system) */
+DARKSYS_ITERATOR_0(NAME, code)
+DARKSYS_ITERATOR_1(NAME, A, code)       /* A = pool[0] */
+DARKSYS_ITERATOR_2(NAME, A, B, code)    /* A = pool[0], B = pool[1] */
 /* ... up to 5 pointers */
 ```
 
 Example:
 ```c
-DE_SYSTEM_ITERATOR_2(update_particles, float *px, float *py, {
+DARKSYS_ITERATOR_2(update_particles, float *px, float *py, {
     *px += (rand() % 3 - 1) * 0.1f;
     *py += 0.3f;
 })
-/* Generates: void *update_particles(de_system system) { ... } */
+/* Generates: void *update_particles(darksys system) { ... } */
 ```
 
 ### Entity Functions
@@ -520,8 +520,8 @@ DE_SYSTEM_ITERATOR_2(update_particles, float *px, float *py, {
 
 | Function | Description |
 |----------|-------------|
-| `void de_system_init(s, storage, cap_groups, params)` | Initialize system |
-| `uint16_t de_system_remove(s, first_ptr)` | Remove group whose first ptr matches |
+| `void darksys_init(s, storage, cap_groups, params)` | Initialize system |
+| `uint16_t darksys_remove(s, first_ptr)` | Remove group whose first ptr matches |
 
 ### State Constants
 

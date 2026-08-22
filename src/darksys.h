@@ -23,9 +23,9 @@
 #include <stdint.h>
 #include <stdarg.h>
 
-typedef struct de_system *de_system;
+typedef struct darksys *darksys;
 
-struct de_system
+struct darksys
 {
     void **pool;
     uint16_t capacity;
@@ -37,37 +37,37 @@ struct de_system
  * PUBLIC API
  * ============================================================================ */
 
-#define DE_SYSTEM_STORAGE _DE_SYSTEM_STORAGE
-#define DE_SYSTEM_ARGS _DE_SYSTEM_ARGS
-#define DE_SYSTEM_FOREACH(...) _DE_SYSTEM_FOREACH_DISPATCH(_DE_SYSTEM_NARGS(__VA_ARGS__), __VA_ARGS__)
+#define DARKSYS_STORAGE _DARKSYS_STORAGE
+#define DARKSYS_ARGS _DARKSYS_ARGS
+#define DARKSYS_FOREACH(...) _DARKSYS_FOREACH_DISPATCH(_DARKSYS_NARGS(__VA_ARGS__), __VA_ARGS__)
 
-void de_system_init(de_system, void **, uint16_t, uint16_t);
-uint16_t de_system_add(de_system, ...);
-uint16_t de_system_remove(de_system, void *);
-void de_system_clear(de_system);
+void darksys_init(darksys, void **, uint16_t, uint16_t);
+uint16_t darksys_add(darksys, ...);
+uint16_t darksys_remove(darksys, void *);
+void darksys_clear(darksys);
 
 /* ============================================================================
  * INTERNAL MACRO IMPLEMENTATIONS
  * ============================================================================ */
 
-#define _DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS) \
-    struct                                         \
-    {                                              \
-        void *pool[(CAPACITY) * (PARAMS)];         \
-        uint16_t capacity;                         \
-        uint16_t params;                           \
-    } NAME = {                                     \
-        .capacity = (CAPACITY),                    \
-        .params = (PARAMS),                        \
+#define _DARKSYS_STORAGE(NAME, CAPACITY, PARAMS) \
+    struct                                       \
+    {                                            \
+        void *pool[(CAPACITY) * (PARAMS)];       \
+        uint16_t capacity;                       \
+        uint16_t params;                         \
+    } NAME = {                                   \
+        .capacity = (CAPACITY),                  \
+        .params = (PARAMS),                      \
     }
 
-#define _DE_SYSTEM_ARGS(NAME) \
+#define _DARKSYS_ARGS(NAME) \
     (NAME).pool, (NAME).capacity, (NAME).params
 
-#define _DE_SYSTEM_FOREACH(SYSTEM, CODE)    \
+#define _DARKSYS_FOREACH(SYSTEM, CODE)      \
     do                                      \
     {                                       \
-        de_system _system = (SYSTEM);       \
+        darksys _system = (SYSTEM);         \
         uint16_t _size = _system->size;     \
         void **_pool = _system->pool;       \
         uint16_t _params = _system->params; \
@@ -80,18 +80,18 @@ void de_system_clear(de_system);
         }                                   \
     } while (0)
 
-#define _DE_SYSTEM_FOREACH_DISPATCH(N, ...) _DE_SYSTEM_FOREACH_DISPATCH_(N, __VA_ARGS__)
-#define _DE_SYSTEM_FOREACH_DISPATCH_(N, ...) _DE_SYSTEM_FOREACH_##N(__VA_ARGS__)
+#define _DARKSYS_FOREACH_DISPATCH(N, ...) _DARKSYS_FOREACH_CONCAT(N, __VA_ARGS__)
+#define _DARKSYS_FOREACH_CONCAT(N, ...) _DARKSYS_FOREACH_##N(__VA_ARGS__)
 
-#define _DE_SYSTEM_NARGS(...) _DE_SYSTEM_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1, 0, -1)
-#define _DE_SYSTEM_NARGS_I(_1, _2, _3, _4, _5, _6, _7, N, ...) N
+#define _DARKSYS_NARGS(...) _DARKSYS_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1, 0, -1)
+#define _DARKSYS_NARGS_I(_1, _2, _3, _4, _5, _6, _7, N, ...) N
 
-#define _DE_SYSTEM_FOREACH_0(SYSTEM, IT) _DE_SYSTEM_FOREACH(SYSTEM, { IT; })
-#define _DE_SYSTEM_FOREACH_1(SYSTEM, A, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = _pool[0]; IT; })
-#define _DE_SYSTEM_FOREACH_2(SYSTEM, A, B, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; IT; })
-#define _DE_SYSTEM_FOREACH_3(SYSTEM, A, B, C, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; C = _pool[2]; IT; })
-#define _DE_SYSTEM_FOREACH_4(SYSTEM, A, B, C, D, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; C = _pool[2]; D = _pool[3]; IT; })
-#define _DE_SYSTEM_FOREACH_5(SYSTEM, A, B, C, D, E, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; C = _pool[2]; D = _pool[3]; E = _pool[4]; IT; })
+#define _DARKSYS_FOREACH_0(SYSTEM, IT) _DARKSYS_FOREACH(SYSTEM, { IT; })
+#define _DARKSYS_FOREACH_1(SYSTEM, A, IT) _DARKSYS_FOREACH(SYSTEM, { A = _pool[0]; IT; })
+#define _DARKSYS_FOREACH_2(SYSTEM, A, B, IT) _DARKSYS_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; IT; })
+#define _DARKSYS_FOREACH_3(SYSTEM, A, B, C, IT) _DARKSYS_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; C = _pool[2]; IT; })
+#define _DARKSYS_FOREACH_4(SYSTEM, A, B, C, D, IT) _DARKSYS_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; C = _pool[2]; D = _pool[3]; IT; })
+#define _DARKSYS_FOREACH_5(SYSTEM, A, B, C, D, E, IT) _DARKSYS_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; C = _pool[2]; D = _pool[3]; E = _pool[4]; IT; })
 
 #endif // DARKSYS_H
 
@@ -101,7 +101,7 @@ void de_system_clear(de_system);
 
 #ifdef DARKSYS_IMPLEMENTATION
 
-void de_system_init(de_system $, void **storage, uint16_t capacity_groups, uint16_t params)
+void darksys_init(darksys $, void **storage, uint16_t capacity_groups, uint16_t params)
 {
     $->pool = storage;
     $->capacity = capacity_groups * params;
@@ -109,7 +109,7 @@ void de_system_init(de_system $, void **storage, uint16_t capacity_groups, uint1
     $->params = params;
 }
 
-uint16_t de_system_add(de_system $, ...)
+uint16_t darksys_add(darksys $, ...)
 {
     uint16_t size = $->size;
     uint16_t params = $->params;
@@ -131,7 +131,7 @@ uint16_t de_system_add(de_system $, ...)
     return 1;
 }
 
-uint16_t de_system_remove(de_system $, void *first)
+uint16_t darksys_remove(darksys $, void *first)
 {
     uint16_t params = $->params;
     void **pool = $->pool;
@@ -156,7 +156,7 @@ uint16_t de_system_remove(de_system $, void *first)
     return 0;
 }
 
-void de_system_clear(de_system $)
+void darksys_clear(darksys $)
 {
     $->size = 0;
 }

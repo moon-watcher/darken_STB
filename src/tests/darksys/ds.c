@@ -104,8 +104,8 @@ static struct de_manager test_mgr;
 
 #define TEST_SYS_CAPACITY 32
 #define TEST_SYS_PARAMS 2
-DE_SYSTEM_STORAGE(test_sys_storage, TEST_SYS_CAPACITY, TEST_SYS_PARAMS);
-static struct de_system test_sys;
+DARKSYS_STORAGE(test_sys_storage, TEST_SYS_CAPACITY, TEST_SYS_PARAMS);
+static struct darksys test_sys;
 
 static void init_test_manager(void)
 {
@@ -115,7 +115,7 @@ static void init_test_manager(void)
 
 static void init_test_system(void)
 {
-    de_system_init(&test_sys, DE_SYSTEM_ARGS(test_sys_storage));
+    darksys_init(&test_sys, DARKSYS_ARGS(test_sys_storage));
 }
 
 /* ============================================================================
@@ -349,30 +349,30 @@ TEST(test_system_init_add_remove)
     int a = 1, b = 2, c = 3, d = 4;
     int *pa = &a, *pb = &b, *pc = &c, *pd = &d;
 
-    CHECK(de_system_add(&test_sys, pa, pb) == 1);
+    CHECK(darksys_add(&test_sys, pa, pb) == 1);
     CHECK(test_sys.size == TEST_SYS_PARAMS);
-    CHECK(de_system_add(&test_sys, pc, pd) == 1);
+    CHECK(darksys_add(&test_sys, pc, pd) == 1);
     CHECK(test_sys.size == 2 * TEST_SYS_PARAMS);
 
     int sum = 0;
-    DE_SYSTEM_FOREACH(&test_sys, int *x, int *y, {
+    DARKSYS_FOREACH(&test_sys, int *x, int *y, {
         sum += *x + *y;
     });
     CHECK(sum == 1 + 2 + 3 + 4);
 
-    CHECK(de_system_remove(&test_sys, pa) == 1);
+    CHECK(darksys_remove(&test_sys, pa) == 1);
     CHECK(test_sys.size == TEST_SYS_PARAMS);
 
     sum = 0;
-    DE_SYSTEM_FOREACH(&test_sys, int *x, int *y, {
+    DARKSYS_FOREACH(&test_sys, int *x, int *y, {
         sum += *x + *y;
     });
     CHECK(sum == 3 + 4);
 }
 
-static uint16_t test_sys_iterator(de_system system)
+static uint16_t test_sys_iterator(darksys system)
 {
-    DE_SYSTEM_FOREACH(system, int *x, int *y, {
+    DARKSYS_FOREACH(system, int *x, int *y, {
         (*x) += 1;
         (*y) += 2;
     });
@@ -384,9 +384,9 @@ TEST(test_system_iterator_macro)
 {
     init_test_system();
     int a = 10, b = 20;
-    de_system_add(&test_sys, &a, &b);
+    darksys_add(&test_sys, &a, &b);
 
-    // DE_SYSTEM_ITERATOR(test_sys_iterator, int *x, int *y, {
+    // DARKSYS_ITERATOR(test_sys_iterator, int *x, int *y, {
     //     (*x) += 1;
     //     (*y) += 2;
     // });
@@ -426,8 +426,8 @@ static struct de_manager bench_mgr;
 
 #define BENCH_SYS_CAPACITY 128
 #define BENCH_SYS_PARAMS 2
-DE_SYSTEM_STORAGE(bench_sys_storage, BENCH_SYS_CAPACITY, BENCH_SYS_PARAMS);
-static struct de_system bench_sys;
+DARKSYS_STORAGE(bench_sys_storage, BENCH_SYS_CAPACITY, BENCH_SYS_PARAMS);
+static struct darksys bench_sys;
 
 static void bench_entity_new_delete(void)
 {
@@ -496,15 +496,15 @@ static void bench_entity_pause_resume(void)
 static void bench_system_add_remove(void)
 {
     const int ITER = 100;
-    de_system_init(&bench_sys, DE_SYSTEM_ARGS(bench_sys_storage));
+    darksys_init(&bench_sys, DARKSYS_ARGS(bench_sys_storage));
     uint32_t t0 = get_time_us();
 
     for (int i = 0; i < ITER; i++)
     {
         int a = i, b = i + 1;
         int *pa = &a, *pb = &b;
-        de_system_add(&bench_sys, pa, pb);
-        de_system_remove(&bench_sys, pa);
+        darksys_add(&bench_sys, pa, pb);
+        darksys_remove(&bench_sys, pa);
     }
     uint32_t t1 = get_time_us();
     uint32_t us_per_op = (t1 - t0) / ITER;
@@ -514,19 +514,19 @@ static void bench_system_add_remove(void)
 static void bench_system_foreach(void)
 {
     const int ITER = 10;
-    de_system_init(&bench_sys, DE_SYSTEM_ARGS(bench_sys_storage));
+    darksys_init(&bench_sys, DARKSYS_ARGS(bench_sys_storage));
     for (int i = 0; i < BENCH_SYS_CAPACITY; i++)
     {
         int a = i, b = i + 1;
         int *pa = &a, *pb = &b;
-        de_system_add(&bench_sys, pa, pb);
+        darksys_add(&bench_sys, pa, pb);
     }
     volatile int sink = 0;
     uint32_t t0 = get_time_us();
 
     for (int i = 0; i < ITER; i++)
     {
-        DE_SYSTEM_FOREACH(&bench_sys, int *x, int *y, {
+        DARKSYS_FOREACH(&bench_sys, int *x, int *y, {
             sink += *x + *y;
         });
     }

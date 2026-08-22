@@ -232,117 +232,117 @@ typedef struct TestDeSystemEntity
     uint16_t frame;
 } TestDeSystemEntity;
 
-static void test_de_system_movement(de_system system)
+static void test_darksys_movement(darksys system)
 {
-    DE_SYSTEM_FOREACH(system, int16_t *x, int16_t *y, int16_t *vx, int16_t *vy, {
+    DARKSYS_FOREACH(system, int16_t *x, int16_t *y, int16_t *vx, int16_t *vy, {
         *x += *vx;
         *y += *vy;
     });
 }
 
-static void test_de_system_physics(de_system system)
+static void test_darksys_physics(darksys system)
 {
-    DE_SYSTEM_FOREACH(system, int16_t *vy, {
+    DARKSYS_FOREACH(system, int16_t *vy, {
         *vy += 1;
     });
 }
 
-static void test_de_system_frames(de_system system)
+static void test_darksys_frames(darksys system)
 {
-    DE_SYSTEM_FOREACH(system, uint16_t *frame, {
+    DARKSYS_FOREACH(system, uint16_t *frame, {
         *frame += 1;
     });
 }
 
-static void test_de_system_init_add(void)
+static void test_darksys_init_add(void)
 {
-    kprintf("-- test_de_system_init_add --");
-    struct de_system sys;
+    kprintf("-- test_darksys_init_add --");
+    struct darksys sys;
     void *pool[12];
-    de_system_init(&sys, pool, 3, 4);
-    CHECK("de_system init: size 0", sys.size == 0);
-    CHECK("de_system init: params 4", sys.params == 4);
-    CHECK("de_system init: capacity 12", sys.capacity == 12);
+    darksys_init(&sys, pool, 3, 4);
+    CHECK("darksys init: size 0", sys.size == 0);
+    CHECK("darksys init: params 4", sys.params == 4);
+    CHECK("darksys init: capacity 12", sys.capacity == 12);
     int a, b, c, d;
-    CHECK("de_system add: primer grupo", de_system_add(&sys, &a, &b, &c, &d) == 1);
-    CHECK("de_system add: size 4", sys.size == 4);
-    CHECK("de_system add: punteros conservados", sys.pool[0] == &a && sys.pool[1] == &b && sys.pool[2] == &c && sys.pool[3] == &d);
+    CHECK("darksys add: primer grupo", darksys_add(&sys, &a, &b, &c, &d) == 1);
+    CHECK("darksys add: size 4", sys.size == 4);
+    CHECK("darksys add: punteros conservados", sys.pool[0] == &a && sys.pool[1] == &b && sys.pool[2] == &c && sys.pool[3] == &d);
 }
 
-static void test_de_system_multiple_groups(void)
+static void test_darksys_multiple_groups(void)
 {
-    kprintf("-- test_de_system_multiple_groups --");
-    struct de_system sys;
+    kprintf("-- test_darksys_multiple_groups --");
+    struct darksys sys;
     void *pool[12];
-    de_system_init(&sys, pool, 3, 4);
+    darksys_init(&sys, pool, 3, 4);
     int a1, b1, c1, d1, a2, b2, c2, d2;
-    de_system_add(&sys, &a1, &b1, &c1, &d1);
-    de_system_add(&sys, &a2, &b2, &c2, &d2);
-    CHECK("de_system: dos grupos", sys.size == 8);
-    CHECK("de_system: grupo 1 intacto", sys.pool[0] == &a1 && sys.pool[1] == &b1 && sys.pool[2] == &c1 && sys.pool[3] == &d1);
-    CHECK("de_system: grupo 2 intacto", sys.pool[4] == &a2 && sys.pool[5] == &b2 && sys.pool[6] == &c2 && sys.pool[7] == &d2);
+    darksys_add(&sys, &a1, &b1, &c1, &d1);
+    darksys_add(&sys, &a2, &b2, &c2, &d2);
+    CHECK("darksys: dos grupos", sys.size == 8);
+    CHECK("darksys: grupo 1 intacto", sys.pool[0] == &a1 && sys.pool[1] == &b1 && sys.pool[2] == &c1 && sys.pool[3] == &d1);
+    CHECK("darksys: grupo 2 intacto", sys.pool[4] == &a2 && sys.pool[5] == &b2 && sys.pool[6] == &c2 && sys.pool[7] == &d2);
 }
 
-static void test_de_system_remove(void)
+static void test_darksys_remove(void)
 {
-    kprintf("-- test_de_system_remove --");
-    struct de_system sys;
+    kprintf("-- test_darksys_remove --");
+    struct darksys sys;
     void *pool[12];
-    de_system_init(&sys, pool, 3, 4);
+    darksys_init(&sys, pool, 3, 4);
     int a1, b1, c1, d1, a2, b2, c2, d2, a3, b3, c3, d3;
-    de_system_add(&sys, &a1, &b1, &c1, &d1);
-    de_system_add(&sys, &a2, &b2, &c2, &d2);
-    de_system_add(&sys, &a3, &b3, &c3, &d3);
-    CHECK("de_system remove: encuentra grupo", de_system_remove(&sys, &a2) == 1);
-    CHECK("de_system remove: size 8", sys.size == 8);
-    CHECK("de_system remove: grupo final compactado", sys.pool[0] == &a1 && sys.pool[1] == &b1 && sys.pool[2] == &c1 && sys.pool[3] == &d1 && sys.pool[4] == &a3 && sys.pool[5] == &b3 && sys.pool[6] == &c3 && sys.pool[7] == &d3);
-    CHECK("de_system remove: no encuentra grupo ausente", de_system_remove(&sys, &a2) == 0);
+    darksys_add(&sys, &a1, &b1, &c1, &d1);
+    darksys_add(&sys, &a2, &b2, &c2, &d2);
+    darksys_add(&sys, &a3, &b3, &c3, &d3);
+    CHECK("darksys remove: encuentra grupo", darksys_remove(&sys, &a2) == 1);
+    CHECK("darksys remove: size 8", sys.size == 8);
+    CHECK("darksys remove: grupo final compactado", sys.pool[0] == &a1 && sys.pool[1] == &b1 && sys.pool[2] == &c1 && sys.pool[3] == &d1 && sys.pool[4] == &a3 && sys.pool[5] == &b3 && sys.pool[6] == &c3 && sys.pool[7] == &d3);
+    CHECK("darksys remove: no encuentra grupo ausente", darksys_remove(&sys, &a2) == 0);
 }
 
-static void test_de_system_capacity(void)
+static void test_darksys_capacity(void)
 {
-    kprintf("-- test_de_system_capacity --");
-    struct de_system sys;
+    kprintf("-- test_darksys_capacity --");
+    struct darksys sys;
     void *pool[8];
-    de_system_init(&sys, pool, 2, 4);
+    darksys_init(&sys, pool, 2, 4);
     int a[2], b[2], c[2], d[2];
-    CHECK("de_system capacity: primer grupo", de_system_add(&sys, &a[0], &a[1], &b[0], &b[1]) == 1);
-    CHECK("de_system capacity: segundo grupo", de_system_add(&sys, &b[0], &b[1], &c[0], &c[1]) == 1);
-    CHECK("de_system capacity: rechaza grupo lleno", de_system_add(&sys, &c[0], &c[1], &d[0], &d[1]) == 0);
-    kprintf("de_system capacity: size: %d", sys.size);
-    CHECK("de_system capacity: size no cambia", sys.size == 8);
+    CHECK("darksys capacity: primer grupo", darksys_add(&sys, &a[0], &a[1], &b[0], &b[1]) == 1);
+    CHECK("darksys capacity: segundo grupo", darksys_add(&sys, &b[0], &b[1], &c[0], &c[1]) == 1);
+    CHECK("darksys capacity: rechaza grupo lleno", darksys_add(&sys, &c[0], &c[1], &d[0], &d[1]) == 0);
+    kprintf("darksys capacity: size: %d", sys.size);
+    CHECK("darksys capacity: size no cambia", sys.size == 8);
 }
 
-static void test_de_system_as_entities(void)
+static void test_darksys_as_entities(void)
 {
-    kprintf("-- test_de_system_as_entities --");
+    kprintf("-- test_darksys_as_entities --");
 
     struct de_manager entities, systems;
     DE_MANAGER_STORAGE(entities_storage, 2, sizeof(TestDeSystemEntity));
     de_manager_init(&entities, DE_MANAGER_ARGS(entities_storage));
-    DE_MANAGER_STORAGE(systems_storage, 3, sizeof(struct de_system));
+    DE_MANAGER_STORAGE(systems_storage, 3, sizeof(struct darksys));
     de_manager_init(&systems, DE_MANAGER_ARGS(systems_storage));
 
     de_entity frames_entity = de_manager_new(&systems);
     de_entity movement_entity = de_manager_new(&systems);
     de_entity physics_entity = de_manager_new(&systems);
 
-    de_system frames = (de_system)frames_entity->data;
-    de_system movement = (de_system)movement_entity->data;
-    de_system physics = (de_system)physics_entity->data;
+    darksys frames = (darksys)frames_entity->data;
+    darksys movement = (darksys)movement_entity->data;
+    darksys physics = (darksys)physics_entity->data;
 
-    DE_SYSTEM_STORAGE(frames_storage, 2, 1);
-    de_system_init(frames, DE_SYSTEM_ARGS(frames_storage));
+    DARKSYS_STORAGE(frames_storage, 2, 1);
+    darksys_init(frames, DARKSYS_ARGS(frames_storage));
 
-    DE_SYSTEM_STORAGE(movement_storage, 2, 4);
-    de_system_init(movement, DE_SYSTEM_ARGS(movement_storage));
+    DARKSYS_STORAGE(movement_storage, 2, 4);
+    darksys_init(movement, DARKSYS_ARGS(movement_storage));
 
-    DE_SYSTEM_STORAGE(physics_storage, 2, 1);
-    de_system_init(physics, DE_SYSTEM_ARGS(physics_storage));
+    DARKSYS_STORAGE(physics_storage, 2, 1);
+    darksys_init(physics, DARKSYS_ARGS(physics_storage));
 
-    frames_entity->state = (de_state)test_de_system_frames;
-    movement_entity->state = (de_state)test_de_system_movement;
-    physics_entity->state = (de_state)test_de_system_physics;
+    frames_entity->state = (de_state)test_darksys_frames;
+    movement_entity->state = (de_state)test_darksys_movement;
+    physics_entity->state = (de_state)test_darksys_physics;
 
     de_entity e1 = de_manager_new(&entities);
     de_entity e2 = de_manager_new(&entities);
@@ -363,38 +363,38 @@ static void test_de_system_as_entities(void)
     e1->state = (de_state)state_noop;
     e2->state = (de_state)state_noop;
 
-    de_system_add(movement, &p1->x, &p1->y, &p1->vx, &p1->vy);
-    de_system_add(movement, &p2->x, &p2->y, &p2->vx, &p2->vy);
-    de_system_add(physics, &p1->vy);
-    de_system_add(physics, &p2->vy);
-    de_system_add(frames, &p1->frame);
-    de_system_add(frames, &p2->frame);
+    darksys_add(movement, &p1->x, &p1->y, &p1->vx, &p1->vy);
+    darksys_add(movement, &p2->x, &p2->y, &p2->vx, &p2->vy);
+    darksys_add(physics, &p1->vy);
+    darksys_add(physics, &p2->vy);
+    darksys_add(frames, &p1->frame);
+    darksys_add(frames, &p2->frame);
 
     de_manager_update(&systems);
 
-    CHECK("de_system entities: physics modifica vy", p1->vy == 4 && p2->vy == 6);
-    CHECK("de_system entities: movement procesa ambas", p1->x == 12 && p1->y == 24 && p2->x == 96 && p2->y == 206);
-    CHECK("de_system entities: frames procesa ambas", p1->frame == 1 && p2->frame == 11);
-    CHECK("de_system entities: manager contiene 3 sistemas", systems.size == 3);
-    CHECK("de_system entities: manager de entidades intacto", entities.size == 2);
+    CHECK("darksys entities: physics modifica vy", p1->vy == 4 && p2->vy == 6);
+    CHECK("darksys entities: movement procesa ambas", p1->x == 12 && p1->y == 24 && p2->x == 96 && p2->y == 206);
+    CHECK("darksys entities: frames procesa ambas", p1->frame == 1 && p2->frame == 11);
+    CHECK("darksys entities: manager contiene 3 sistemas", systems.size == 3);
+    CHECK("darksys entities: manager de entidades intacto", entities.size == 2);
 }
 
-static void test_de_system_shared_payload(void)
+static void test_darksys_shared_payload(void)
 {
-    kprintf("-- test_de_system_shared_payload --");
+    kprintf("-- test_darksys_shared_payload --");
     struct de_manager entities, systems;
     DE_MANAGER_STORAGE(entities_storage, 1, sizeof(TestDeSystemEntity));
     de_manager_init(&entities, DE_MANAGER_ARGS(entities_storage));
-    DE_MANAGER_STORAGE(systems_storage, 2, sizeof(struct de_system));
+    DE_MANAGER_STORAGE(systems_storage, 2, sizeof(struct darksys));
     de_manager_init(&systems, DE_MANAGER_ARGS(systems_storage));
     void *movement_pool[4], *frames_pool[1];
     de_entity movement_entity = de_manager_new(&systems), frames_entity = de_manager_new(&systems);
-    de_system movement = (de_system)movement_entity->data;
-    de_system frames = (de_system)frames_entity->data;
-    de_system_init(movement, movement_pool, 1, 4);
-    de_system_init(frames, frames_pool, 1, 1);
-    movement_entity->state = (de_state)test_de_system_movement;
-    frames_entity->state = (de_state)test_de_system_frames;
+    darksys movement = (darksys)movement_entity->data;
+    darksys frames = (darksys)frames_entity->data;
+    darksys_init(movement, movement_pool, 1, 4);
+    darksys_init(frames, frames_pool, 1, 1);
+    movement_entity->state = (de_state)test_darksys_movement;
+    frames_entity->state = (de_state)test_darksys_frames;
     de_entity entity = de_manager_new(&entities);
     TestDeSystemEntity *data = (TestDeSystemEntity *)entity->data;
     data->x = 50;
@@ -402,26 +402,26 @@ static void test_de_system_shared_payload(void)
     data->vx = 7;
     data->vy = -2;
     data->frame = 3;
-    de_system_add(movement, &data->x, &data->y, &data->vx, &data->vy);
-    de_system_add(frames, &data->frame);
+    darksys_add(movement, &data->x, &data->y, &data->vx, &data->vy);
+    darksys_add(frames, &data->frame);
     de_manager_update(&systems);
-    CHECK("de_system shared: movimiento modifica payload", data->x == 57 && data->y == 58);
-    CHECK("de_system shared: frames usa el mismo payload", data->frame == 4);
+    CHECK("darksys shared: movimiento modifica payload", data->x == 57 && data->y == 58);
+    CHECK("darksys shared: frames usa el mismo payload", data->frame == 4);
 }
 
-struct de_system sys;
+struct darksys sys;
 
 static void test_system_foreach_direct(void)
 {
     kprintf("-- test_system_foreach_direct --");
 
     void *pool[12];
-    de_system_init(&sys, pool, 3, 4);
+    darksys_init(&sys, pool, 3, 4);
     int a1 = 1, b1 = 2, c1 = 3, d1 = 4;
     int a2 = 10, b2 = 20, c2 = 30, d2 = 40;
-    de_system_add(&sys, &a1, &b1, &c1, &d1);
-    de_system_add(&sys, &a2, &b2, &c2, &d2);
-    DE_SYSTEM_FOREACH(&sys, int *a, int *b, int *c, int *d, { *a += *b + *c + *d; });
+    darksys_add(&sys, &a1, &b1, &c1, &d1);
+    darksys_add(&sys, &a2, &b2, &c2, &d2);
+    DARKSYS_FOREACH(&sys, int *a, int *b, int *c, int *d, { *a += *b + *c + *d; });
     CHECK("foreach direct: grupo 1 modificado", a1 == 1 + 2 + 3 + 4);
     CHECK("foreach direct: grupo 2 modificado", a2 == 10 + 20 + 30 + 40);
 }
@@ -429,31 +429,31 @@ static void test_system_foreach_direct(void)
 static void test_system_add_various_arity(void)
 {
     kprintf("-- test_system_add_various_arity --");
-    struct de_system sys1, sys2, sys3, sys5;
+    struct darksys sys1, sys2, sys3, sys5;
     void *p1[3], *p2[6], *p3[9], *p5[15];
-    de_system_init(&sys1, p1, 3, 1);
-    de_system_init(&sys2, p2, 3, 2);
-    de_system_init(&sys3, p3, 3, 3);
-    de_system_init(&sys5, p5, 3, 5);
+    darksys_init(&sys1, p1, 3, 1);
+    darksys_init(&sys2, p2, 3, 2);
+    darksys_init(&sys3, p3, 3, 3);
+    darksys_init(&sys5, p5, 3, 5);
     int a, b, c, d, e;
-    CHECK("add arity 1", de_system_add(&sys1, &a) == 1);
-    CHECK("add arity 2", de_system_add(&sys2, &a, &b) == 1);
-    CHECK("add arity 3", de_system_add(&sys3, &a, &b, &c) == 1);
-    CHECK("add arity 5", de_system_add(&sys5, &a, &b, &c, &d, &e) == 1);
+    CHECK("add arity 1", darksys_add(&sys1, &a) == 1);
+    CHECK("add arity 2", darksys_add(&sys2, &a, &b) == 1);
+    CHECK("add arity 3", darksys_add(&sys3, &a, &b, &c) == 1);
+    CHECK("add arity 5", darksys_add(&sys5, &a, &b, &c, &d, &e) == 1);
     CHECK("arity sizes", sys1.size == 1 && sys2.size == 2 && sys3.size == 3 && sys5.size == 5);
 }
 
 static void test_system_remove_first(void)
 {
     kprintf("-- test_system_remove_first --");
-    struct de_system sys;
+    struct darksys sys;
     void *pool[12];
-    de_system_init(&sys, pool, 3, 4);
+    darksys_init(&sys, pool, 3, 4);
     int a1, b1, c1, d1, a2, b2, c2, d2, a3, b3, c3, d3;
-    de_system_add(&sys, &a1, &b1, &c1, &d1);
-    de_system_add(&sys, &a2, &b2, &c2, &d2);
-    de_system_add(&sys, &a3, &b3, &c3, &d3);
-    de_system_remove(&sys, &a1);
+    darksys_add(&sys, &a1, &b1, &c1, &d1);
+    darksys_add(&sys, &a2, &b2, &c2, &d2);
+    darksys_add(&sys, &a3, &b3, &c3, &d3);
+    darksys_remove(&sys, &a1);
     CHECK("remove first: size 8", sys.size == 8);
     CHECK("remove first: compacta con ultimo", sys.pool[0] == &a3);
 }
@@ -461,14 +461,14 @@ static void test_system_remove_first(void)
 static void test_system_remove_last(void)
 {
     kprintf("-- test_system_remove_last --");
-    struct de_system sys;
+    struct darksys sys;
     void *pool[12];
-    de_system_init(&sys, pool, 3, 4);
+    darksys_init(&sys, pool, 3, 4);
     int a1, b1, c1, d1, a2, b2, c2, d2, a3, b3, c3, d3;
-    de_system_add(&sys, &a1, &b1, &c1, &d1);
-    de_system_add(&sys, &a2, &b2, &c2, &d2);
-    de_system_add(&sys, &a3, &b3, &c3, &d3);
-    de_system_remove(&sys, &a3);
+    darksys_add(&sys, &a1, &b1, &c1, &d1);
+    darksys_add(&sys, &a2, &b2, &c2, &d2);
+    darksys_add(&sys, &a3, &b3, &c3, &d3);
+    darksys_remove(&sys, &a3);
     CHECK("remove last: size 8", sys.size == 8);
     CHECK("remove last: no toca primeros", sys.pool[0] == &a1 && sys.pool[4] == &a2);
 }
@@ -476,19 +476,19 @@ static void test_system_remove_last(void)
 static void test_empty_system(void)
 {
     kprintf("-- test_empty_system --");
-    struct de_system sys;
+    struct darksys sys;
     void *pool[4];
-    de_system_init(&sys, pool, 1, 4);
+    darksys_init(&sys, pool, 1, 4);
     CHECK("empty system: size 0", sys.size == 0);
     int sum = 0;
-    DE_SYSTEM_FOREACH(&sys, int *a, int *b, int *c, int *d, {
+    DARKSYS_FOREACH(&sys, int *a, int *b, int *c, int *d, {
         b = c;
         c = d;
         d = b;
         sum += *a;
     });
     CHECK("empty system: foreach no itera", sum == 0);
-    CHECK("empty system: remove devuelve 0", de_system_remove(&sys, (void *)1) == 0);
+    CHECK("empty system: remove devuelve 0", darksys_remove(&sys, (void *)1) == 0);
 }
 
 void ds_run_all_tests(void)
@@ -496,12 +496,12 @@ void ds_run_all_tests(void)
     g_testsRun = 0;
     g_testsPassed = 0;
     kprintf("========== TESTS ==========");
-    test_de_system_init_add();
-    test_de_system_multiple_groups();
-    test_de_system_remove();
-    test_de_system_capacity();
-    test_de_system_as_entities();
-    test_de_system_shared_payload();
+    test_darksys_init_add();
+    test_darksys_multiple_groups();
+    test_darksys_remove();
+    test_darksys_capacity();
+    test_darksys_as_entities();
+    test_darksys_shared_payload();
     test_entity_system_basic();
     test_entity_system_shared_data();
     test_entity_system_paused_entity();

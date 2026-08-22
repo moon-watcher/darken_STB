@@ -181,7 +181,7 @@ static void *game_state(EntityData *e)
  * ENTITY FACTORY
  * ============================================================ */
 
-static de_entity create_entity(de_manager *m, de_system *ren,
+static de_entity create_entity(de_manager *m, darksys *ren,
                                 int type, int id, float x, float y, char sym)
 {
     de_entity e = de_manager_new(m);
@@ -203,7 +203,7 @@ static de_entity create_entity(de_manager *m, de_system *ren,
     e->tag = (uint16_t)type;
 
     /* Register in render system: (x*, y*, sym*) */
-    de_system_add(ren, &d->x, &d->y, &d->symbol);
+    darksys_add(ren, &d->x, &d->y, &d->symbol);
 
     return e;
 }
@@ -265,7 +265,7 @@ static void check_collisions(de_manager *m)
 }
 
 /* ============================================================
- * RENDERING VIA DE_SYSTEM (flat array, cache-friendly)
+ * RENDERING VIA DARKSYS (flat array, cache-friendly)
  * ============================================================ */
 
 static void draw_borders(void)
@@ -286,16 +286,16 @@ static void draw_borders(void)
     printf("\n");
 }
 
-static void render_frame(de_system *ren)
+static void render_frame(darksys *ren)
 {
     draw_borders();
 
     /* Flag */
     printf("\033[%d;%dH$", (int)FLAG_Y + 1, (int)FLAG_X + 1);
 
-    /* Iterate the flat de_system: 3 pointers per group (x, y, symbol).
-     * Using the public DE_SYSTEM_FOREACH macro. */
-    DE_SYSTEM_FOREACH(ren, float *px, float *py, char *sym, {
+    /* Iterate the flat darksys: 3 pointers per group (x, y, symbol).
+     * Using the public DARKSYS_FOREACH macro. */
+    DARKSYS_FOREACH(ren, float *px, float *py, char *sym, {
         int ix = (int)(*px);
         int iy = (int)(*py);
         if (ix >= 1 && ix < MAP_W - 1 && iy >= 1 && iy < MAP_H - 1)
@@ -319,13 +319,13 @@ int main(void)
 
     /* --- Setup Darken --- */
     DE_MANAGER_STORAGE(world, MAX_ENT, sizeof(EntityData));
-    DE_SYSTEM_STORAGE(render_sys, MAX_ENT, 3);
+    DARKSYS_STORAGE(render_sys, MAX_ENT, 3);
 
     struct de_manager manager;
-    struct de_system  renderer;
+    struct darksys  renderer;
 
     de_manager_init(&manager, DE_MANAGER_ARGS(world));
-    de_system_init(&renderer, DE_SYSTEM_ARGS(render_sys));
+    darksys_init(&renderer, DARKSYS_ARGS(render_sys));
 
     /* --- Create players --- */
     EntityData *p1_data = NULL;
@@ -379,7 +379,7 @@ int main(void)
         /* Collisions */
         check_collisions(&manager);
 
-        /* Render via de_system */
+        /* Render via darksys */
         render_frame(&renderer);
 
         usleep(33333);  /* ~30 FPS */

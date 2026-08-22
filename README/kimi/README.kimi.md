@@ -13,7 +13,7 @@ Darken es un sistema de entidades en C diseñado para entornos de recursos limit
 3. [Conceptos fundamentales](#conceptos-fundamentales)
    - [Entidad (`de_entity`)](#entidad-de_entity)
    - [Manager (`de_manager`)](#manager-de_manager)
-   - [Sistema (`de_system`)](#sistema-de_system)
+   - [Sistema (`darksys`)](#sistema-darksys)
    - [Estado (`de_state`)](#estado-de_state)
 4. [Layout de memoria](#layout-de-memoria)
    - [Entidad](#layout-de-entidad)
@@ -34,9 +34,9 @@ Darken es un sistema de entidades en C diseñado para entornos de recursos limit
 
 - **Sin `malloc` en runtime**: el usuario proporciona todos los bloques de memoria.
 - **Direcciones de entidad inmutables**: una entidad, una vez creada, nunca se mueve físicamente en memoria. Solo se reordenan los *punteros* dentro del array del manager.
-- **Tres zonas lógicas**: activa, libre y pausada. Las entidades pausadas permanecen en direcciones de memoria estables, lo que permite que sistemas externos (`de_system`) mantengan punteros seguros a `entity->data`.
+- **Tres zonas lógicas**: activa, libre y pausada. Las entidades pausadas permanecen en direcciones de memoria estables, lo que permite que sistemas externos (`darksys`) mantengan punteros seguros a `entity->data`.
 - **Iteración segura hacia atrás**: el manager recorre las entidades activas en orden inverso, permitiendo borrar, pausar o resumir la entidad actual sin invalidar el recorrido.
-- **Sistemas de datos planos**: un `de_system` es un pool contiguo de grupos de punteros, sin overhead de estructuras anidadas.
+- **Sistemas de datos planos**: un `darksys` es un pool contiguo de grupos de punteros, sin overhead de estructuras anidadas.
   
 ```--> **Alineación longword (4 bytes)**: obligatoria para accesos word/long eficientes en el Motorola 68000.```
 
@@ -82,7 +82,7 @@ El manager es el contenedor de entidades. Mantiene un array de punteros (`items`
 | **Libre** | `[active, paused)` | Slots sin asignar. `de_manager_new()` consume desde el borde izquierdo de esta zona. |
 | **Pausada** | `[paused, capacity)` | Entidades fuera del bucle de actualización. Sus direcciones físicas son estables. |
 
-### Sistema (`de_system`)
+### Sistema (`darksys`)
 
 Un sistema es un pool lineal de punteros agrupados en bloques de `params` elementos. Cada bloque representa los datos asociados a un ítem procesado (por ejemplo, una entidad).
 
@@ -282,7 +282,7 @@ Elimina **todas** las entidades activas y pausadas, restaurando el manager a su 
 
 ## API de sistema
 
-### `void de_system_init(de_system s, void **storage, uint16_t capacity_groups, uint16_t params)`
+### `void darksys_init(darksys s, void **storage, uint16_t capacity_groups, uint16_t params)`
 
 Inicializa un sistema.
 
@@ -290,7 +290,7 @@ Inicializa un sistema.
 - `capacity_groups`: número máximo de grupos que el pool puede almacenar.
 - `params`: número de punteros por grupo.
 
-### `uint16_t de_system_remove(de_system s, void *first)`
+### `uint16_t darksys_remove(darksys s, void *first)`
 
 Elimina un grupo del sistema buscando coincidencia con su **primer puntero** (`first`).
 
@@ -321,20 +321,20 @@ de_manager_init(&enemies, de_manager_args(enemies_storage));
 
 Expande a los cuatro argumentos requeridos por `de_manager_init` a partir de una estructura `DE_MANAGER_STORAGE`.
 
-#### `DE_SYSTEM_STORAGE(name, capacity, params)`
+#### `DARKSYS_STORAGE(name, capacity, params)`
 
 Declara e inicializa una estructura de almacenamiento estático para un sistema.
 
 **Ejemplo:**
 ```c
-struct de_system sys;
-DE_SYSTEM_STORAGE(storage, 32, 3);
-de_system_init(&sys, de_system_args(storage));
+struct darksys sys;
+DARKSYS_STORAGE(storage, 32, 3);
+darksys_init(&sys, darksys_args(storage));
 ```
 
-#### `de_system_args(name)`
+#### `darksys_args(name)`
 
-Expande a los argumentos requeridos por `de_system_init`.
+Expande a los argumentos requeridos por `darksys_init`.
 
 ### Iteración
 
@@ -359,7 +359,7 @@ de_manager_foreach(my_manager, {
 
 ### Sistema — Añadir e iterar
 
-#### `de_system_add(sys, ...)`
+#### `darksys_add(sys, ...)`
 
 Añade un grupo de punteros al sistema. El primer argumento siempre es el puntero al sistema. Acepta de **1 a 5** punteros de datos adicionales.
 
@@ -367,36 +367,36 @@ Retorna `1` si tuvo éxito, `0` si el sistema está lleno.
 
 **Ejemplo:**
 ```c
-de_system_add(physics_system, entity_ptr, &velocity, &position);
+darksys_add(physics_system, entity_ptr, &velocity, &position);
 ```
 
-#### `DE_SYSTEM_FOREACH(sys, ...)`
+#### `DARKSYS_FOREACH(sys, ...)`
 
 Itera sobre los grupos del sistema. El primer argumento es el sistema. Acepta de **0 a 5** variables de salida (que recibirán los punteros del grupo actual) seguidas de un bloque de código.
 
 **Ejemplo:**
 ```c
-DE_SYSTEM_FOREACH(physics_system, entity, velocity, position, {
+DARKSYS_FOREACH(physics_system, entity, velocity, position, {
     update_physics(entity, velocity, position);
 });
 ```
 
-#### `DE_SYSTEM_ITERATOR(name, ...)`
+#### `DARKSYS_ITERATOR(name, ...)`
 
-Genera una función con la firma `void *name(de_system system)` que ejecuta un `DE_SYSTEM_FOREACH` interno y retorna `DE_STATE_LOOP`.
+Genera una función con la firma `void *name(darksys system)` que ejecuta un `DARKSYS_FOREACH` interno y retorna `DE_STATE_LOOP`.
 
 Esto permite usar la función generada como un estado de entidad (`de_state`).
 
 **Ejemplo:**
 ```c
-DE_SYSTEM_ITERATOR(physics_update, velocity, position, {
+DARKSYS_ITERATOR(physics_update, velocity, position, {
     entity->x += velocity->dx;
     entity->y += velocity->dy;
 });
 // physics_update puede asignarse a e->state
 ```
 
-```--> **Nota**: la función generada recibe `de_system `, por lo que **no** es compatible con la firma `de_state(void *)` bajo ISO C estricto, aunque funciona en el target GNU C/M68000.```
+```--> **Nota**: la función generada recibe `darksys `, por lo que **no** es compatible con la firma `de_state(void *)` bajo ISO C estricto, aunque funciona en el target GNU C/M68000.```
 
 ### Constantes de estado
 
@@ -533,22 +533,22 @@ int main(void) {
 ### Uso de sistemas
 
 ```c
-struct de_system sys;
+struct darksys sys;
 struct vec2 { int x, y; };
 struct vec2 positions[8];
 struct vec2 velocities[8];
 
-DE_SYSTEM_STORAGE(sys_storage, 8, 2);
-de_system_init(&sys, de_system_args(sys_storage));
+DARKSYS_STORAGE(sys_storage, 8, 2);
+darksys_init(&sys, darksys_args(sys_storage));
 
 /* Registrar pares de punteros */
 for (int i = 0; i < 8; ++i) {
-    de_system_add(&sys, &positions[i], &velocities[i]);
+    darksys_add(&sys, &positions[i], &velocities[i]);
 }
 
 /* Iterar y actualizar */
-void *system_function(de_system sys) {
-    DE_SYSTEM_FOREACH(&sys,
+void *system_function(darksys sys) {
+    DARKSYS_FOREACH(&sys,
         strurct vec2 *pos,
         strurct vec2 *vel,
         {
@@ -559,7 +559,7 @@ void *system_function(de_system sys) {
 }
 
 /* Eliminar un grupo buscando por su primer puntero */
-de_system_remove(&sys, &positions[3]);
+darksys_remove(&sys, &positions[3]);
 ```
 
 ---
@@ -567,7 +567,7 @@ de_system_remove(&sys, &positions[3]);
 ## Notas de implementación
 
 - **Convención de nombres**: todo símbolo público utiliza el prefijo `de_` (funciones/tipos) o `DE_` (macros/constantes). Los símbolos internos utilizan `_de_` / `_DE_`.
-- **Macros variádicas**: `_DE_ADD_NARGS` e `_DE_FOREACH_NARGS` utilizan el truco de conteo de argumentos mediante expansión de macro para soportar sobrecarga de aridad en `de_system_add`, `DE_SYSTEM_FOREACH` y `DE_SYSTEM_ITERATOR`.
-- **Statement expressions**: `_de_system_add` usa la sintaxis `({ ... })` de GNU C para poder retornar un valor desde una macro compleja.
+- **Macros variádicas**: `_DE_ADD_NARGS` e `_DE_FOREACH_NARGS` utilizan el truco de conteo de argumentos mediante expansión de macro para soportar sobrecarga de aridad en `darksys_add`, `DARKSYS_FOREACH` y `DARKSYS_ITERATOR`.
+- **Statement expressions**: `_darksys_add` usa la sintaxis `({ ... })` de GNU C para poder retornar un valor desde una macro compleja.
 - **Sin gestión de errores de memoria**: si el almacenamiento proporcionado es insuficiente, el comportamiento es indefinido. El usuario es responsable de calcular correctamente los tamaños.
 - **Capacidad 16-bit**: todos los contadores (`capacity`, `active`, `paused`, `size`) son `uint16_t` para optimizar el rendimiento en el Motorola 68000.

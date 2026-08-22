@@ -1,6 +1,6 @@
 # Darken — DARKula ENgine 2.0
 
-Darken is a single-header, allocation-free entity system for C, built for GCC/SGDK and the Motorola 68000 (Sega Mega Drive / Genesis). No `malloc` at runtime, no archetypes, no reflection — just a fixed-capacity entity manager plus a small pointer pool (`de_system`) for cross-entity logic.
+Darken is a single-header, allocation-free entity system for C, built for GCC/SGDK and the Motorola 68000 (Sega Mega Drive / Genesis). No `malloc` at runtime, no archetypes, no reflection — just a fixed-capacity entity manager plus a small pointer pool (`darksys`) for cross-entity logic.
 
 Rather than dump the whole API on you up front, this README builds one small thing with it: **Meteor Dodge**, a tiny terminal simulation — a stationary ship, three falling meteors, a pause button, and a score. It's not a real game (no input, no graphics), just enough moving parts to exercise every corner of Darken naturally, in the order you'd actually reach for it.
 
@@ -20,7 +20,7 @@ Every snippet below is a real piece of one program that compiles and runs. Every
   - [5. Cleanup on death: destructors](#5-cleanup-on-death-destructors)
   - [6. Who goes first: `move_front` / `move_back`](#6-who-goes-first-move_front--move_back)
   - [7. Freeze frame: pause and resume](#7-freeze-frame-pause-and-resume)
-  - [8. Talking across entities: `de_system`](#8-talking-across-entities-de_system)
+  - [8. Talking across entities: `darksys`](#8-talking-across-entities-darksys)
   - [9. Tearing it down: `de_manager_reset`](#9-tearing-it-down-de_manager_reset)
   - [10. Full listing](#10-full-listing)
   - [11. Quick reference](#11-quick-reference)
@@ -64,7 +64,7 @@ de_manager g_manager = &g_manager_storage;
 de_manager_init(g_manager, DE_MANAGER_ARGS(storage));
 ```
 
-Two lines instead of one, and this is worth pausing on: `de_manager` is a **pointer** type (`typedef struct de_manager *de_manager;`), not a struct you can declare directly. Write `de_manager g_manager;` on its own and you get an uninitialized pointer pointing at nothing. So we declare the real `struct de_manager` ourselves and take its address. Same deal for `de_system` later on. It reads a little unusual the first time, then it's just a habit — declare the struct, hand its address to the API.
+Two lines instead of one, and this is worth pausing on: `de_manager` is a **pointer** type (`typedef struct de_manager *de_manager;`), not a struct you can declare directly. Write `de_manager g_manager;` on its own and you get an uninitialized pointer pointing at nothing. So we declare the real `struct de_manager` ourselves and take its address. Same deal for `darksys` later on. It reads a little unusual the first time, then it's just a habit — declare the struct, hand its address to the API.
 
 `DE_MANAGER_ARGS(storage)` expands to the four arguments `de_manager_init` wants (its pointer table, its raw byte storage, the capacity, the payload size) — you never have to spell those out by hand.
 
@@ -193,7 +193,7 @@ Call it once after spawning the three meteors:
   radar: (lane 4, row 0) (lane 2, row 0) (lane 0, row 0)
 ```
 
-Notice the order: **lane 4 first**, even though lane 0 was spawned first. `DE_MANAGER_FOREACH` walks backward — from the highest active index down to zero — which is exactly what lets a callback safely delete, pause, or resume *itself* mid-loop without corrupting the traversal. (Mutating a *different*, not-yet-visited entity from inside the loop is a different story — more on that with `de_system` in a moment, where it's easier to see exactly what goes wrong.)
+Notice the order: **lane 4 first**, even though lane 0 was spawned first. `DE_MANAGER_FOREACH` walks backward — from the highest active index down to zero — which is exactly what lets a callback safely delete, pause, or resume *itself* mid-loop without corrupting the traversal. (Mutating a *different*, not-yet-visited entity from inside the loop is a different story — more on that with `darksys` in a moment, where it's easier to see exactly what goes wrong.)
 
 ---
 
@@ -275,24 +275,24 @@ Rows freeze at `3` through the two paused frames — the radar prints nothing be
 
 ---
 
-## 8. Talking across entities: `de_system`
+## 8. Talking across entities: `darksys`
 
-The manager handles *one* entity's lifecycle at a time. Checking "did any meteor reach the ship's row *and* lane" needs to compare a meteor against the player — that's what `de_system` is for: a flat pool of pointer groups, with no lifecycle of its own, that you fill and drain by hand.
+The manager handles *one* entity's lifecycle at a time. Checking "did any meteor reach the ship's row *and* lane" needs to compare a meteor against the player — that's what `darksys` is for: a flat pool of pointer groups, with no lifecycle of its own, that you fill and drain by hand.
 
 Reserve one, sized for 8 groups of 2 pointers each:
 
 ```c
-struct de_system g_hits_storage;
-de_system g_hits = &g_hits_storage;
+struct darksys g_hits_storage;
+darksys g_hits = &g_hits_storage;
 
-DE_SYSTEM_STORAGE(hits_storage, 8, 2);
-de_system_init(g_hits, DE_SYSTEM_ARGS(hits_storage));
+DARKSYS_STORAGE(hits_storage, 8, 2);
+darksys_init(g_hits, DARKSYS_ARGS(hits_storage));
 ```
 
 Register a `{meteor payload, meteor entity}` pair every time we spawn one:
 
 ```c
-de_system_add(g_hits, m, e);
+darksys_add(g_hits, m, e);
 ```
 
 And check the whole pool each frame:
@@ -302,7 +302,7 @@ void check_collisions(void)
 {
     struct player_data *p = (struct player_data *)g_player->data;
 
-    DE_SYSTEM_FOREACH(g_hits, struct meteor_data *m, de_entity meteor_entity,
+    DARKSYS_FOREACH(g_hits, struct meteor_data *m, de_entity meteor_entity,
     {
         if (m->row == GRID_ROWS - 1 && m->lane == p->lane)
             de_entity_delete(meteor_entity);
@@ -316,14 +316,14 @@ Deleting the meteor here triggers its destructor, which is the right place to ke
 void *meteor_destroyed(void *raw)
 {
     struct meteor_data *m = (struct meteor_data *)raw;
-    de_system_remove(g_hits, m);
+    darksys_remove(g_hits, m);
     printf("  [boom]  lane %d meteor destroyed\n", m->lane);
     g_score++;
     return 0;
 }
 ```
 
-**A gotcha worth actually seeing, not just being told about.** Is it safe to mutate `g_hits` from inside its own `DE_SYSTEM_FOREACH`? The answer is "it depends on *which* group you touch," and it's easy to get wrong, so here it is proven rather than asserted. Two tests, both against the real header:
+**A gotcha worth actually seeing, not just being told about.** Is it safe to mutate `g_hits` from inside its own `DARKSYS_FOREACH`? The answer is "it depends on *which* group you touch," and it's easy to get wrong, so here it is proven rather than asserted. Two tests, both against the real header:
 
 *Removing the group you're currently visiting* — every one of six groups deletes itself as it's visited:
 
@@ -349,7 +349,7 @@ visiting 40
 visiting 50
 ```
 
-`50` shows up **twice**. `DE_SYSTEM_FOREACH` snapshots its end boundary once, at the start; removing a group compacts the pool by copying the last group into the hole, but the loop's stale boundary doesn't know that and walks one step too far, re-reading memory that's no longer logically part of the pool.
+`50` shows up **twice**. `DARKSYS_FOREACH` snapshots its end boundary once, at the start; removing a group compacts the pool by copying the last group into the hole, but the loop's stale boundary doesn't know that and walks one step too far, re-reading memory that's no longer logically part of the pool.
 
 So: **self-removal — the group currently being visited — is safe. Removing anything else mid-pass is not.** It's the exact same rule `DE_MANAGER_FOREACH` has for entities, just not written down anywhere before now. Our `check_collisions` above only ever deletes the entity it's currently looking at, so it's on the safe side of that line.
 
@@ -415,8 +415,8 @@ struct meteor_data { int16_t lane; int16_t row; };
 static struct de_manager g_manager_storage;
 static de_manager g_manager = &g_manager_storage;
 
-static struct de_system g_hits_storage;
-static de_system g_hits = &g_hits_storage;
+static struct darksys g_hits_storage;
+static darksys g_hits = &g_hits_storage;
 
 static de_entity g_player;
 static de_entity g_meteors[3];
@@ -440,7 +440,7 @@ void *meteor_fall(void *raw)
 void *meteor_destroyed(void *raw)
 {
     struct meteor_data *m = (struct meteor_data *)raw;
-    de_system_remove(g_hits, m);
+    darksys_remove(g_hits, m);
     printf("  [boom]  lane %d meteor destroyed\n", m->lane);
     g_score++;
     return 0;
@@ -459,7 +459,7 @@ de_entity spawn_meteor(int16_t lane)
     e->destructor = meteor_destroyed;
     e->tag        = TAG_METEOR;
 
-    de_system_add(g_hits, m, e);
+    darksys_add(g_hits, m, e);
     g_meteors[g_meteor_count++] = e;
     return e;
 }
@@ -468,7 +468,7 @@ void check_collisions(void)
 {
     struct player_data *p = (struct player_data *)g_player->data;
 
-    DE_SYSTEM_FOREACH(g_hits, struct meteor_data *m, de_entity meteor_entity,
+    DARKSYS_FOREACH(g_hits, struct meteor_data *m, de_entity meteor_entity,
     {
         if (m->row == GRID_ROWS - 1 && m->lane == p->lane)
             de_entity_delete(meteor_entity); /* self-removal: safe, see §8 */
@@ -492,8 +492,8 @@ int main(void)
     DE_MANAGER_STORAGE(storage, 8, sizeof(struct meteor_data));
     de_manager_init(g_manager, DE_MANAGER_ARGS(storage));
 
-    DE_SYSTEM_STORAGE(hits_storage, 8, 2);
-    de_system_init(g_hits, DE_SYSTEM_ARGS(hits_storage));
+    DARKSYS_STORAGE(hits_storage, 8, 2);
+    darksys_init(g_hits, DARKSYS_ARGS(hits_storage));
 
     g_player = de_manager_new(g_manager);
     struct player_data *pd = (struct player_data *)g_player->data;
@@ -557,11 +557,11 @@ typedef void *(*de_state)(void *);
 
 typedef struct de_entity  *de_entity;    /* pointer typedefs, all three */
 typedef struct de_manager *de_manager;
-typedef struct de_system  *de_system;
+typedef struct darksys  *darksys;
 
 struct de_entity  { de_state state, destructor; de_manager owner; uint16_t slot, tag; uint8_t data[]; };
 struct de_manager { de_entity *pool; uint16_t capacity, size, paused; };
-struct de_system  { void **pool, **end; uint16_t capacity, size, params; };
+struct darksys  { void **pool, **end; uint16_t capacity, size, params; };
 ```
 
 ### Entity
@@ -587,10 +587,10 @@ struct de_system  { void **pool, **end; uint16_t capacity, size, params; };
 
 | | |
 |---|---|
-| `de_system_init(s, storage, capacity_groups, params)` | one-time setup |
-| `de_system_add(s, ...)` | 1–5 pointers, must match `params` every time |
-| `DE_SYSTEM_FOREACH(s, ...)` | 0–5 output vars; safe to remove the *current* group, unsafe to remove a different one (§8) |
-| `de_system_remove(s, first)` | matches by first pointer, swap-removes (order not preserved) |
+| `darksys_init(s, storage, capacity_groups, params)` | one-time setup |
+| `darksys_add(s, ...)` | 1–5 pointers, must match `params` every time |
+| `DARKSYS_FOREACH(s, ...)` | 0–5 output vars; safe to remove the *current* group, unsafe to remove a different one (§8) |
+| `darksys_remove(s, first)` | matches by first pointer, swap-removes (order not preserved) |
 
 ### Macros
 
@@ -598,8 +598,8 @@ struct de_system  { void **pool, **end; uint16_t capacity, size, params; };
 |---|---|
 | `DE_MANAGER_STORAGE` / `DE_MANAGER_ARGS` | static manager storage + init args |
 | `DE_MANAGER_FOREACH(m, code)` | backward, active-only; exposes `INDEX`, `POOL`, `ENTITY` |
-| `DE_SYSTEM_STORAGE` / `DE_SYSTEM_ARGS` | static system storage + init args |
-| `DE_SYSTEM_ITERATOR(name, ...)` | generates `void *name(de_system)`, installable as a `state` |
+| `DARKSYS_STORAGE` / `DARKSYS_ARGS` | static system storage + init args |
+| `DARKSYS_ITERATOR(name, ...)` | generates `void *name(darksys)`, installable as a `state` |
 
 ### State control values
 
@@ -609,7 +609,7 @@ struct de_system  { void **pool, **end; uint16_t capacity, size, params; };
 
 ## 12. If you're upgrading from an older `darken.h`
 
-The one structural change that will break old code: `de_manager` and `de_system` are now pointer typedefs, matching `de_entity`. If you have code like
+The one structural change that will break old code: `de_manager` and `darksys` are now pointer typedefs, matching `de_entity`. If you have code like
 
 ```c
 de_manager mgr;

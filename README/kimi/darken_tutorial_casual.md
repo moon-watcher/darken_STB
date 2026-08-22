@@ -159,7 +159,7 @@ It walks active entities **backwards** (yeah, in reverse like *Tenet*). For each
 
 ---
 
-## Step 4: Throwing in a `de_system` (Because Why Not)
+## Step 4: Throwing in a `darksys` (Because Why Not)
 
 Managers handle life and death. **Systems** process data in a cache-friendly way. Let's make an **engine particle** system for the ship.
 
@@ -167,12 +167,12 @@ First, we need a system. It's a flat array of pointers. If you tell it 2 paramet
 
 ```c
 /* Particle system: stores (position, velocity) */
-DE_SYSTEM_STORAGE(particles, 100, 2);
+DARKSYS_STORAGE(particles, 100, 2);
 
 /* Generate a system function that updates all particles.
- * DE_SYSTEM_ITERATOR_2 creates: void *update_particles(de_system system)
+ * DARKSYS_ITERATOR_2 creates: void *update_particles(darksys system)
  * with two unpacked pointers per group: px = pool[0], py = pool[1] */
-DE_SYSTEM_ITERATOR_2(update_particles, float *px, float *py, {
+DARKSYS_ITERATOR_2(update_particles, float *px, float *py, {
     *px += (rand() % 3 - 1) * 0.1f;  /* jitter on X */
     *py += 0.3f;                      /* fall down */
 })
@@ -181,13 +181,13 @@ DE_SYSTEM_ITERATOR_2(update_particles, float *px, float *py, {
 In `main`, initialize and use it:
 
 ```c
-    struct de_system engine;
-    de_system_init(&engine, DE_SYSTEM_ARGS(particles));
+    struct darksys engine;
+    darksys_init(&engine, DARKSYS_ARGS(particles));
 
     /* Every time we want a particle: */
     float *pos_x = &((Thing *)ship->data)->x;
     float *pos_y = &((Thing *)ship->data)->y;
-    de_system_add(&engine, pos_x, pos_y);  /* store pointers to ship position */
+    darksys_add(&engine, pos_x, pos_y);  /* store pointers to ship position */
 ```
 
 And in the loop:
@@ -201,11 +201,11 @@ And in the loop:
     }
 ```
 
-### What's the deal with `de_system`?
+### What's the deal with `darksys`?
 
 It's a box of flat pointers. Doesn't know about entities, doesn't know about managers. Only knows it has `params` pointers per group and a bunch of groups. Iteration is super fast because everything is packed tight in memory.
 
-> **Tip:** If you have a rendering system, a physics system, and a sound system, each can have its own `de_system` pointing at the data it cares about. No "searching components by ID." Direct pointers, friend.
+> **Tip:** If you have a rendering system, a physics system, and a sound system, each can have its own `darksys` pointing at the data it cares about. No "searching components by ID." Direct pointers, friend.
 
 ---
 
@@ -327,9 +327,9 @@ int main(void)
     de_manager_init(&manager, DE_MANAGER_ARGS(world));
 
     /* Engine particle system */
-    DE_SYSTEM_STORAGE(particles, 100, 2);
-    struct de_system engine;
-    de_system_init(&engine, DE_SYSTEM_ARGS(particles));
+    DARKSYS_STORAGE(particles, 100, 2);
+    struct darksys engine;
+    darksys_init(&engine, DARKSYS_ARGS(particles));
 
     create_ship(&manager);
 
@@ -376,7 +376,7 @@ gcc -std=gnu99 main.c -o orbit && ./orbit
 | Create something | `de_manager_new(&manager)` |
 | Make it move/change every frame | Assign a `state` and call `de_manager_update()` |
 | Make it disappear | The `state` returns `DE_STATE_DELETE` |
-| Process lots of data fast | `de_system` + `DE_SYSTEM_ITERATOR_*` or `DE_SYSTEM_FOREACH` |
+| Process lots of data fast | `darksys` + `DARKSYS_ITERATOR_*` or `DARKSYS_FOREACH` |
 | Check if something is active | `_DE_ENTITY_IS_ACTIVE(e)` |
 | Reset everything | `de_manager_reset(&manager)` |
 
@@ -389,7 +389,7 @@ You've got the skeleton. From here you can:
 - Add `de_entity_delete()` manually when an asteroid hits the ship.
 - Use `e->destructor` to spawn explosions when something dies.
 - Pause entities with `de_entity_pause()` (useful for pause menus or freeze effects).
-- Make more `de_system`s: one for sound, one for AI, one for networking.
+- Make more `darksys`s: one for sound, one for AI, one for networking.
 
 Darken doesn't tell you how to structure your game. It gives you a manager that doesn't break, a system that iterates fast, and states that are just functions. The rest is up to you.
 

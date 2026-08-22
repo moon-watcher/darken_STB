@@ -43,7 +43,7 @@ Only the second one changes during creation, deletion, pause/resume, or reorderi
 - Explicit state-machine callbacks.
 - Optional per-entity destructor.
 - User-defined 16-bit entity tags.
-- Separate packed data-pointer system (`de_system`).
+- Separate packed data-pointer system (`darksys`).
 - 1–5 parameter convenience macros for systems.
 - Static storage declaration macros.
 - GNU C statement expressions and `__attribute__` support for SGDK/GCC.
@@ -72,9 +72,9 @@ The `de_state` interface also represents state callback pointers and special con
 
 The header contains `_DE_*` macros used only to implement the public convenience macros. In particular:
 
-- `_DE_ADD_NARGS` counts the data arguments supplied to `de_system_add`; the system pointer is excluded, so the supported range is 1–5 data pointers.
-- `_DE_FOREACH_NARGS` performs the equivalent selection for `DE_SYSTEM_FOREACH` and `DE_SYSTEM_ITERATOR`; the system pointer and final code block are excluded, so the supported range is 0–5 data variables.
-- `_DE_CONCAT` performs token concatenation so the public variadic macro can select `_de_system_add_1` … `_de_system_add_5`, or the corresponding foreach/iterator implementation.
+- `_DE_ADD_NARGS` counts the data arguments supplied to `darksys_add`; the system pointer is excluded, so the supported range is 1–5 data pointers.
+- `_DE_FOREACH_NARGS` performs the equivalent selection for `DARKSYS_FOREACH` and `DARKSYS_ITERATOR`; the system pointer and final code block are excluded, so the supported range is 0–5 data variables.
+- `_DE_CONCAT` performs token concatenation so the public variadic macro can select `_darksys_add_1` … `_darksys_add_5`, or the corresponding foreach/iterator implementation.
 
 These helpers are implementation details. Application code should use the `DE_*` macros rather than calling `_DE_*` directly.
 
@@ -124,7 +124,7 @@ Darken has two main pieces:
                                └──────────────────┘
 
                  ┌──────────────────┐
-                 │    de_system     │
+                 │    darksys     │
                  │ packed pointers  │
                  └──────────────────┘
 ```
@@ -762,7 +762,7 @@ Mutating a different entity while the loop is running is not guaranteed safe bec
 
 # 16. Systems
 
-`de_system` is a separate, very small packed pointer pool.
+`darksys` is a separate, very small packed pointer pool.
 
 It is useful when a processing step needs to maintain a list of related pointers without allocating memory.
 
@@ -799,7 +799,7 @@ pool[]
 
 `size` and `capacity` are measured in pointer slots, while `params` defines the group width. Thus, if `params == 3`, a system containing four groups has `size == 12`, not `size == 4`.
 
-`end` points one element past the last used pointer. `de_system_add` writes new pointers at `end`, then advances both `size` and `end` by the number of pointers added. The pool therefore remains densely packed from `pool` through `end`.
+`end` points one element past the last used pointer. `darksys_add` writes new pointers at `end`, then advances both `size` and `end` by the number of pointers added. The pool therefore remains densely packed from `pool` through `end`.
 
 The system does not own the pointed-to objects. It stores only pointers. The lifetime of the entities/components represented by those pointers remains the caller's responsibility.
 
@@ -807,7 +807,7 @@ The system does not own the pointed-to objects. It stores only pointers. The lif
 
 # 17. System storage
 
-A `de_system` is a flat pointer pool. Its storage is arranged in groups of `params` pointers, allowing one logical group to represent several related data references for one entity or one processing item. For `params = 3`, the layout is:
+A `darksys` is a flat pointer pool. Its storage is arranged in groups of `params` pointers, allowing one logical group to represent several related data references for one entity or one processing item. For `params = 3`, the layout is:
 
 ```text
 [e0.a][e0.b][e0.c][e1.a][e1.b][e1.c][e2.a][e2.b][e2.c]...
@@ -818,17 +818,17 @@ The `capacity` field stores the total number of pointer slots (`capacity_groups 
 Declare static system storage:
 
 ```c
-DE_SYSTEM_STORAGE(g_physics_storage, 32, 3);
+DARKSYS_STORAGE(g_physics_storage, 32, 3);
 ```
 
 Initialize:
 
 ```c
-de_system physics;
+darksys physics;
 
-de_system_init(
+darksys_init(
     &physics,
-    de_system_args(g_physics_storage)
+    darksys_args(g_physics_storage)
 );
 ```
 
@@ -846,12 +846,12 @@ No heap allocation is performed.
 
 # 18. Adding system groups
 
-`de_system_add` accepts the system pointer first and then 1–5 data pointers. The macro writes those pointers consecutively at `system->end`, advances both `size` and `end`, and returns non-zero on success. If there is insufficient capacity for the complete group, it writes nothing and returns zero.
+`darksys_add` accepts the system pointer first and then 1–5 data pointers. The macro writes those pointers consecutively at `system->end`, advances both `size` and `end`, and returns non-zero on success. If there is insufficient capacity for the complete group, it writes nothing and returns zero.
 
 Use:
 
 ```c
-de_system_add(&physics, entity, velocity, position);
+darksys_add(&physics, entity, velocity, position);
 ```
 
 The first argument is the system pointer.
@@ -861,11 +861,11 @@ The remaining arguments are the pointers stored in one group.
 Up to five data pointers are supported:
 
 ```c
-de_system_add(&system, A);
-de_system_add(&system, A, B);
-de_system_add(&system, A, B, C);
-de_system_add(&system, A, B, C, D);
-de_system_add(&system, A, B, C, D, E);
+darksys_add(&system, A);
+darksys_add(&system, A, B);
+darksys_add(&system, A, B, C);
+darksys_add(&system, A, B, C, D);
+darksys_add(&system, A, B, C, D, E);
 ```
 
 The macro returns:
@@ -882,7 +882,7 @@ The macro returns:
 Example:
 
 ```c
-DE_SYSTEM_FOREACH(&physics, entity, velocity, position,
+DARKSYS_FOREACH(&physics, entity, velocity, position,
 {
     update_physics(entity, velocity, position);
 });
@@ -906,7 +906,7 @@ The variables supplied to the macro are assigned from the current group's pointe
 
 # 20. Removing system groups
 
-`de_system_init()` receives the number of logical groups and the number of pointers per group. It initializes `pool` and `end` to the beginning of the caller-owned storage, sets `size` to zero, and stores the pointer-slot capacity as:
+`darksys_init()` receives the number of logical groups and the number of pointers per group. It initializes `pool` and `end` to the beginning of the caller-owned storage, sets `size` to zero, and stores the pointer-slot capacity as:
 
 ```text
 capacity = capacity_groups × params
@@ -917,7 +917,7 @@ capacity = capacity_groups × params
 Remove a group by matching its first pointer:
 
 ```c
-de_system_remove(&physics, entity);
+darksys_remove(&physics, entity);
 ```
 
 The function returns:
@@ -950,9 +950,9 @@ Do not depend on stable system-group ordering after removal.
 
 # 21. System iterator generator
 
-`DE_SYSTEM_ITERATOR` turns a `DE_SYSTEM_FOREACH`-style body into a function whose signature accepts `de_system `. The generated function executes the complete system traversal and returns `DE_STATE_LOOP`, which allows the generated iterator to be installed directly as an entity state callback.
+`DARKSYS_ITERATOR` turns a `DARKSYS_FOREACH`-style body into a function whose signature accepts `darksys `. The generated function executes the complete system traversal and returns `DE_STATE_LOOP`, which allows the generated iterator to be installed directly as an entity state callback.
 
-`DE_SYSTEM_ITERATOR` generates a function that executes a system foreach pattern and returns:
+`DARKSYS_ITERATOR` generates a function that executes a system foreach pattern and returns:
 
 ```c
 DE_STATE_LOOP
@@ -961,7 +961,7 @@ DE_STATE_LOOP
 Example:
 
 ```c
-DE_SYSTEM_ITERATOR(physics_update_f,
+DARKSYS_ITERATOR(physics_update_f,
     de_entity *entity,
     struct Velocity *velocity,
     struct Position *position,
@@ -974,13 +974,13 @@ DE_SYSTEM_ITERATOR(physics_update_f,
 The generated function has the conceptual form:
 
 ```c
-void *physics_update(de_system system) {
+void *physics_update(darksys system) {
     /* foreach body */
     return DE_STATE_LOOP;
 }
 ```
 
-Important: this function takes `de_system `, while `de_state` takes `void *`. Therefore the generated function pointer is **not type-compatible with `de_state` under strict ISO C**.
+Important: this function takes `darksys `, while `de_state` takes `void *`. Therefore the generated function pointer is **not type-compatible with `de_state` under strict ISO C**.
 
 On the intended GCC/SGDK target the macro can be useful where the ABI and calling convention are known, but it should not be treated as a portable function-pointer conversion.
 
@@ -992,9 +992,9 @@ The convenience macros deliberately support a small fixed number of parameters:
 
 | Macro                | Supported data variables/pointers |
 | -------------------- | --------------------------------: |
-| `de_system_add`      |                               1–5 |
-| `DE_SYSTEM_FOREACH`  |                               0–5 |
-| `DE_SYSTEM_ITERATOR` |                               0–5 |
+| `darksys_add`      |                               1–5 |
+| `DARKSYS_FOREACH`  |                               0–5 |
+| `DARKSYS_ITERATOR` |                               0–5 |
 
 The `_DE_*` macros used to count arguments and select implementations are internal details. They exist solely to provide the public variadic API and should not be called directly.
 
@@ -1052,7 +1052,7 @@ void game_update(void)  {
 
 ```c
 
-DE_SYSTEM_ITERATOR(sys_movement_f,
+DARKSYS_ITERATOR(sys_movement_f,
     struct Position *pos,
     struct Velocity *vel,
     {
@@ -1061,15 +1061,15 @@ DE_SYSTEM_ITERATOR(sys_movement_f,
     }
 );
 
-de_system sys_movement;
+darksys sys_movement;
 
-DE_SYSTEM_STORAGE(storage, 64, 2);
-de_system_init(&sys_movement, de_system_args(storage));
+DARKSYS_STORAGE(storage, 64, 2);
+darksys_init(&sys_movement, darksys_args(storage));
 
 struct Position { int16_t x, y; } position;
 struct Velocity { int16_t vx, vy; } velocity;
 
-de_system_add(&sys_movement, &position, &velocity);
+darksys_add(&sys_movement, &position, &velocity);
 ```
 
 ---
@@ -1146,7 +1146,7 @@ A state callback can therefore act as a lightweight state machine.
 
 The manager operations are designed around constant-time pointer rearrangement. `de_manager_new()`, pause, resume, entity swap, move-front, move-back, and deletion do not move entity bytes; they adjust boundaries and/or a constant number of entries in `items[]`.
 
-`de_manager_init()` is O(capacity) because it precomputes one entity pointer per storage slot. `de_manager_update()` is O(active) per call, excluding the cost of user state callbacks. `de_system_remove()` is O(number of groups * params) in the worst case because it searches for the first pointer and may copy one complete group.
+`de_manager_init()` is O(capacity) because it precomputes one entity pointer per storage slot. `de_manager_update()` is O(active) per call, excluding the cost of user state callbacks. `darksys_remove()` is O(number of groups * params) in the worst case because it searches for the first pointer and may copy one complete group.
 
 For the manager:
 
@@ -1166,9 +1166,9 @@ For systems:
 
 | Operation           | Complexity |
 | ------------------- | ---------: |
-| `de_system_add`     |       O(1) |
-| `DE_SYSTEM_FOREACH` |  O(groups) |
-| `de_system_remove`  |  O(groups) |
+| `darksys_add`     |       O(1) |
+| `DARKSYS_FOREACH` |  O(groups) |
+| `darksys_remove`  |  O(groups) |
 | removal compaction  |  O(params) |
 
 ---
@@ -1248,7 +1248,7 @@ typedef void *(*de_state)(void *);
 
 typedef struct de_entity *de_entity;
 typedef struct de_manager de_manager;
-typedef struct de_system de_system;
+typedef struct darksys darksys;
 ```
 
 ## Entity
@@ -1280,7 +1280,7 @@ struct de_manager
 ## System
 
 ```c
-struct de_system
+struct darksys
 {
     void **pool;
     void **end;
@@ -1322,15 +1322,15 @@ void de_manager_reset(de_manager);
 ## System functions
 
 ```c
-void de_system_init(
-    de_system ,
+void darksys_init(
+    darksys ,
     void **,
     uint16_t,
     uint16_t
 );
 
-uint16_t de_system_remove(
-    de_system ,
+uint16_t darksys_remove(
+    darksys ,
     void *
 );
 ```
@@ -1344,11 +1344,11 @@ DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)
 de_manager_args(NAME)
 de_manager_foreach(M, CODE)
 
-DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS)
-de_system_args(NAME)
-de_system_add(...)
-DE_SYSTEM_FOREACH(...)
-DE_SYSTEM_ITERATOR(...)
+DARKSYS_STORAGE(NAME, CAPACITY, PARAMS)
+darksys_args(NAME)
+darksys_add(...)
+DARKSYS_FOREACH(...)
+DARKSYS_ITERATOR(...)
 ```
 
 ---
@@ -1370,8 +1370,8 @@ DE_SYSTEM_ITERATOR(...)
 - Reuse an entity pointer after `de_entity_delete`.
 - Assume active entity ordering is stable.
 - Modify a different manager entity while a `de_manager_foreach` loop is running unless the mutation is known to be safe.
-- Assume `de_system_remove()` preserves order.
-- Treat `DE_SYSTEM_ITERATOR` as a strictly portable `de_state` function pointer.
+- Assume `darksys_remove()` preserves order.
+- Treat `DARKSYS_ITERATOR` as a strictly portable `de_state` function pointer.
 
 ---
 

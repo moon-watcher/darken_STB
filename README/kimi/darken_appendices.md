@@ -78,12 +78,12 @@ The manager has three zones: `[active][free][paused]`. `de_manager_new` only tak
 **Fix:** Check `manager.paused - manager.size` to see how many free slots remain. If you pause a lot, eventually you run out of room for new stuff.
 
 ### 4. "I keep a pointer to `entity->data` and then the entity dies"
-Pointers to `data[]` are **stable only for paused entities**. If the entity is active and `de_entity_delete` or `de_manager_update` destroys it, that pointer you stored in your `de_system` or in another entity now points at a corpse (or worse, another entity that took that slot).
+Pointers to `data[]` are **stable only for paused entities**. If the entity is active and `de_entity_delete` or `de_manager_update` destroys it, that pointer you stored in your `darksys` or in another entity now points at a corpse (or worse, another entity that took that slot).
 
-**Fix:** If a `de_system` needs to point at data safely, make sure the entity is **paused** (`de_entity_pause`). Or better, rebuild the system's pointers every frame from the manager.
+**Fix:** If a `darksys` needs to point at data safely, make sure the entity is **paused** (`de_entity_pause`). Or better, rebuild the system's pointers every frame from the manager.
 
-### 5. "`de_system_remove` finds nothing"
-`de_system_remove(sys, ptr)` looks for a group whose **first** pointer (`pool[i]`) equals `ptr`. If you stored `(pos, vel)` and try to search by `vel`, it won't work. Always search by the first element of the group.
+### 5. "`darksys_remove` finds nothing"
+`darksys_remove(sys, ptr)` looks for a group whose **first** pointer (`pool[i]`) equals `ptr`. If you stored `(pos, vel)` and try to search by `vel`, it won't work. Always search by the first element of the group.
 
 ### 6. "My state returns `0` and the entity doesn't die"
 `0` **is** `DE_STATE_DELETE`, but if your function accidentally returns `NULL` (which is `0`), the entity dies. If your state returns a pointer to another function, make sure it's not `NULL`, `1`, or `2`, because those are the engine's magic values.
@@ -97,26 +97,26 @@ Darken **does not initialize your payload**. It gives you the entity with `state
 ### 9. "I pause an entity and it still shows up in my `DE_MANAGER_FOREACH`"
 `DE_MANAGER_FOREACH` only walks the active zone `[0, size)`. If you paused something, it moved to `[paused, capacity)`. It shouldn't show up... unless you're iterating over `pool[]` manually without checking boundaries.
 
-### 10. "My `de_system` has weird `capacity`"
-`de_system_init` receives `capacity_groups` (how many groups you want) and `params` (how many pointers per group). The **total** pointer capacity is `groups * params`. If you reserve `DE_SYSTEM_STORAGE(sys, 10, 3)`, you have room for 10 groups of 3 pointers, not 30 groups.
+### 10. "My `darksys` has weird `capacity`"
+`darksys_init` receives `capacity_groups` (how many groups you want) and `params` (how many pointers per group). The **total** pointer capacity is `groups * params`. If you reserve `DARKSYS_STORAGE(sys, 10, 3)`, you have room for 10 groups of 3 pointers, not 30 groups.
 
-### 11. "I used `DE_SYSTEM_FOREACH_2` and it doesn't compile"
-The public macro is `DE_SYSTEM_FOREACH`, not `DE_SYSTEM_FOREACH_2`. The number suffix is resolved automatically by the variadic macro. Use:
+### 11. "I used `DARKSYS_FOREACH_2` and it doesn't compile"
+The public macro is `DARKSYS_FOREACH`, not `DARKSYS_FOREACH_2`. The number suffix is resolved automatically by the variadic macro. Use:
 ```c
 /* Good: 2 unpacked pointers + code block */
-DE_SYSTEM_FOREACH(sys, float *px, float *py, {
+DARKSYS_FOREACH(sys, float *px, float *py, {
     *px += 1.0f;
     *py += 0.5f;
 });
 
 /* Good: generating a system function */
-DE_SYSTEM_ITERATOR_2(update_particles, float *px, float *py, {
+DARKSYS_ITERATOR_2(update_particles, float *px, float *py, {
     *px += (rand() % 3 - 1) * 0.1f;
     *py += 0.3f;
 })
 
 /* Bad: internal macro, don't use directly */
-_DE_SYSTEM_FOREACH_2(...)
+_DARKSYS_FOREACH_2(...)
 ```
 
 ---
@@ -129,7 +129,7 @@ _DE_SYSTEM_FOREACH_2(...)
 | Delete entities by returning `DE_STATE_DELETE` from their `state` | Call `de_entity_delete` inside a `DE_MANAGER_FOREACH` |
 | Pause entities if you want stable pointers to their `data` | Keep pointers to `data` of active entities |
 | Initialize your payload after `de_manager_new` | Assume `data[]` comes zeroed |
-| Use `de_system_remove` searching by the **first** pointer of the group | Search by the second, third, etc. |
-| Use `DE_SYSTEM_FOREACH` or `DE_SYSTEM_ITERATOR_*` (public) | Use `_DE_SYSTEM_FOREACH_*` (internal) |
+| Use `darksys_remove` searching by the **first** pointer of the group | Search by the second, third, etc. |
+| Use `DARKSYS_FOREACH` or `DARKSYS_ITERATOR_*` (public) | Use `_DARKSYS_FOREACH_*` (internal) |
 
 With these rules, Darken is practically impossible to break. Or well, harder. A bit. 🎮

@@ -2,7 +2,7 @@
 
 **Sistema de entidades de cabecera única, en C, sin asignación dinámica de memoria en tiempo de ejecución, pensado para GCC/SGDK y el Motorola 68000 (Sega Mega Drive / Genesis).**
 
-Darken no es un ECS de archetypes. Es un gestor de entidades de capacidad fija sobre memoria proporcionada por el usuario, más un pool de punteros compacto (`de_system`) para procesar datos en bloque. Toda la memoria se reserva en tiempo de compilación o de inicialización; Darken nunca llama a `malloc`, `free` ni `calloc`.
+Darken no es un ECS de archetypes. Es un gestor de entidades de capacidad fija sobre memoria proporcionada por el usuario, más un pool de punteros compacto (`darksys`) para procesar datos en bloque. Toda la memoria se reserva en tiempo de compilación o de inicialización; Darken nunca llama a `malloc`, `free` ni `calloc`.
 
 > Este documento describe el comportamiento **real** del código de `darken.h`, verificado leyendo cada función línea a línea y comprobando con casos de prueba compilados los puntos que resultaban ambiguos (marcados como tal en la sección [18](#18-peculiaridades-y-advertencias-importantes)).
 
@@ -40,14 +40,14 @@ Darken no es un ECS de archetypes. Es un gestor de entidades de capacidad fija s
 - **Tres zonas lógicas en un único array de punteros:** activa, libre y pausada.
 - **Las entidades pausadas conservan su dirección.** `de_manager_new()` nunca recicla un slot de la zona pausada, así que un puntero externo a `entity->data` sigue siendo válido mientras la entidad esté pausada o activa.
 - **Iteración activa hacia atrás y segura para auto-modificación.** El manager recorre la zona activa en orden descendente, lo que permite borrar, pausar o reanudar la entidad *que se está visitando* sin invalidar el recorrido.
-- **`de_system` es un pool plano de punteros**, agrupados de `params` en `params`, sin relación estructural con las entidades salvo la que el propio código de usuario decida darle.
+- **`darksys` es un pool plano de punteros**, agrupados de `params` en `params`, sin relación estructural con las entidades salvo la que el propio código de usuario decida darle.
 - **Alineación a 4 bytes (longword)** en el stride de entidad y en el bloque de datos, orientada al Motorola 68000.
 
 ---
 
 ## 2. Requisitos y plataforma
 
-- Compilador **GCC** (o compatible) con extensiones GNU C: el código usa `__attribute__((aligned(4)))` y *statement expressions* `({ ... })` dentro de `de_system_add`.
+- Compilador **GCC** (o compatible) con extensiones GNU C: el código usa `__attribute__((aligned(4)))` y *statement expressions* `({ ... })` dentro de `darksys_add`.
 - Única dependencia: `<stdint.h>`.
 - Objetivo declarado: **SGDK** (Sega Genesis Development Kit) sobre Motorola 68000, aunque el header compila igualmente en cualquier plataforma con GCC (se ha verificado en x86_64/Linux para este documento).
 - El tipo `de_state` representa tanto punteros a función como valores de control mediante `void *`, y varias comparaciones de puntero (`S > (de_state)2`) no son estrictamente ISO C portables. Es una decisión de diseño consciente para el ABI de destino, no un descuido.
@@ -80,7 +80,7 @@ No definir `DARKEN_IMPLEMENTATION` en más de una unidad de traducción (produci
 | `de_*`  | Funciones y tipos públicos                                       |
 | `DE_*`  | Macros públicas                                                  |
 | `_de_*` | Funciones internas (uso interno del propio header)               |
-| `_DE_*` | Macros internas, implementan la aridad variable de `DE_SYSTEM_*` |
+| `_DE_*` | Macros internas, implementan la aridad variable de `DARKSYS_*` |
 
 Los símbolos `_de_*` / `_DE_*` no forman parte de la API estable y no deben usarse directamente desde código de aplicación (ver [§18.3](#183-de_entity_swap-no-es-pública)).
 
@@ -122,10 +122,10 @@ struct de_manager
 
 El manager no almacena las entidades: almacena un array de **punteros** a ellas (`pool`), dividido en tres zonas contiguas (ver [§7](#7-las-tres-zonas-del-manager)). Las entidades en sí viven en un bloque de bytes contiguo separado, proporcionado por el usuario.
 
-### 5.3 Sistema (`de_system`)
+### 5.3 Sistema (`darksys`)
 
 ```c
-struct de_system
+struct darksys
 {
     void **pool;
     void **end;
@@ -144,7 +144,7 @@ Pool (params = 2):
 
 `capacity` y `size` se expresan en **slots de puntero**, no en grupos: un sistema con 10 grupos de 3 parámetros tiene `capacity == 30`. El número de grupos ocupados es `size / params`. `end` apunta siempre un elemento más allá del último puntero usado.
 
-Un `de_system` **no es propietario** de los objetos a los que apunta; solo guarda punteros. La vida de esos objetos es responsabilidad del código que los añadió.
+Un `darksys` **no es propietario** de los objetos a los que apunta; solo guarda punteros. La vida de esos objetos es responsabilidad del código que los añadió.
 
 ### 5.4 Estado (`de_state`)
 
@@ -169,7 +169,7 @@ Un callback de estado recibe `entity->data` (no la entidad completa) y devuelve,
 
 Cualquier valor de puntero mayor que `2` se considera un callback ejecutable. Esto asume que el enlazador nunca coloca código en las direcciones `0`–`2`, cierto en la práctica en el ABI de destino pero no garantizado por ISO C.
 
-> **Nota de tipado:** aunque `de_state` se declara como `void *(*)(void *)`, es habitual en el propio código de Darken escribir los callbacks tomando directamente el tipo del payload (`struct MiComponente *`) en vez de `void *`, y asignarlos a `entity->state` sin *cast* explícito. Compila y funciona en el ABI de destino (GCC/68000), pero no es válido bajo ISO C estricto — es la misma flexibilidad ya asumida para `DE_STATE_*` y para las funciones generadas por `DE_SYSTEM_ITERATOR` (ver [§10.3](#103-de_system_iterator)).
+> **Nota de tipado:** aunque `de_state` se declara como `void *(*)(void *)`, es habitual en el propio código de Darken escribir los callbacks tomando directamente el tipo del payload (`struct MiComponente *`) en vez de `void *`, y asignarlos a `entity->state` sin *cast* explícito. Compila y funciona en el ABI de destino (GCC/68000), pero no es válido bajo ISO C estricto — es la misma flexibilidad ya asumida para `DE_STATE_*` y para las funciones generadas por `DARKSYS_ITERATOR` (ver [§10.3](#103-darksys_iterator)).
 
 ---
 
@@ -225,12 +225,12 @@ El objeto generado por `DE_MANAGER_STORAGE` debe permanecer vivo y en la misma d
 ### 6.3 Sistema: el pool
 
 ```c
-#define DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS) \
+#define DARKSYS_STORAGE(NAME, CAPACITY, PARAMS) \
     struct { void *pool[(CAPACITY) * (PARAMS)]; uint16_t capacity; uint16_t params; } \
     NAME = { .capacity = (CAPACITY), .params = (PARAMS) }
 ```
 
-Aquí `CAPACITY` es número de **grupos**, no de punteros: `DE_SYSTEM_STORAGE(s, 32, 3)` reserva `32 × 3 = 96` slots de puntero.
+Aquí `CAPACITY` es número de **grupos**, no de punteros: `DARKSYS_STORAGE(s, 32, 3)` reserva `32 × 3 = 96` slots de puntero.
 
 ---
 
@@ -381,34 +381,34 @@ Borra (con destructor incluido) **todas las entidades que estaban en la zona act
 ## 10. API de sistema
 
 ```c
-void     de_system_init(de_system , void **, uint16_t, uint16_t);
-uint16_t de_system_remove(de_system , void *);
+void     darksys_init(darksys , void **, uint16_t, uint16_t);
+uint16_t darksys_remove(darksys , void *);
 ```
 
-### `de_system_init(s, storage, capacity_groups, params)`
+### `darksys_init(s, storage, capacity_groups, params)`
 
 Fija `pool = end = storage`, `size = 0`, `capacity = capacity_groups * params`, `params = params`. No hay validación de que `storage` tenga realmente ese tamaño.
 
-### `uint16_t de_system_remove(de_system s, void *first)`
+### `uint16_t darksys_remove(darksys s, void *first)`
 
 Busca, avanzando de `params` en `params`, el grupo cuyo **primer** puntero sea exactamente `first`. Si lo encuentra: reduce `size` en `params`, y si el grupo encontrado no era el último, copia el último grupo sobre la posición eliminada (compactación tipo *swap-remove*, por lo que **no preserva el orden**). Devuelve `1`. Si no lo encuentra tras recorrer todo el pool, devuelve `0`.
 
-### `de_system_add` / `DE_SYSTEM_FOREACH` (macros)
+### `darksys_add` / `DARKSYS_FOREACH` (macros)
 
 Ver [§11](#11-macros-públicas).
 
-### 10.3 `DE_SYSTEM_ITERATOR`
+### 10.3 `DARKSYS_ITERATOR`
 
 Genera una función con la forma:
 
 ```c
-void *nombre(de_system system) {
-    /* cuerpo de DE_SYSTEM_FOREACH */
+void *nombre(darksys system) {
+    /* cuerpo de DARKSYS_FOREACH */
     return DE_STATE_LOOP;
 }
 ```
 
-pensada para instalarse directamente como `entity->state`. **Importante:** la función generada recibe `de_system `, no `void *`; formalmente no es compatible con `de_state` bajo ISO C estricto, aunque funciona en el ABI GNU C/68000 objetivo. Trátese como una conversión de puntero a función específica de plataforma, no como algo portable.
+pensada para instalarse directamente como `entity->state`. **Importante:** la función generada recibe `darksys `, no `void *`; formalmente no es compatible con `de_state` bajo ISO C estricto, aunque funciona en el ABI GNU C/68000 objetivo. Trátese como una conversión de puntero a función específica de plataforma, no como algo portable.
 
 ---
 
@@ -455,30 +455,30 @@ de_manager_foreach(&g_manager, {
 
 **Regla de seguridad:** borrar, pausar o resumir `ENTITY` (la entidad visitada en la iteración actual) es seguro. Mutar una entidad **distinta** no lo es en general: si esa otra entidad todavía no ha sido visitada (índice menor que `INDEX`) y se borra/pausa, el hueco que deja se rellena con una entidad que **ya** fue visitada, la cual puede acabar procesándose una segunda vez en la misma pasada.
 
-### `DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS)` / `de_system_args(NAME)`
+### `DARKSYS_STORAGE(NAME, CAPACITY, PARAMS)` / `darksys_args(NAME)`
 
 ```c
-struct de_system sys;
-DE_SYSTEM_STORAGE(sys_storage, 32, 3);
-de_system_init(&sys, de_system_args(sys_storage));
+struct darksys sys;
+DARKSYS_STORAGE(sys_storage, 32, 3);
+darksys_init(&sys, darksys_args(sys_storage));
 ```
 
-### `de_system_add(sys, ...)`
+### `darksys_add(sys, ...)`
 
 Añade un grupo de 1 a 5 punteros; el primer argumento es siempre el sistema:
 
 ```c
-uint16_t ok = de_system_add(&physics, entity, velocity, position); /* 1 = éxito, 0 = lleno */
+uint16_t ok = darksys_add(&physics, entity, velocity, position); /* 1 = éxito, 0 = lleno */
 ```
 
-⚠️ El número de punteros pasado en **cada** llamada debe coincidir siempre con el `params` con el que se inicializó el sistema. Darken no lo valida: mezclar aridades en distintas llamadas sobre el mismo sistema desalinea silenciosamente el agrupamiento del pool, y tanto `DE_SYSTEM_FOREACH` como `de_system_remove` asumen grupos de tamaño uniforme.
+⚠️ El número de punteros pasado en **cada** llamada debe coincidir siempre con el `params` con el que se inicializó el sistema. Darken no lo valida: mezclar aridades en distintas llamadas sobre el mismo sistema desalinea silenciosamente el agrupamiento del pool, y tanto `DARKSYS_FOREACH` como `darksys_remove` asumen grupos de tamaño uniforme.
 
-### `DE_SYSTEM_FOREACH(sys, ...)`
+### `DARKSYS_FOREACH(sys, ...)`
 
 De 0 a 5 variables de salida seguidas del bloque de código; el primer argumento es siempre el sistema:
 
 ```c
-DE_SYSTEM_FOREACH(&physics, struct Position *pos, struct Velocity *vel,
+DARKSYS_FOREACH(&physics, struct Position *pos, struct Velocity *vel,
 {
     pos->x += vel->x;
     pos->y += vel->y;
@@ -487,12 +487,12 @@ DE_SYSTEM_FOREACH(&physics, struct Position *pos, struct Velocity *vel,
 
 Las variables pueden declararse en el propio sitio de la llamada (como arriba: `struct Position *pos = pool[0];` es una asignación de `void*` a puntero tipado, válida en C) o ser variables ya existentes.
 
-### `DE_SYSTEM_ITERATOR(nombre, ...)`
+### `DARKSYS_ITERATOR(nombre, ...)`
 
-Ver [§10.3](#103-de_system_iterator).
+Ver [§10.3](#103-darksys_iterator).
 
 ```c
-DE_SYSTEM_ITERATOR(sys_movement_f,
+DARKSYS_ITERATOR(sys_movement_f,
     struct Position *pos,
     struct Velocity *vel,
     {
@@ -580,9 +580,9 @@ Por eso `de_entity_move_front()` (lleva la entidad al índice más alto) hace qu
 
 | Operación           |                                                 Complejidad |
 | ------------------- | ----------------------------------------------------------: |
-| `de_system_add`     |                                                        O(1) |
-| `DE_SYSTEM_FOREACH` |                                                   O(grupos) |
-| `de_system_remove`  | O(grupos) para la búsqueda + O(params) para la compactación |
+| `darksys_add`     |                                                        O(1) |
+| `DARKSYS_FOREACH` |                                                   O(grupos) |
+| `darksys_remove`  | O(grupos) para la búsqueda + O(params) para la compactación |
 
 ---
 
@@ -644,23 +644,23 @@ int main(void) {
 ```c
 struct vec2 { int16_t x, y; };
 
-struct de_system sys;
+struct darksys sys;
 struct vec2 positions[8];
 struct vec2 velocities[8];
 
-DE_SYSTEM_STORAGE(sys_storage, 8, 2);
-de_system_init(&sys, de_system_args(sys_storage));
+DARKSYS_STORAGE(sys_storage, 8, 2);
+darksys_init(&sys, darksys_args(sys_storage));
 
 for (int i = 0; i < 8; ++i)
-    de_system_add(&sys, &positions[i], &velocities[i]);
+    darksys_add(&sys, &positions[i], &velocities[i]);
 
-DE_SYSTEM_FOREACH(&sys, struct vec2 *pos, struct vec2 *vel,
+DARKSYS_FOREACH(&sys, struct vec2 *pos, struct vec2 *vel,
 {
     pos->x += vel->x;
     pos->y += vel->y;
 });
 
-de_system_remove(&sys, &positions[3]); /* elimina el grupo por su primer puntero */
+darksys_remove(&sys, &positions[3]); /* elimina el grupo por su primer puntero */
 ```
 
 *(Ambos fragmentos se han compilado y ejecutado para verificar este documento; el segundo se muestra tal cual con `gcc -std=gnu11`.)*
@@ -671,10 +671,10 @@ de_system_remove(&sys, &positions[3]); /* elimina el grupo por su primer puntero
 
 ### Hacer
 
-- Mantener viva la memoria de `DE_MANAGER_STORAGE` / `DE_SYSTEM_STORAGE` durante toda la vida del manager/sistema correspondiente.
+- Mantener viva la memoria de `DE_MANAGER_STORAGE` / `DARKSYS_STORAGE` durante toda la vida del manager/sistema correspondiente.
 - Tratar `entity->data` como válido mientras la entidad esté activa o pausada.
 - Usar siempre el puntero devuelto por `de_manager_new()`.
-- Esperar que `de_system_remove()` reordene los grupos restantes (no preserva orden).
+- Esperar que `darksys_remove()` reordene los grupos restantes (no preserva orden).
 - Esperar que la iteración activa vaya siempre de mayor a menor índice.
 
 ### No hacer
@@ -684,7 +684,7 @@ de_system_remove(&sys, &positions[3]); /* elimina el grupo por su primer puntero
 - Asumir que el orden de las entidades activas es estable entre frames.
 - Modificar una entidad **distinta** de la actual dentro de `de_manager_foreach` o `de_manager_update`, salvo que se sepa explícitamente que es seguro.
 - Asignar `entity->state = DE_STATE_LOOP` a mano (solo tiene sentido como valor de retorno de un callback).
-- Tratar la función generada por `DE_SYSTEM_ITERATOR` como un `de_state` portable bajo ISO C estricto.
+- Tratar la función generada por `DARKSYS_ITERATOR` como un `de_state` portable bajo ISO C estricto.
 - Asumir que `de_manager_reset()` invoca los destructores de las entidades pausadas.
 
 ---
@@ -746,9 +746,9 @@ La operación de intercambio de dos entidades existe en el código (`_de_entity_
 
 No existe una función pública `de_entity_swap()`. El intercambio de dos entidades cualesquiera no forma parte de la API pública actual; solo se usa internamente como implementación de `pause`, `resume`, `delete`, `move_front` y `move_back`.
 
-### 18.4 Mismatch de aridad en `de_system_add` / `DE_SYSTEM_FOREACH` / `DE_SYSTEM_ITERATOR`
+### 18.4 Mismatch de aridad en `darksys_add` / `DARKSYS_FOREACH` / `DARKSYS_ITERATOR`
 
-Ninguna de estas macros comprueba en tiempo de compilación ni de ejecución que el número de punteros usado coincida con el `params` con el que se inicializó el sistema. Un desajuste no produce un error visible: simplemente descoloca el agrupamiento interno del pool de forma silenciosa, y las lecturas posteriores (`DE_SYSTEM_FOREACH`, `de_system_remove`) leerán punteros de otro grupo. Es responsabilidad exclusiva del usuario mantener la aridad constante para un mismo `de_system`.
+Ninguna de estas macros comprueba en tiempo de compilación ni de ejecución que el número de punteros usado coincida con el `params` con el que se inicializó el sistema. Un desajuste no produce un error visible: simplemente descoloca el agrupamiento interno del pool de forma silenciosa, y las lecturas posteriores (`DARKSYS_FOREACH`, `darksys_remove`) leerán punteros de otro grupo. Es responsabilidad exclusiva del usuario mantener la aridad constante para un mismo `darksys`.
 
 ---
 
@@ -794,11 +794,11 @@ typedef void *(*de_state)(void *);
 
 typedef struct de_entity *de_entity;   /* ya es un puntero */
 typedef struct de_manager de_manager;
-typedef struct de_system  de_system;
+typedef struct darksys  darksys;
 
 struct de_entity  { de_state state, destructor; de_manager manager; uint16_t slot, tag; uint8_t data[]; };
 struct de_manager { de_entity *pool; uint16_t capacity, active, paused; };
-struct de_system  { void **pool, **end; uint16_t capacity, size, params; };
+struct darksys  { void **pool, **end; uint16_t capacity, size, params; };
 ```
 
 ### Funciones — entidad
@@ -828,8 +828,8 @@ struct de_system  { void **pool, **end; uint16_t capacity, size, params; };
 
 | Función                                                       | Descripción                                         |
 | ------------------------------------------------------------- | --------------------------------------------------- |
-| `void de_system_init(de_system*, void**, uint16_t, uint16_t)` | Inicializa sistema sobre almacenamiento del usuario |
-| `uint16_t de_system_remove(de_system*, void*)`                | Elimina grupo por su primer puntero; `1`/`0`        |
+| `void darksys_init(darksys*, void**, uint16_t, uint16_t)` | Inicializa sistema sobre almacenamiento del usuario |
+| `uint16_t darksys_remove(darksys*, void*)`                | Elimina grupo por su primer puntero; `1`/`0`        |
 
 ### Macros
 
@@ -839,11 +839,11 @@ struct de_system  { void **pool, **end; uint16_t capacity, size, params; };
 | `DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)` | Declara almacenamiento estático de manager                   |
 | `de_manager_args(NAME)`                            | Expande a los 4 argumentos de `de_manager_init`              |
 | `de_manager_foreach(M, CODE)`                      | Itera la zona activa hacia atrás (`INDEX`, `POOL`, `ENTITY`) |
-| `DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS)`        | Declara almacenamiento estático de sistema                   |
-| `de_system_args(NAME)`                             | Expande a los 3 argumentos de `de_system_init`               |
-| `de_system_add(sys, ...)`                          | Añade grupo de 1–5 punteros                                  |
-| `DE_SYSTEM_FOREACH(sys, ...)`                      | Itera grupos, 0–5 variables de salida                        |
-| `DE_SYSTEM_ITERATOR(nombre, ...)`                  | Genera `void *nombre(de_system*)` a partir de un `FOREACH`   |
+| `DARKSYS_STORAGE(NAME, CAPACITY, PARAMS)`        | Declara almacenamiento estático de sistema                   |
+| `darksys_args(NAME)`                             | Expande a los 3 argumentos de `darksys_init`               |
+| `darksys_add(sys, ...)`                          | Añade grupo de 1–5 punteros                                  |
+| `DARKSYS_FOREACH(sys, ...)`                      | Itera grupos, 0–5 variables de salida                        |
+| `DARKSYS_ITERATOR(nombre, ...)`                  | Genera `void *nombre(darksys*)` a partir de un `FOREACH`   |
 
 ---
 
