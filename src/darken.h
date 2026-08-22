@@ -189,6 +189,66 @@ void de_manager_reset(de_manager);
 
 #ifdef DARKEN_IMPLEMENTATION
 
+inline void de_manager_init(de_manager $, de_entity *pool, void *param_storage, uint16_t capacity, uint16_t bytes)
+{
+    $->pool = pool;
+    $->capacity = capacity;
+    $->size = 0;
+    $->paused = capacity;
+
+    uint16_t stride = _DE_ENTITY_STRIDE(bytes);
+    uint8_t *storage = param_storage;
+
+    for (uint16_t i = 0; i < capacity; ++i)
+    {
+        de_entity entity = (de_entity)storage;
+
+        pool[i] = entity;
+        entity->owner = $;
+        entity->slot = i;
+
+        storage += stride;
+    }
+}
+
+inline de_entity de_manager_new(de_manager $)
+{
+    _DE_ASSERT($->size < $->paused, 0);
+
+    return $->pool[$->size++];
+}
+
+inline void de_manager_update(de_manager $)
+{
+    uint16_t i = $->size;
+    de_entity *pool = $->pool;
+
+    while (i--)
+    {
+        de_entity entity = pool[i];
+        de_state state = entity->state;
+
+        if (_DE_STATE_IS_ACTIVE(state))
+            _DE_ENTITY_UPDATE(entity);
+
+        else if (_DE_STATE_IS_PAUSED(state))
+            de_entity_pause(entity);
+
+        else if (_DE_STATE_IS_DELETED(state))
+            de_entity_delete(entity);
+    }
+}
+
+inline void de_manager_reset(de_manager $)
+{
+    DE_MANAGER_FOREACH($, de_entity_delete(ENTITY));
+
+    $->size = 0;
+    $->paused = $->capacity;
+}
+
+//
+
 static inline void _de_swap(de_entity *pool, uint16_t i, uint16_t j)
 {
     if (i == j)
@@ -246,66 +306,6 @@ inline void de_entity_delete(de_entity $)
         $->destructor($->data);
 
     _de_swap(manager->pool, $->slot, --manager->size);
-}
-
-//
-
-inline void de_manager_init(de_manager $, de_entity *pool, void *param_storage, uint16_t capacity, uint16_t bytes)
-{
-    $->pool = pool;
-    $->capacity = capacity;
-    $->size = 0;
-    $->paused = capacity;
-
-    uint16_t stride = _DE_ENTITY_STRIDE(bytes);
-    uint8_t *storage = param_storage;
-
-    for (uint16_t i = 0; i < capacity; ++i)
-    {
-        de_entity entity = (de_entity)storage;
-
-        pool[i] = entity;
-        entity->owner = $;
-        entity->slot = i;
-
-        storage += stride;
-    }
-}
-
-inline de_entity de_manager_new(de_manager $)
-{
-    _DE_ASSERT($->size < $->paused, 0);
-
-    return $->pool[$->size++];
-}
-
-inline void de_manager_update(de_manager $)
-{
-    uint16_t i = $->size;
-    de_entity *pool = $->pool;
-
-    while (i--)
-    {
-        de_entity entity = pool[i];
-        de_state state = entity->state;
-
-        if (_DE_STATE_IS_ACTIVE(state))
-            _DE_ENTITY_UPDATE(entity);
-
-        else if (_DE_STATE_IS_PAUSED(state))
-            de_entity_pause(entity);
-
-        else if (_DE_STATE_IS_DELETED(state))
-            de_entity_delete(entity);
-    }
-}
-
-inline void de_manager_reset(de_manager $)
-{
-    DE_MANAGER_FOREACH($, de_entity_delete(ENTITY));
-
-    $->size = 0;
-    $->paused = $->capacity;
 }
 
 #endif // DARKEN_IMPLEMENTATION
