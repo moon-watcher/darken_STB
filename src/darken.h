@@ -131,7 +131,6 @@ void de_manager_reset(de_manager);
 
 #define _DE_ENTITY_IS_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->owner->size)
 #define _DE_ENTITY_IS_PAUSED(ENTITY) ((ENTITY)->slot >= (ENTITY)->owner->paused)
-#define _DE_ENTITY_IS_FREE(ENTITY) (!_DE_ENTITY_IS_ACTIVE(ENTITY) && !_DE_ENTITY_IS_PAUSED(ENTITY))
 
 /**
  * Align a byte count to a 4-byte boundary.
@@ -150,9 +149,9 @@ void de_manager_reset(de_manager);
     if (!_DE_STATE_IS_LOOP(result))             \
         ENTITY->state = result;)
 
-#define _DE_ENTITY_PAUSE(ENTITY) _DE_BLOCK(                             \
-    _de_swap(ENTITY->owner->pool, ENTITY->slot, --ENTITY->owner->size); \
-    _de_swap(ENTITY->owner->pool, ENTITY->slot, --ENTITY->owner->paused);)
+#define _DE_ENTITY_PAUSE(ENTITY) _DE_BLOCK(                                    \
+    _de_entity_swap(ENTITY->owner->pool, ENTITY->slot, --ENTITY->owner->size); \
+    _de_entity_swap(ENTITY->owner->pool, ENTITY->slot, --ENTITY->owner->paused);)
 
 #define _DE_ENTITY_DELETE(ENTITY) _DE_BLOCK(     \
     de_manager manager = ENTITY->owner;          \
@@ -160,7 +159,7 @@ void de_manager_reset(de_manager);
     if (_DE_STATE_IS_ACTIVE(ENTITY->destructor)) \
         ENTITY->destructor(ENTITY->data);        \
                                                  \
-    _de_swap(manager->pool, ENTITY->slot, --manager->size);)
+    _de_entity_swap(manager->pool, ENTITY->slot, --manager->size);)
 
 #define _DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)                                         \
     struct                                                                                        \
@@ -197,7 +196,7 @@ void de_manager_reset(de_manager);
 
 #ifdef DARKEN_IMPLEMENTATION
 
-static inline void _de_swap(de_entity *pool, uint16_t i, uint16_t j)
+static inline void _de_entity_swap(de_entity *pool, uint16_t i, uint16_t j)
 {
     if (i == j)
         return;
@@ -296,8 +295,8 @@ inline void de_entity_resume(de_entity $)
 {
     _DE_ASSERT(_DE_ENTITY_IS_PAUSED($), );
 
-    _de_swap($->owner->pool, $->slot, $->owner->paused);
-    _de_swap($->owner->pool, $->slot, $->owner->size);
+    _de_entity_swap($->owner->pool, $->slot, $->owner->paused);
+    _de_entity_swap($->owner->pool, $->slot, $->owner->size);
 
     de_manager manager = $->owner;
 
