@@ -194,7 +194,6 @@ static inline void _de_swap(de_entity *pool, uint16_t i, uint16_t j)
 
 inline void de_entity_exec(de_entity $)
 {
-    _DE_ASSERT(_DE_ENTITY_IS_ACTIVE($), );
     _DE_ASSERT(_DE_STATE_IS_ACTIVE($->state), );
 
     $->state($->data);
@@ -202,7 +201,6 @@ inline void de_entity_exec(de_entity $)
 
 inline void de_entity_update(de_entity $)
 {
-    _DE_ASSERT(_DE_ENTITY_IS_ACTIVE($), );
     _DE_ASSERT(_DE_STATE_IS_ACTIVE($->state), );
 
     void *result = $->state($->data);
