@@ -38,7 +38,7 @@ struct de_system
 
 #define DE_SYSTEM_STORAGE _DE_SYSTEM_STORAGE
 #define DE_SYSTEM_ARGS _DE_SYSTEM_ARGS
-#define DE_SYSTEM_FOREACH(...) _DE_SYSTEM_FOREACH_DISPATCH(__VA_ARGS__)
+#define DE_SYSTEM_FOREACH(...) _DE_SYSTEM_FOREACH_DISPATCH(_DE_SYSTEM_NARGS(__VA_ARGS__), __VA_ARGS__)
 
 void de_system_init(de_system, void **, uint16_t, uint16_t);
 uint16_t de_system_add(de_system, ...);
@@ -48,13 +48,6 @@ void de_system_clear(de_system);
 /* ============================================================================
  * INTERNAL MACRO IMPLEMENTATIONS
  * ============================================================================ */
-
-#define _DE_SYSTEM_FOREACH_DISPATCH(...) _DE_SYSTEM_CONCAT(_DE_SYSTEM_FOREACH_, _DE_SYSTEM_NARGS(__VA_ARGS__))(__VA_ARGS__)
-
-#define _DE_SYSTEM_NARGS(...) _DE_SYSTEM_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1, 0, -1)
-#define _DE_SYSTEM_NARGS_I(_1, _2, _3, _4, _5, _6, _7, N, ...) N
-#define _DE_SYSTEM_CONCAT_INNER(A, B) A##B
-#define _DE_SYSTEM_CONCAT(A, B) _DE_SYSTEM_CONCAT_INNER(A, B)
 
 #define _DE_SYSTEM_STORAGE(NAME, CAPACITY, PARAMS) \
     struct                                         \
@@ -70,7 +63,7 @@ void de_system_clear(de_system);
 #define _DE_SYSTEM_ARGS(NAME) \
     (NAME).pool, (NAME).capacity, (NAME).params
 
-#define _DE_SYSTEM_FOREACH(SYSTEM, IT)      \
+#define _DE_SYSTEM_FOREACH(SYSTEM, CODE)    \
     do                                      \
     {                                       \
         de_system _system = (SYSTEM);       \
@@ -80,11 +73,17 @@ void de_system_clear(de_system);
                                             \
         while (_size)                       \
         {                                   \
-            IT;                             \
+            CODE;                           \
             _pool += _params;               \
             _size -= _params;               \
         }                                   \
     } while (0)
+
+#define _DE_SYSTEM_FOREACH_DISPATCH(N, ...) _DE_SYSTEM_FOREACH_DISPATCH_(N, __VA_ARGS__)
+#define _DE_SYSTEM_FOREACH_DISPATCH_(N, ...) _DE_SYSTEM_FOREACH_##N(__VA_ARGS__)
+
+#define _DE_SYSTEM_NARGS(...) _DE_SYSTEM_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1, 0, -1)
+#define _DE_SYSTEM_NARGS_I(_1, _2, _3, _4, _5, _6, _7, N, ...) N
 
 #define _DE_SYSTEM_FOREACH_0(SYSTEM, IT) _DE_SYSTEM_FOREACH(SYSTEM, { IT; })
 #define _DE_SYSTEM_FOREACH_1(SYSTEM, A, IT) _DE_SYSTEM_FOREACH(SYSTEM, { A = _pool[0]; IT; })
@@ -125,6 +124,8 @@ inline uint16_t de_system_add(de_system $, ...)
 
     while (params--)
         *pool++ = va_arg(args, void *);
+
+    va_end(args);
 
     return 1;
 }
