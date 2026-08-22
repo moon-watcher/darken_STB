@@ -4,7 +4,7 @@
  * Full documentation: README.Darken.md
  *
  * GNU C note:
- * - This header uses GNU C extensions (__attribute__ and statement expressions).
+ * - This header uses GNU C __attribute__ extension.
  * - 4-byte align boundary because Darken targets GCC and the Motorola 68000.
  * - 16-bit members preference for optimal 68K performance.
  *
@@ -146,6 +146,24 @@ void de_manager_reset(de_manager);
             ENTITY->state = result;                 \
     } while (0)
 
+#define _DE_ENTITY_PAUSE(ENTITY)                                              \
+    do                                                                        \
+    {                                                                         \
+        _de_swap(ENTITY->owner->pool, ENTITY->slot, --ENTITY->owner->size);   \
+        _de_swap(ENTITY->owner->pool, ENTITY->slot, --ENTITY->owner->paused); \
+    } while (0)
+
+#define _DE_ENTITY_DELETE(ENTITY)                               \
+    do                                                          \
+    {                                                           \
+        de_manager manager = ENTITY->owner;                     \
+                                                                \
+        if (_DE_STATE_IS_ACTIVE(ENTITY->destructor))            \
+            ENTITY->destructor(ENTITY->data);                   \
+                                                                \
+        _de_swap(manager->pool, ENTITY->slot, --manager->size); \
+    } while (0)
+
 #define _DE_MANAGER_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)                                         \
     struct                                                                                        \
     {                                                                                             \
@@ -188,6 +206,20 @@ void de_manager_reset(de_manager);
  * ============================================================================ */
 
 #ifdef DARKEN_IMPLEMENTATION
+
+static inline void _de_swap(de_entity *pool, uint16_t i, uint16_t j)
+{
+    if (i == j)
+        return;
+
+    de_entity tmp = pool[i];
+    pool[i] = pool[j];
+    pool[j] = tmp;
+    pool[i]->slot = i;
+    pool[j]->slot = j;
+}
+
+//
 
 inline void de_manager_init(de_manager $, de_entity *pool, void *param_storage, uint16_t capacity, uint16_t bytes)
 {
@@ -232,34 +264,22 @@ inline void de_manager_update(de_manager $)
             _DE_ENTITY_UPDATE(entity);
 
         else if (_DE_STATE_IS_PAUSED(state))
-            de_entity_pause(entity);
+            _DE_ENTITY_PAUSE(entity);
 
         else if (_DE_STATE_IS_DELETED(state))
-            de_entity_delete(entity);
+            _DE_ENTITY_DELETE(entity);
     }
 }
 
 inline void de_manager_reset(de_manager $)
 {
-    DE_MANAGER_FOREACH($, de_entity_delete(ENTITY));
+    DE_MANAGER_FOREACH($, _DE_ENTITY_DELETE(ENTITY));
 
     $->size = 0;
     $->paused = $->capacity;
 }
 
 //
-
-static inline void _de_swap(de_entity *pool, uint16_t i, uint16_t j)
-{
-    if (i == j)
-        return;
-
-    de_entity tmp = pool[i];
-    pool[i] = pool[j];
-    pool[j] = tmp;
-    pool[i]->slot = i;
-    pool[j]->slot = j;
-}
 
 inline void de_entity_exec(de_entity $)
 {
@@ -279,8 +299,7 @@ inline void de_entity_pause(de_entity $)
 {
     _DE_ASSERT(_DE_ENTITY_IS_ACTIVE($), );
 
-    _de_swap($->owner->pool, $->slot, --$->owner->size);
-    _de_swap($->owner->pool, $->slot, --$->owner->paused);
+    _DE_ENTITY_PAUSE($);
 }
 
 inline void de_entity_resume(de_entity $)
@@ -300,12 +319,7 @@ inline void de_entity_delete(de_entity $)
 {
     _DE_ASSERT(_DE_ENTITY_IS_ACTIVE($), );
 
-    de_manager manager = $->owner;
-
-    if (_DE_STATE_IS_ACTIVE($->destructor))
-        $->destructor($->data);
-
-    _de_swap(manager->pool, $->slot, --manager->size);
+    _DE_ENTITY_DELETE($);
 }
 
 #endif // DARKEN_IMPLEMENTATION
