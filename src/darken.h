@@ -210,7 +210,7 @@ static inline void _de_entity_swap(de_entity *pool, uint16_t i, uint16_t j)
 
 //
 
-inline void de_manager_init(de_manager $, de_entity *pool, void *param_storage, uint16_t capacity, uint16_t bytes)
+void de_manager_init(de_manager $, de_entity *pool, void *param_storage, uint16_t capacity, uint16_t bytes)
 {
     $->pool = pool;
     $->capacity = capacity;
@@ -232,14 +232,14 @@ inline void de_manager_init(de_manager $, de_entity *pool, void *param_storage, 
     }
 }
 
-inline de_entity de_manager_new(de_manager $)
+de_entity de_manager_new(de_manager $)
 {
     _DE_ASSERT($->size < $->paused, 0);
 
     return $->pool[$->size++];
 }
 
-inline void de_manager_update(de_manager $)
+void de_manager_update(de_manager $)
 {
     uint16_t i = $->size;
     de_entity *pool = $->pool;
@@ -260,7 +260,7 @@ inline void de_manager_update(de_manager $)
     }
 }
 
-inline void de_manager_reset(de_manager $)
+void de_manager_reset(de_manager $)
 {
     DE_MANAGER_FOREACH($, _DE_ENTITY_DELETE(ENTITY));
 
@@ -270,28 +270,28 @@ inline void de_manager_reset(de_manager $)
 
 //
 
-inline void de_entity_exec(de_entity $)
+void de_entity_exec(de_entity $)
 {
     _DE_ASSERT(_DE_STATE_IS_ACTIVE($->state), );
 
     $->state($->data);
 }
 
-inline void de_entity_update(de_entity $)
+void de_entity_update(de_entity $)
 {
     _DE_ASSERT(_DE_STATE_IS_ACTIVE($->state), );
 
     _DE_ENTITY_UPDATE($);
 }
 
-inline void de_entity_pause(de_entity $)
+void de_entity_pause(de_entity $)
 {
     _DE_ASSERT(_DE_ENTITY_IS_ACTIVE($), );
 
     _DE_ENTITY_PAUSE($);
 }
 
-inline void de_entity_resume(de_entity $)
+void de_entity_resume(de_entity $)
 {
     _DE_ASSERT(_DE_ENTITY_IS_PAUSED($), );
 
@@ -304,7 +304,7 @@ inline void de_entity_resume(de_entity $)
     ++manager->size;
 }
 
-inline void de_entity_delete(de_entity $)
+void de_entity_delete(de_entity $)
 {
     _DE_ASSERT(_DE_ENTITY_IS_ACTIVE($), );
 

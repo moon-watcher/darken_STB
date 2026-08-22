@@ -101,7 +101,7 @@ void de_system_clear(de_system);
 
 #ifdef DARKSYS_IMPLEMENTATION
 
-inline void de_system_init(de_system $, void **storage, uint16_t capacity_groups, uint16_t params)
+void de_system_init(de_system $, void **storage, uint16_t capacity_groups, uint16_t params)
 {
     $->pool = storage;
     $->capacity = capacity_groups * params;
@@ -109,7 +109,7 @@ inline void de_system_init(de_system $, void **storage, uint16_t capacity_groups
     $->params = params;
 }
 
-inline uint16_t de_system_add(de_system $, ...)
+uint16_t de_system_add(de_system $, ...)
 {
     uint16_t size = $->size;
     uint16_t params = $->params;
@@ -131,7 +131,7 @@ inline uint16_t de_system_add(de_system $, ...)
     return 1;
 }
 
-inline uint16_t de_system_remove(de_system $, void *first)
+uint16_t de_system_remove(de_system $, void *first)
 {
     uint16_t params = $->params;
     void **pool = $->pool;
@@ -156,7 +156,7 @@ inline uint16_t de_system_remove(de_system $, void *first)
     return 0;
 }
 
-inline void de_system_clear(de_system $)
+void de_system_clear(de_system $)
 {
     $->size = 0;
 }
