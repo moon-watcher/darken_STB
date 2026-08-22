@@ -7,8 +7,8 @@
 	],
 	"settings": {
 		"files.exclude": {
-			// ".gitignore": true,
-			// "out/": true,
+			".gitignore": true,
+			"out/": true,
 		},
 		"terminal.integrated.defaultProfile.windows": "Command Prompt",
 		"git.confirmEmptyCommits": true,
