@@ -118,7 +118,7 @@ inline uint16_t de_system_add(de_system $, ...)
     void **pool = $->pool + size;
     $->size = size + params;
 
-    void *args;
+    va_list args;
     va_start(args, $);
 
     while (params--)
