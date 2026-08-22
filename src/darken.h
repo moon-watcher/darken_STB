@@ -221,10 +221,10 @@ inline void de_entity_resume(de_entity $)
 {
     _DE_ASSERT(_DE_ENTITY_IS_PAUSED($), );
 
-    de_manager manager = $->owner;
+    _de_swap($->owner->pool, $->slot, $->owner->paused);
+    _de_swap($->owner->pool, $->slot, $->owner->size);
 
-    _de_swap(manager->pool, $->slot, manager->paused);
-    _de_swap(manager->pool, $->slot, manager->size);
+    de_manager manager = $->owner;
 
     ++manager->paused;
     ++manager->size;
