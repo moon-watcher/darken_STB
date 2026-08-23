@@ -25,9 +25,12 @@
 
 typedef struct
 {
+    // Pool
     void **pool;
     uint16_t capacity;
     uint16_t size;
+
+    // Dedicated members
     uint16_t params;
 } darksys;
 

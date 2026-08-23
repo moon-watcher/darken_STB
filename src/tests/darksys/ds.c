@@ -105,7 +105,7 @@ static void *state_delete_after_1(TestData *d)
 
 #define TEST_MGR_CAPACITY 32
 DARKEN_STORAGE(test_mgr_storage, TEST_MGR_CAPACITY, sizeof(TestData));
-static struct darken test_mgr;
+static darken test_mgr;
 
 #define TEST_SYS_CAPACITY 32
 #define TEST_SYS_PARAMS 2
@@ -426,7 +426,7 @@ TEST(test_manager_iterate_macro)
 
 #define BENCH_MGR_CAPACITY 128
 DARKEN_STORAGE(bench_mgr_storage, BENCH_MGR_CAPACITY, sizeof(TestData));
-static struct darken bench_mgr;
+static darken bench_mgr;
 
 #define BENCH_SYS_CAPACITY 128
 #define BENCH_SYS_PARAMS 2

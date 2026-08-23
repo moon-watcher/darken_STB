@@ -80,7 +80,7 @@ es pausada, reanudada o reordenada internamente.
 
 | Macro | Para qué sirve |
 |---|---|
-| `DARKEN(nombre, CAPACIDAD, TAMAÑO_PAYLOAD)` / `DARKEN_STORAGE(...)` | Declara el `pool[]` + bloque de datos alineado a 4 bytes. **No** declara el `struct darken` en sí — eso lo declaras tú aparte. |
+| `DARKEN(nombre, CAPACIDAD, TAMAÑO_PAYLOAD)` / `DARKEN_STORAGE(...)` | Declara el `pool[]` + bloque de datos alineado a 4 bytes. **No** declara el `darken` en sí — eso lo declaras tú aparte. |
 | `DARKEN_ARGS(nombre)` | Expande a `pool, data, capacity, payload_size` para pasar a `darken_init`. |
 | `DARKEN_DATA(TIPO, var, entidad)` | `TIPO *var = (TIPO *)entidad->data;` — acceso tipado al payload. |
 | `DARKEN_FOREACH(manager, CODIGO)` | Itera la zona activa; expone `ENTITY` (tipo `darken_entity`) dentro de `CODIGO`. |
@@ -163,8 +163,8 @@ uint8_t      data[];        // payload de tamaño variable
 ### 1. Configuración mínima
 
 Cada manager necesita dos cosas: el almacenamiento (`DARKEN_STORAGE`, que
-reserva `pool[]` y el bloque de datos) y el propio `struct darken` que lo
-gobierna, declarado aparte:
+reserva `pool[]` y el bloque de datos) y el propio `darken` que lo gobierna,
+declarado aparte:
 
 ```c
 #define DARKEN_IMPLEMENTATION
