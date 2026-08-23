@@ -14,9 +14,9 @@
 int main(void)
 {
     BLASTEM_PROFIL_START
-    de_run_usage_example();
-    de_run_all_tests();
-    de_run_benchmarks();
+    darken_run_usage_example();
+    darken_run_all_tests();
+    darken_run_benchmarks();
 
     run_ds_test();
     ds_run_all_tests();

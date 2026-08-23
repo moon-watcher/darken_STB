@@ -30,7 +30,7 @@ static u16 g_testsRun = 0, g_testsPassed = 0;
 static void *state_noop(void *data)
 {
     (void)data;
-    return DE_STATE_LOOP;
+    return DARKEN_LOOP;
 }
 
 typedef struct TestSystemEntity
@@ -54,7 +54,7 @@ static void *test_system_physics(void *data)
         int16_t *vy = (int16_t *)system->items[i++];
         *vy += 1;
     }
-    return DE_STATE_LOOP;
+    return DARKEN_LOOP;
 }
 
 static void *test_system_movement(void *data)
@@ -70,7 +70,7 @@ static void *test_system_movement(void *data)
         *x += *vx;
         *y += *vy;
     }
-    return DE_STATE_LOOP;
+    return DARKEN_LOOP;
 }
 
 static void *test_system_frames(void *data)
@@ -82,21 +82,21 @@ static void *test_system_frames(void *data)
         uint16_t *frame = (uint16_t *)system->items[i++];
         *frame += 1;
     }
-    return DE_STATE_LOOP;
+    return DARKEN_LOOP;
 }
 
 static void test_entity_system_basic(void)
 {
     kprintf("-- test_entity_system_basic --");
-    struct de_manager entities, systems;
-    DE_MANAGER_STORAGE(entities_storage, 3, sizeof(TestSystemEntity));
-    de_manager_init(&entities, DE_MANAGER_ARGS(entities_storage));
-    DE_MANAGER_STORAGE(systems_storage, 3, sizeof(TestBatchSystem));
-    de_manager_init(&systems, DE_MANAGER_ARGS(systems_storage));
+    struct darken entities, systems;
+    DARKEN_STORAGE(entities_storage, 3, sizeof(TestSystemEntity));
+    darken_init(&entities, DARKEN_ARGS(entities_storage));
+    DARKEN_STORAGE(systems_storage, 3, sizeof(TestBatchSystem));
+    darken_init(&systems, DARKEN_ARGS(systems_storage));
     void *physics_items[3], *movement_items[12], *frame_items[3];
-    de_entity frames_entity = de_manager_new(&systems);
-    de_entity movement_entity = de_manager_new(&systems);
-    de_entity physics_entity = de_manager_new(&systems);
+    darken_entity frames_entity = darken_spawn(&systems);
+    darken_entity movement_entity = darken_spawn(&systems);
+    darken_entity physics_entity = darken_spawn(&systems);
     TestBatchSystem *physics_pool = (TestBatchSystem *)physics_entity->data;
     TestBatchSystem *movement_pool = (TestBatchSystem *)movement_entity->data;
     TestBatchSystem *frame_pool = (TestBatchSystem *)frames_entity->data;
@@ -106,11 +106,11 @@ static void test_entity_system_basic(void)
     movement_pool->size = 0;
     frame_pool->items = frame_items;
     frame_pool->size = 0;
-    physics_entity->state = (de_state)test_system_physics;
-    movement_entity->state = (de_state)test_system_movement;
-    frames_entity->state = (de_state)test_system_frames;
-    de_entity p1_entity = de_manager_new(&entities);
-    de_entity p2_entity = de_manager_new(&entities);
+    physics_entity->state = (darken_state)test_system_physics;
+    movement_entity->state = (darken_state)test_system_movement;
+    frames_entity->state = (darken_state)test_system_frames;
+    darken_entity p1_entity = darken_spawn(&entities);
+    darken_entity p2_entity = darken_spawn(&entities);
     TestSystemEntity *p1 = (TestSystemEntity *)p1_entity->data;
     TestSystemEntity *p2 = (TestSystemEntity *)p2_entity->data;
     p1->x = 10;
@@ -123,8 +123,8 @@ static void test_entity_system_basic(void)
     p2->vx = -4;
     p2->vy = 5;
     p2->frame = 10;
-    p1_entity->state = (de_state)state_noop;
-    p2_entity->state = (de_state)state_noop;
+    p1_entity->state = (darken_state)state_noop;
+    p2_entity->state = (darken_state)state_noop;
     physics_items[physics_pool->size++] = &p1->vy;
     physics_items[physics_pool->size++] = &p2->vy;
     movement_items[movement_pool->size++] = &p1->x;
@@ -137,7 +137,7 @@ static void test_entity_system_basic(void)
     movement_items[movement_pool->size++] = &p2->vy;
     frame_items[frame_pool->size++] = &p1->frame;
     frame_items[frame_pool->size++] = &p2->frame;
-    de_manager_update(&systems);
+    darken_update(&systems);
     CHECK("entity systems: physics modifica vy", p1->vy == 4 && p2->vy == 6);
     CHECK("entity systems: movement procesa ambas entidades", p1->x == 12 && p1->y == 24 && p2->x == 96 && p2->y == 206);
     CHECK("entity systems: frames procesa ambas entidades", p1->frame == 1 && p2->frame == 11);
@@ -148,36 +148,36 @@ static void test_entity_system_basic(void)
 static void test_entity_system_shared_data(void)
 {
     kprintf("-- test_entity_system_shared_data --");
-    struct de_manager entities, systems;
-    DE_MANAGER_STORAGE(entities_storage, 2, sizeof(TestSystemEntity));
-    de_manager_init(&entities, DE_MANAGER_ARGS(entities_storage));
-    DE_MANAGER_STORAGE(systems_storage, 2, sizeof(TestBatchSystem));
-    de_manager_init(&systems, DE_MANAGER_ARGS(systems_storage));
+    struct darken entities, systems;
+    DARKEN_STORAGE(entities_storage, 2, sizeof(TestSystemEntity));
+    darken_init(&entities, DARKEN_ARGS(entities_storage));
+    DARKEN_STORAGE(systems_storage, 2, sizeof(TestBatchSystem));
+    darken_init(&systems, DARKEN_ARGS(systems_storage));
     void *movement_items[8], *frame_items[2];
-    de_entity movement = de_manager_new(&systems);
-    de_entity frames = de_manager_new(&systems);
+    darken_entity movement = darken_spawn(&systems);
+    darken_entity frames = darken_spawn(&systems);
     TestBatchSystem *movement_system = (TestBatchSystem *)movement->data;
     TestBatchSystem *frame_system = (TestBatchSystem *)frames->data;
     movement_system->items = movement_items;
     movement_system->size = 0;
     frame_system->items = frame_items;
     frame_system->size = 0;
-    movement->state = (de_state)test_system_movement;
-    frames->state = (de_state)test_system_frames;
-    de_entity e = de_manager_new(&entities);
+    movement->state = (darken_state)test_system_movement;
+    frames->state = (darken_state)test_system_frames;
+    darken_entity e = darken_spawn(&entities);
     TestSystemEntity *data = (TestSystemEntity *)e->data;
     data->x = 50;
     data->y = 60;
     data->vx = 7;
     data->vy = -2;
     data->frame = 3;
-    e->state = (de_state)state_noop;
+    e->state = (darken_state)state_noop;
     movement_items[movement_system->size++] = &data->x;
     movement_items[movement_system->size++] = &data->y;
     movement_items[movement_system->size++] = &data->vx;
     movement_items[movement_system->size++] = &data->vy;
     frame_items[frame_system->size++] = &data->frame;
-    de_manager_update(&systems);
+    darken_update(&systems);
     CHECK("shared data: movimiento usa x/y/vx/vy", data->x == 57 && data->y == 58);
     CHECK("shared data: frames usa el mismo payload", data->frame == 4);
 }
@@ -185,19 +185,19 @@ static void test_entity_system_shared_data(void)
 static void test_entity_system_paused_entity(void)
 {
     kprintf("-- test_entity_system_paused_entity --");
-    struct de_manager entities, systems;
-    DE_MANAGER_STORAGE(entities_storage, 2, sizeof(TestSystemEntity));
-    de_manager_init(&entities, DE_MANAGER_ARGS(entities_storage));
-    DE_MANAGER_STORAGE(systems_storage, 1, sizeof(TestBatchSystem));
-    de_manager_init(&systems, DE_MANAGER_ARGS(systems_storage));
+    struct darken entities, systems;
+    DARKEN_STORAGE(entities_storage, 2, sizeof(TestSystemEntity));
+    darken_init(&entities, DARKEN_ARGS(entities_storage));
+    DARKEN_STORAGE(systems_storage, 1, sizeof(TestBatchSystem));
+    darken_init(&systems, DARKEN_ARGS(systems_storage));
     void *movement_items[8];
-    de_entity system_entity = de_manager_new(&systems);
+    darken_entity system_entity = darken_spawn(&systems);
     TestBatchSystem *system = (TestBatchSystem *)system_entity->data;
     system->items = movement_items;
     system->size = 0;
-    system_entity->state = (de_state)test_system_movement;
-    de_entity active_entity = de_manager_new(&entities);
-    de_entity paused_entity = de_manager_new(&entities);
+    system_entity->state = (darken_state)test_system_movement;
+    darken_entity active_entity = darken_spawn(&entities);
+    darken_entity paused_entity = darken_spawn(&entities);
     TestSystemEntity *active = (TestSystemEntity *)active_entity->data;
     TestSystemEntity *paused = (TestSystemEntity *)paused_entity->data;
     active->x = 10;
@@ -208,8 +208,8 @@ static void test_entity_system_paused_entity(void)
     paused->y = 200;
     paused->vx = 3;
     paused->vy = 4;
-    active_entity->state = (de_state)state_noop;
-    paused_entity->state = (de_state)state_noop;
+    active_entity->state = (darken_state)state_noop;
+    paused_entity->state = (darken_state)state_noop;
     movement_items[system->size++] = &active->x;
     movement_items[system->size++] = &active->y;
     movement_items[system->size++] = &active->vx;
@@ -218,8 +218,8 @@ static void test_entity_system_paused_entity(void)
     movement_items[system->size++] = &paused->y;
     movement_items[system->size++] = &paused->vx;
     movement_items[system->size++] = &paused->vy;
-    de_entity_pause(paused_entity);
-    de_manager_update(&systems);
+    darken_entity_pause(paused_entity);
+    darken_update(&systems);
     CHECK("paused entity: sigue en el pool del sistema", paused->x == 103 && paused->y == 204);
     CHECK("paused entity: active tambien se procesa", active->x == 11 && active->y == 22);
     CHECK("paused entity: sigue pausada en su manager", paused_entity->slot >= entities.paused);
@@ -317,15 +317,15 @@ static void test_darksys_as_entities(void)
 {
     kprintf("-- test_darksys_as_entities --");
 
-    struct de_manager entities, systems;
-    DE_MANAGER_STORAGE(entities_storage, 2, sizeof(TestDeSystemEntity));
-    de_manager_init(&entities, DE_MANAGER_ARGS(entities_storage));
-    DE_MANAGER_STORAGE(systems_storage, 3, sizeof(struct darksys));
-    de_manager_init(&systems, DE_MANAGER_ARGS(systems_storage));
+    struct darken entities, systems;
+    DARKEN_STORAGE(entities_storage, 2, sizeof(TestDeSystemEntity));
+    darken_init(&entities, DARKEN_ARGS(entities_storage));
+    DARKEN_STORAGE(systems_storage, 3, sizeof(struct darksys));
+    darken_init(&systems, DARKEN_ARGS(systems_storage));
 
-    de_entity frames_entity = de_manager_new(&systems);
-    de_entity movement_entity = de_manager_new(&systems);
-    de_entity physics_entity = de_manager_new(&systems);
+    darken_entity frames_entity = darken_spawn(&systems);
+    darken_entity movement_entity = darken_spawn(&systems);
+    darken_entity physics_entity = darken_spawn(&systems);
 
     darksys frames = (darksys)frames_entity->data;
     darksys movement = (darksys)movement_entity->data;
@@ -340,12 +340,12 @@ static void test_darksys_as_entities(void)
     DARKSYS_STORAGE(physics_storage, 2, 1);
     darksys_init(physics, DARKSYS_ARGS(physics_storage));
 
-    frames_entity->state = (de_state)test_darksys_frames;
-    movement_entity->state = (de_state)test_darksys_movement;
-    physics_entity->state = (de_state)test_darksys_physics;
+    frames_entity->state = (darken_state)test_darksys_frames;
+    movement_entity->state = (darken_state)test_darksys_movement;
+    physics_entity->state = (darken_state)test_darksys_physics;
 
-    de_entity e1 = de_manager_new(&entities);
-    de_entity e2 = de_manager_new(&entities);
+    darken_entity e1 = darken_spawn(&entities);
+    darken_entity e2 = darken_spawn(&entities);
     TestDeSystemEntity *p1 = (TestDeSystemEntity *)e1->data;
     TestDeSystemEntity *p2 = (TestDeSystemEntity *)e2->data;
 
@@ -360,8 +360,8 @@ static void test_darksys_as_entities(void)
     p2->vy = 5;
     p2->frame = 10;
 
-    e1->state = (de_state)state_noop;
-    e2->state = (de_state)state_noop;
+    e1->state = (darken_state)state_noop;
+    e2->state = (darken_state)state_noop;
 
     darksys_add(movement, &p1->x, &p1->y, &p1->vx, &p1->vy);
     darksys_add(movement, &p2->x, &p2->y, &p2->vx, &p2->vy);
@@ -370,7 +370,7 @@ static void test_darksys_as_entities(void)
     darksys_add(frames, &p1->frame);
     darksys_add(frames, &p2->frame);
 
-    de_manager_update(&systems);
+    darken_update(&systems);
 
     CHECK("darksys entities: physics modifica vy", p1->vy == 4 && p2->vy == 6);
     CHECK("darksys entities: movement procesa ambas", p1->x == 12 && p1->y == 24 && p2->x == 96 && p2->y == 206);
@@ -382,20 +382,20 @@ static void test_darksys_as_entities(void)
 static void test_darksys_shared_payload(void)
 {
     kprintf("-- test_darksys_shared_payload --");
-    struct de_manager entities, systems;
-    DE_MANAGER_STORAGE(entities_storage, 1, sizeof(TestDeSystemEntity));
-    de_manager_init(&entities, DE_MANAGER_ARGS(entities_storage));
-    DE_MANAGER_STORAGE(systems_storage, 2, sizeof(struct darksys));
-    de_manager_init(&systems, DE_MANAGER_ARGS(systems_storage));
+    struct darken entities, systems;
+    DARKEN_STORAGE(entities_storage, 1, sizeof(TestDeSystemEntity));
+    darken_init(&entities, DARKEN_ARGS(entities_storage));
+    DARKEN_STORAGE(systems_storage, 2, sizeof(struct darksys));
+    darken_init(&systems, DARKEN_ARGS(systems_storage));
     void *movement_pool[4], *frames_pool[1];
-    de_entity movement_entity = de_manager_new(&systems), frames_entity = de_manager_new(&systems);
+    darken_entity movement_entity = darken_spawn(&systems), frames_entity = darken_spawn(&systems);
     darksys movement = (darksys)movement_entity->data;
     darksys frames = (darksys)frames_entity->data;
     darksys_init(movement, movement_pool, 1, 4);
     darksys_init(frames, frames_pool, 1, 1);
-    movement_entity->state = (de_state)test_darksys_movement;
-    frames_entity->state = (de_state)test_darksys_frames;
-    de_entity entity = de_manager_new(&entities);
+    movement_entity->state = (darken_state)test_darksys_movement;
+    frames_entity->state = (darken_state)test_darksys_frames;
+    darken_entity entity = darken_spawn(&entities);
     TestDeSystemEntity *data = (TestDeSystemEntity *)entity->data;
     data->x = 50;
     data->y = 60;
@@ -404,7 +404,7 @@ static void test_darksys_shared_payload(void)
     data->frame = 3;
     darksys_add(movement, &data->x, &data->y, &data->vx, &data->vy);
     darksys_add(frames, &data->frame);
-    de_manager_update(&systems);
+    darken_update(&systems);
     CHECK("darksys shared: movimiento modifica payload", data->x == 57 && data->y == 58);
     CHECK("darksys shared: frames usa el mismo payload", data->frame == 4);
 }

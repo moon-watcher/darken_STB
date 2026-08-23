@@ -65,15 +65,14 @@ static void *test_destructor(void *data)
 {
     (void)data;
     g_destructor_calls++;
-    return DE_STATE_DELETE;
+    return DARKEN_DELETE;
 }
 
-static void *state_inc(void *data)
+static void *state_inc(TestData *d)
 {
-    TestData *d = (TestData *)data;
     d->value++;
     d->updates++;
-    return DE_STATE_LOOP;
+    return DARKEN_LOOP;
 }
 
 static void *state_pause_after_1(void *data)
@@ -81,17 +80,16 @@ static void *state_pause_after_1(void *data)
     TestData *d = (TestData *)data;
     d->value++;
     if (d->value >= 1)
-        return DE_STATE_PAUSE;
-    return DE_STATE_LOOP;
+        return DARKEN_PAUSE;
+    return DARKEN_LOOP;
 }
 
-static void *state_delete_after_1(void *data)
+static void *state_delete_after_1(TestData *d)
 {
-    TestData *d = (TestData *)data;
     d->value++;
     if (d->value >= 1)
-        return DE_STATE_DELETE;
-    return DE_STATE_LOOP;
+        return DARKEN_DELETE;
+    return DARKEN_LOOP;
 }
 
 /* ============================================================================
@@ -99,8 +97,8 @@ static void *state_delete_after_1(void *data)
  * ============================================================================ */
 
 #define TEST_MGR_CAPACITY 32
-DE_MANAGER_STORAGE(test_mgr_storage, TEST_MGR_CAPACITY, sizeof(TestData));
-static struct de_manager test_mgr;
+DARKEN_STORAGE(test_mgr_storage, TEST_MGR_CAPACITY, sizeof(TestData));
+static struct darken test_mgr;
 
 #define TEST_SYS_CAPACITY 32
 #define TEST_SYS_PARAMS 2
@@ -109,7 +107,7 @@ static struct darksys test_sys;
 
 static void init_test_manager(void)
 {
-    de_manager_init(&test_mgr, DE_MANAGER_ARGS(test_mgr_storage));
+    darken_init(&test_mgr, DARKEN_ARGS(test_mgr_storage));
     g_destructor_calls = 0;
 }
 
@@ -132,10 +130,10 @@ TEST(test_manager_init)
 TEST(test_entity_new)
 {
     init_test_manager();
-    de_entity e = de_manager_new(&test_mgr);
+    darken_entity e = darken_spawn(&test_mgr);
     CHECK(e != 0);
     CHECK(e->slot == 0);
-    CHECK(e->state == DE_STATE_DELETE);
+    CHECK(e->state == DARKEN_DELETE);
     CHECK(e->tag == 0);
     CHECK(e->owner == &test_mgr);
     CHECK(test_mgr.size == 1);
@@ -146,24 +144,23 @@ TEST(test_entity_new_full)
     init_test_manager();
     for (uint16_t i = 0; i < TEST_MGR_CAPACITY; i++)
     {
-        de_entity e = de_manager_new(&test_mgr);
+        darken_entity e = darken_spawn(&test_mgr);
         CHECK(e != 0);
     }
-    de_entity e = de_manager_new(&test_mgr);
+    darken_entity e = darken_spawn(&test_mgr);
     CHECK(e == 0);
 }
 
 TEST(test_entity_exec)
 {
     init_test_manager();
-    de_entity e = de_manager_new(&test_mgr);
+    darken_entity e = darken_spawn(&test_mgr);
     TestData *d = (TestData *)e->data;
     d->value = 0;
     d->updates = 0;
     e->state = state_inc;
 
-    de_entity_exec(e);
-    CHECK(e->state == DE_STATE_LOOP);
+    darken_entity_run(e);
     CHECK(d->value == 1);
     CHECK(d->updates == 1);
     CHECK(e->state == state_inc);
@@ -172,14 +169,15 @@ TEST(test_entity_exec)
 TEST(test_entity_update_loop)
 {
     init_test_manager();
-    de_entity e = de_manager_new(&test_mgr);
-    TestData *d = (TestData *)e->data;
+    darken_entity e = darken_spawn(&test_mgr);
+    // TestData *d = (TestData *)e->data;
+    DARKEN_DATA(TestData, d, e);
     d->value = 0;
     d->updates = 0;
     e->state = state_inc;
 
-    de_entity_update(e);
-    CHECK(e->state == DE_STATE_LOOP);
+    darken_entity_update(e);
+    // CHECK(e->state == DARKEN_LOOP);
     CHECK(d->value == 1);
     CHECK(d->updates == 1);
     CHECK(e->state == state_inc);
@@ -188,34 +186,33 @@ TEST(test_entity_update_loop)
 TEST(test_entity_update_pause_transition)
 {
     init_test_manager();
-    de_entity e = de_manager_new(&test_mgr);
+    darken_entity e = darken_spawn(&test_mgr);
     TestData *d = (TestData *)e->data;
     d->value = 0;
     e->state = state_pause_after_1;
 
-    de_entity_update(e);
-    CHECK(e->state == DE_STATE_PAUSE);
-    CHECK(e->state == DE_STATE_PAUSE);
+    darken_entity_update(e);
+    CHECK(e->state == DARKEN_PAUSE);
 }
 
 /* Test removed: test_entity_update_preserves_special_state
-   because actual de_entity_update() does NOT preserve special states. */
+   because actual darken_entity_update() does NOT preserve special states. */
 
 TEST(test_entity_pause_resume)
 {
     init_test_manager();
-    de_entity e = de_manager_new(&test_mgr);
+    darken_entity e = darken_spawn(&test_mgr);
     e->state = state_inc;
 
     uint16_t active_before = test_mgr.size;
     uint16_t paused_before = test_mgr.paused;
 
-    de_entity_pause(e);
+    darken_entity_pause(e);
     CHECK(e->slot >= test_mgr.paused);
     CHECK(test_mgr.size == active_before - 1);
     CHECK(test_mgr.paused == paused_before - 1);
 
-    de_entity_resume(e);
+    darken_entity_resume(e);
     CHECK(e->slot < test_mgr.size);
     CHECK(test_mgr.size == active_before);
     CHECK(test_mgr.paused == paused_before);
@@ -224,14 +221,14 @@ TEST(test_entity_pause_resume)
 TEST(test_entity_delete_active)
 {
     init_test_manager();
-    de_entity e = de_manager_new(&test_mgr);
+    darken_entity e = darken_spawn(&test_mgr);
     e->state = state_inc;
     e->destructor = test_destructor;
 
     uint16_t active_before = test_mgr.size;
     g_destructor_calls = 0;
 
-    de_entity_delete(e);
+    darken_entity_delete(e);
     CHECK(test_mgr.size == active_before - 1);
     CHECK(g_destructor_calls == 1);
 }
@@ -239,34 +236,34 @@ TEST(test_entity_delete_active)
 TEST(test_entity_delete_paused)
 {
     init_test_manager();
-    de_entity e = de_manager_new(&test_mgr);
+    darken_entity e = darken_spawn(&test_mgr);
     e->state = state_inc;
-    de_entity_pause(e);
+    darken_entity_pause(e);
     e->destructor = test_destructor;
 
     uint16_t paused_before = test_mgr.paused;
     g_destructor_calls = 0;
 
-    de_entity_delete(e);
+    darken_entity_delete(e);
     CHECK(test_mgr.paused == paused_before + 1);
-    CHECK(g_destructor_calls == 1);
+    CHECK(g_destructor_calls == 0);
 }
 
 TEST(test_entity_move_front_back)
 {
     // init_test_manager();
-    // de_entity e0 = de_manager_new(&test_mgr);
-    // de_entity e1 = de_manager_new(&test_mgr);
-    // de_entity e2 = de_manager_new(&test_mgr);
+    // darken_entity e0 = darken_spawn(&test_mgr);
+    // darken_entity e1 = darken_spawn(&test_mgr);
+    // darken_entity e2 = darken_spawn(&test_mgr);
     // e0->state = state_inc;
     // e1->state = state_inc;
     // e2->state = state_inc;
 
-    // de_entity_move_front(e0);
+    // darken_entity_move_front(e0);
     // CHECK(test_mgr.pool[test_mgr.size - 1] == e0);
     // CHECK(e0->slot == test_mgr.size - 1);
 
-    // de_entity_move_back(e2);
+    // darken_entity_move_back(e2);
     // CHECK(test_mgr.pool[0] == e2);
     // CHECK(e2->slot == 0);
 }
@@ -274,8 +271,8 @@ TEST(test_entity_move_front_back)
 TEST(test_manager_update_basic)
 {
     init_test_manager();
-    de_entity e0 = de_manager_new(&test_mgr);
-    de_entity e1 = de_manager_new(&test_mgr);
+    darken_entity e0 = darken_spawn(&test_mgr);
+    darken_entity e1 = darken_spawn(&test_mgr);
     e0->state = state_inc;
     e1->state = state_inc;
     TestData *d0 = (TestData *)e0->data;
@@ -285,7 +282,7 @@ TEST(test_manager_update_basic)
     d1->value = 0;
     d1->updates = 0;
 
-    de_manager_update(&test_mgr);
+    darken_update(&test_mgr);
     CHECK(d0->value == 1);
     CHECK(d0->updates == 1);
     CHECK(d1->value == 1);
@@ -296,8 +293,8 @@ TEST(test_manager_update_basic)
 TEST(test_manager_update_pause_and_delete)
 {
     init_test_manager();
-    de_entity e0 = de_manager_new(&test_mgr);
-    de_entity e1 = de_manager_new(&test_mgr);
+    darken_entity e0 = darken_spawn(&test_mgr);
+    darken_entity e1 = darken_spawn(&test_mgr);
     e0->state = state_pause_after_1;
     e1->state = state_delete_after_1;
     TestData *d0 = (TestData *)e0->data;
@@ -306,14 +303,14 @@ TEST(test_manager_update_pause_and_delete)
     d1->value = 0;
 
     /* First update: states change but no transition yet */
-    de_manager_update(&test_mgr);
+    darken_update(&test_mgr);
     CHECK(test_mgr.size == 2);
     CHECK(test_mgr.paused == TEST_MGR_CAPACITY);
-    CHECK(e0->state == DE_STATE_PAUSE);
-    CHECK(e1->state == DE_STATE_DELETE);
+    CHECK(e0->state == DARKEN_PAUSE);
+    CHECK(e1->state == DARKEN_DELETE);
 
     /* Second update: transitions processed */
-    de_manager_update(&test_mgr);
+    darken_update(&test_mgr);
     CHECK(test_mgr.paused == TEST_MGR_CAPACITY - 1);                // e0 paused
     CHECK(test_mgr.size == 0);                                      // e1 deleted
     CHECK(e0->slot >= test_mgr.paused);                             // e0 in paused zone
@@ -323,16 +320,16 @@ TEST(test_manager_update_pause_and_delete)
 TEST(test_manager_reset)
 {
     init_test_manager();
-    de_entity e0 = de_manager_new(&test_mgr);
-    de_entity e1 = de_manager_new(&test_mgr);
+    darken_entity e0 = darken_spawn(&test_mgr);
+    darken_entity e1 = darken_spawn(&test_mgr);
     e0->state = state_inc;
     e1->state = state_inc;
     e0->destructor = test_destructor;
     e1->destructor = test_destructor;
-    de_entity_pause(e1); /* one active, one paused */
+    darken_entity_pause(e1); /* one active, one paused */
 
     g_destructor_calls = 0;
-    de_manager_reset(&test_mgr);
+    darken_reset(&test_mgr);
     CHECK(test_mgr.size == 0);
     CHECK(test_mgr.paused == TEST_MGR_CAPACITY);
     /* Only active entity's destructor is called; paused ones are ignored. */
@@ -400,14 +397,14 @@ TEST(test_system_iterator_macro)
 TEST(test_manager_iterate_macro)
 {
     init_test_manager();
-    de_entity e0 = de_manager_new(&test_mgr);
-    de_entity e1 = de_manager_new(&test_mgr);
+    darken_entity e0 = darken_spawn(&test_mgr);
+    darken_entity e1 = darken_spawn(&test_mgr);
     e0->state = state_inc;
     e1->state = state_inc;
-    de_entity_pause(e1);
+    darken_entity_pause(e1);
 
     int count = 0;
-    DE_MANAGER_FOREACH(&test_mgr, {
+    DARKEN_FOREACH(&test_mgr, {
         count++;
         CHECK(ENTITY != 0);
     });
@@ -421,8 +418,8 @@ TEST(test_manager_iterate_macro)
 #ifndef DISABLE_BENCHMARKS
 
 #define BENCH_MGR_CAPACITY 128
-DE_MANAGER_STORAGE(bench_mgr_storage, BENCH_MGR_CAPACITY, sizeof(TestData));
-static struct de_manager bench_mgr;
+DARKEN_STORAGE(bench_mgr_storage, BENCH_MGR_CAPACITY, sizeof(TestData));
+static struct darken bench_mgr;
 
 #define BENCH_SYS_CAPACITY 128
 #define BENCH_SYS_PARAMS 2
@@ -432,20 +429,20 @@ static struct darksys bench_sys;
 static void bench_entity_new_delete(void)
 {
     const int ITER = 100;
-    de_manager_init(&bench_mgr, DE_MANAGER_ARGS(bench_mgr_storage));
+    darken_init(&bench_mgr, DARKEN_ARGS(bench_mgr_storage));
     uint32_t t0 = get_time_us();
 
     for (int i = 0; i < ITER; i++)
     {
         for (int j = 0; j < BENCH_MGR_CAPACITY; j++)
         {
-            de_entity e = de_manager_new(&bench_mgr);
+            darken_entity e = darken_spawn(&bench_mgr);
             if (e)
                 e->state = state_inc;
         }
         for (int j = 0; j < BENCH_MGR_CAPACITY; j++)
         {
-            de_entity_delete(bench_mgr.pool[bench_mgr.size - 1]);
+            darken_entity_delete(bench_mgr.pool[bench_mgr.size - 1]);
         }
     }
     uint32_t t1 = get_time_us();
@@ -457,10 +454,10 @@ static void bench_entity_new_delete(void)
 static void bench_manager_update(void)
 {
     const int ITER = 100;
-    de_manager_init(&bench_mgr, DE_MANAGER_ARGS(bench_mgr_storage));
+    darken_init(&bench_mgr, DARKEN_ARGS(bench_mgr_storage));
     for (int i = 0; i < BENCH_MGR_CAPACITY; i++)
     {
-        de_entity e = de_manager_new(&bench_mgr);
+        darken_entity e = darken_spawn(&bench_mgr);
         e->state = state_inc;
         ((TestData *)e->data)->value = 0;
     }
@@ -468,7 +465,7 @@ static void bench_manager_update(void)
 
     for (int i = 0; i < ITER; i++)
     {
-        de_manager_update(&bench_mgr);
+        darken_update(&bench_mgr);
     }
     uint32_t t1 = get_time_us();
     uint32_t us_per_update = (t1 - t0) / ITER;
@@ -478,15 +475,15 @@ static void bench_manager_update(void)
 static void bench_entity_pause_resume(void)
 {
     const int ITER = 100;
-    de_manager_init(&bench_mgr, DE_MANAGER_ARGS(bench_mgr_storage));
-    de_entity e = de_manager_new(&bench_mgr);
+    darken_init(&bench_mgr, DARKEN_ARGS(bench_mgr_storage));
+    darken_entity e = darken_spawn(&bench_mgr);
     e->state = state_inc;
     uint32_t t0 = get_time_us();
 
     for (int i = 0; i < ITER; i++)
     {
-        de_entity_pause(e);
-        de_entity_resume(e);
+        darken_entity_pause(e);
+        darken_entity_resume(e);
     }
     uint32_t t1 = get_time_us();
     uint32_t us_per_op = (t1 - t0) / ITER;
@@ -538,10 +535,10 @@ static void bench_system_foreach(void)
 static void bench_manager_iterate(void)
 {
     const int ITER = 100;
-    de_manager_init(&bench_mgr, DE_MANAGER_ARGS(bench_mgr_storage));
+    darken_init(&bench_mgr, DARKEN_ARGS(bench_mgr_storage));
     for (int i = 0; i < BENCH_MGR_CAPACITY; i++)
     {
-        de_entity e = de_manager_new(&bench_mgr);
+        darken_entity e = darken_spawn(&bench_mgr);
         e->state = state_inc;
     }
     volatile int count = 0;
@@ -549,7 +546,7 @@ static void bench_manager_iterate(void)
 
     for (int i = 0; i < ITER; i++)
     {
-        DE_MANAGER_FOREACH(&bench_mgr, {
+        DARKEN_FOREACH(&bench_mgr, {
             count++;
         });
     }

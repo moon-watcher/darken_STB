@@ -1,6 +1,6 @@
-#ifndef DE_BENCHMARKS_H
-#define DE_BENCHMARKS_H
+#ifndef DARKEN_BENCHMARKS_H
+#define DARKEN_BENCHMARKS_H
 
-void de_run_benchmarks(void);
+void darken_run_benchmarks(void);
 
 #endif
