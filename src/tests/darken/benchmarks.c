@@ -17,7 +17,7 @@ static u32 bench_frames_elapsed(u32 start) { return g_frameCounter - start; }
 
 static void darken_bench_create_destroy(void)
 {
-    struct darken m;
+    darken m;
     DARKEN_STORAGE(m_storage, 32, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
     u32 t0 = bench_start();
@@ -39,7 +39,7 @@ static void *darken_bench_state_fn(void *data)
 
 static void darken_bench_update(void)
 {
-    struct darken m;
+    darken m;
     DARKEN_STORAGE(m_storage, 32, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
     for (u16 i = 0; i < 32; ++i)
@@ -56,7 +56,7 @@ static void darken_bench_update(void)
 
 static void darken_bench_apply(void)
 {
-    struct darken m;
+    darken m;
     DARKEN_STORAGE(m_storage, 32, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
     u32 t0 = bench_start();
@@ -80,7 +80,7 @@ static void darken_bench_apply(void)
 
 static void darken_bench_create_destroy_128(void)
 {
-    struct darken m;
+    darken m;
     DARKEN_STORAGE(m_storage, 128, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
     u32 t0 = bench_start();
@@ -96,7 +96,7 @@ static void darken_bench_create_destroy_128(void)
 
 static void darken_bench_create_destroy_256(void)
 {
-    struct darken m;
+    darken m;
     DARKEN_STORAGE(m_storage, 256, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
     u32 t0 = bench_start();
@@ -112,7 +112,7 @@ static void darken_bench_create_destroy_256(void)
 
 static void darken_bench_update_128(void)
 {
-    struct darken m;
+    darken m;
     DARKEN_STORAGE(m_storage, 128, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
     for (u16 i = 0; i < 128; ++i)
@@ -129,7 +129,7 @@ static void darken_bench_update_128(void)
 
 static void darken_bench_update_256(void)
 {
-    struct darken m;
+    darken m;
     DARKEN_STORAGE(m_storage, 256, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
     for (u16 i = 0; i < 256; ++i)
@@ -146,7 +146,7 @@ static void darken_bench_update_256(void)
 
 static void darken_bench_swap(void)
 {
-    struct darken m;
+    darken m;
     DARKEN_STORAGE(m_storage, 2, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
     darken_entity a = darken_spawn(&m);
@@ -170,12 +170,12 @@ static void darken_bench_memory_overhead(void)
     kprintf("stride payload=9:  %d bytes/entidad (impar)", stride9);
     kprintf("stride payload=16: %d bytes/entidad", stride16);
     kprintf("stride payload=32: %d bytes/entidad", stride32);
-    struct darken m32;
+    darken m32;
     DARKEN_STORAGE(m32_storage, 32, sizeof(struct MyComponent));
     darken_init(&m32, DARKEN_ARGS(m32_storage));
     u32 bytes32 = 32 * _DARKEN_ENTITY_STRIDE(sizeof(struct MyComponent));
     kprintf("Manager 32 entidades (payload %d): %ld bytes en storage", (int)sizeof(struct MyComponent), bytes32);
-    struct darken m128;
+    darken m128;
     DARKEN_STORAGE(m128_storage, 128, sizeof(struct MyComponent));
     darken_init(&m128, DARKEN_ARGS(m128_storage));
     u32 bytes128 = 128 * _DARKEN_ENTITY_STRIDE(sizeof(struct MyComponent));

@@ -32,7 +32,7 @@ static void *darken_destructor(struct MyComponent *data)
 void darken_run_usage_example(void)
 {
     kprintf("========== EJEMPLO DE USO ==========");
-    struct darken g_manager, g_manager2;
+    darken g_manager, g_manager2;
     DARKEN_STORAGE(g_manager_storage, 10, sizeof(struct MyComponent));
     darken_init(&g_manager, DARKEN_ARGS(g_manager_storage));
     DARKEN_STORAGE(g_manager2_storage, 20, sizeof(struct MyComponent) + 73);

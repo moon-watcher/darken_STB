@@ -88,7 +88,7 @@ static void *test_system_frames(void *data)
 static void test_entity_system_basic(void)
 {
     // kprintf("-- test_entity_system_basic --");
-    struct darken entities, systems;
+    darken entities, systems;
     DARKEN_STORAGE(entities_storage, 3, sizeof(TestSystemEntity));
     darken_init(&entities, DARKEN_ARGS(entities_storage));
     DARKEN_STORAGE(systems_storage, 3, sizeof(TestBatchSystem));
@@ -148,7 +148,7 @@ static void test_entity_system_basic(void)
 static void test_entity_system_shared_data(void)
 {
     // kprintf("-- test_entity_system_shared_data --");
-    struct darken entities, systems;
+    darken entities, systems;
     DARKEN_STORAGE(entities_storage, 2, sizeof(TestSystemEntity));
     darken_init(&entities, DARKEN_ARGS(entities_storage));
     DARKEN_STORAGE(systems_storage, 2, sizeof(TestBatchSystem));
@@ -185,7 +185,7 @@ static void test_entity_system_shared_data(void)
 static void test_entity_system_paused_entity(void)
 {
     // kprintf("-- test_entity_system_paused_entity --");
-    struct darken entities, systems;
+    darken entities, systems;
     DARKEN_STORAGE(entities_storage, 2, sizeof(TestSystemEntity));
     darken_init(&entities, DARKEN_ARGS(entities_storage));
     DARKEN_STORAGE(systems_storage, 1, sizeof(TestBatchSystem));
@@ -323,7 +323,7 @@ static void test_darksys_as_entities(void)
 {
     // kprintf("-- test_darksys_as_entities --");
 
-    struct darken entities, systems;
+    darken entities, systems;
     DARKEN_STORAGE(entities_storage, 2, sizeof(TestDeSystemEntity));
     darken_init(&entities, DARKEN_ARGS(entities_storage));
     DARKEN_STORAGE(systems_storage, 3, sizeof(struct darksys));
@@ -388,7 +388,7 @@ static void test_darksys_as_entities(void)
 static void test_darksys_shared_payload(void)
 {
     // kprintf("-- test_darksys_shared_payload --");
-    struct darken entities, systems;
+    darken entities, systems;
     DARKEN_STORAGE(entities_storage, 1, sizeof(TestDeSystemEntity));
     darken_init(&entities, DARKEN_ARGS(entities_storage));
     DARKEN_STORAGE(systems_storage, 2, sizeof(struct darksys));

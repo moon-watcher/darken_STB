@@ -1,8 +1,8 @@
 /**
  * darken.h — Darken (DARKula ENgine) 2.0 Entity System
- * 
+ *
  * darken-2.0.0-dev
- * 
+ *
  * Full documentation: README.Darken.md
  *
  * GNU C note:
@@ -63,13 +63,20 @@
 
 typedef void *(*darken_state)();
 
-typedef struct darken *darken;
 typedef struct darken_entity *darken_entity;
+
+typedef struct darken
+{
+    darken_entity *pool;
+    uint16_t capacity;
+    uint16_t size;
+    uint16_t paused;
+} darken;
 
 struct darken_entity
 {
     // Private
-    darken owner;
+    darken *owner;
     uint16_t slot;
 
     // Public
@@ -78,14 +85,6 @@ struct darken_entity
     uint32_t tag; // available to the user
     uint16_t usr; // available to the user
     uint8_t data[];
-};
-
-struct darken
-{
-    darken_entity *pool;
-    uint16_t capacity;
-    uint16_t size;
-    uint16_t paused;
 };
 
 /* ============================================================================
@@ -109,10 +108,10 @@ void darken_entity_delete(darken_entity);
 #define DARKEN_ARGS _DARKEN_ARGS
 #define DARKEN_FOREACH _DARKEN_FOREACH
 
-void darken_init(darken, darken_entity *, void *, uint16_t, uint16_t);
-darken_entity darken_spawn(darken);
-void darken_update(darken);
-void darken_reset(darken);
+void darken_init(darken *, darken_entity *, void *, uint16_t, uint16_t);
+darken_entity darken_spawn(darken *);
+void darken_update(darken *);
+void darken_reset(darken *);
 
 /* ============================================================================
  * INTERNAL MACRO IMPLEMENTATIONS
@@ -158,7 +157,7 @@ void darken_reset(darken);
     _darken_entity_swap(ENTITY->owner->pool, ENTITY->slot, --ENTITY->owner->paused);)
 
 #define _DARKEN_ENTITY_DELETE(ENTITY) _DARKEN_BLOCK( \
-    darken manager = ENTITY->owner;                  \
+    darken *manager = ENTITY->owner;                 \
                                                      \
     if (DARKEN_STATE_IS_ACTIVE(ENTITY->destructor))  \
         ENTITY->destructor(ENTITY->data);            \
@@ -214,7 +213,7 @@ static inline void _darken_entity_swap(darken_entity *pool, uint16_t i, uint16_t
 
 //
 
-void darken_init(darken $, darken_entity *pool, void *param_storage, uint16_t capacity, uint16_t bytes)
+void darken_init(darken *$, darken_entity *pool, void *param_storage, uint16_t capacity, uint16_t bytes)
 {
     $->pool = pool;
     $->capacity = capacity;
@@ -236,14 +235,14 @@ void darken_init(darken $, darken_entity *pool, void *param_storage, uint16_t ca
     }
 }
 
-darken_entity darken_spawn(darken $)
+darken_entity darken_spawn(darken *$)
 {
     DARKEN_ASSERT($->size < $->paused, 0);
 
     return $->pool[$->size++];
 }
 
-void darken_update(darken $)
+void darken_update(darken *$)
 {
     uint16_t i = $->size;
     darken_entity *pool = $->pool;
@@ -264,7 +263,7 @@ void darken_update(darken $)
     }
 }
 
-void darken_reset(darken $)
+void darken_reset(darken *$)
 {
     DARKEN_FOREACH($, _DARKEN_ENTITY_DELETE(ENTITY));
 
@@ -297,7 +296,7 @@ void darken_entity_resume(darken_entity $)
 {
     DARKEN_ASSERT(_DARKEN_ENTITY_IS_PAUSED($), );
 
-    darken manager = $->owner;
+    darken *manager = $->owner;
 
     _darken_entity_swap(manager->pool, $->slot, manager->paused);
     _darken_entity_swap(manager->pool, $->slot, manager->size);
