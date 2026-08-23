@@ -45,7 +45,7 @@ static void darken_bench_update(void)
     for (u16 i = 0; i < 32; ++i)
     {
         darken_entity e = darken_spawn(&m);
-        e->state = (darken_state)darken_bench_state_fn;
+        e->state = darken_bench_state_fn;
     }
     u32 t0 = bench_start();
     for (u32 r = 0; r < BENCH_REPS; ++r)
@@ -118,7 +118,7 @@ static void darken_bench_update_128(void)
     for (u16 i = 0; i < 128; ++i)
     {
         darken_entity e = darken_spawn(&m);
-        e->state = (darken_state)darken_bench_state_fn;
+        e->state = darken_bench_state_fn;
     }
     u32 t0 = bench_start();
     for (u32 r = 0; r < 500; ++r)
@@ -135,7 +135,7 @@ static void darken_bench_update_256(void)
     for (u16 i = 0; i < 256; ++i)
     {
         darken_entity e = darken_spawn(&m);
-        e->state = (darken_state)darken_bench_state_fn;
+        e->state = darken_bench_state_fn;
     }
     u32 t0 = bench_start();
     for (u32 r = 0; r < 250; ++r)

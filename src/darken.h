@@ -59,10 +59,10 @@
 
 #include <stdint.h>
 
-typedef void *(*darken_state)(void *);
+typedef void *(*darken_state)();
 
-typedef struct darken_entity *darken_entity;
 typedef struct darken *darken;
+typedef struct darken_entity *darken_entity;
 
 struct darken_entity
 {

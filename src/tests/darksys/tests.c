@@ -106,9 +106,9 @@ static void test_entity_system_basic(void)
     movement_pool->size = 0;
     frame_pool->items = frame_items;
     frame_pool->size = 0;
-    physics_entity->state = (darken_state)test_system_physics;
-    movement_entity->state = (darken_state)test_system_movement;
-    frames_entity->state = (darken_state)test_system_frames;
+    physics_entity->state = test_system_physics;
+    movement_entity->state = test_system_movement;
+    frames_entity->state = test_system_frames;
     darken_entity p1_entity = darken_spawn(&entities);
     darken_entity p2_entity = darken_spawn(&entities);
     TestSystemEntity *p1 = (TestSystemEntity *)p1_entity->data;
@@ -123,8 +123,8 @@ static void test_entity_system_basic(void)
     p2->vx = -4;
     p2->vy = 5;
     p2->frame = 10;
-    p1_entity->state = (darken_state)state_noop;
-    p2_entity->state = (darken_state)state_noop;
+    p1_entity->state = state_noop;
+    p2_entity->state = state_noop;
     physics_items[physics_pool->size++] = &p1->vy;
     physics_items[physics_pool->size++] = &p2->vy;
     movement_items[movement_pool->size++] = &p1->x;
@@ -162,8 +162,8 @@ static void test_entity_system_shared_data(void)
     movement_system->size = 0;
     frame_system->items = frame_items;
     frame_system->size = 0;
-    movement->state = (darken_state)test_system_movement;
-    frames->state = (darken_state)test_system_frames;
+    movement->state = test_system_movement;
+    frames->state = test_system_frames;
     darken_entity e = darken_spawn(&entities);
     TestSystemEntity *data = (TestSystemEntity *)e->data;
     data->x = 50;
@@ -171,7 +171,7 @@ static void test_entity_system_shared_data(void)
     data->vx = 7;
     data->vy = -2;
     data->frame = 3;
-    e->state = (darken_state)state_noop;
+    e->state = state_noop;
     movement_items[movement_system->size++] = &data->x;
     movement_items[movement_system->size++] = &data->y;
     movement_items[movement_system->size++] = &data->vx;
@@ -195,7 +195,7 @@ static void test_entity_system_paused_entity(void)
     TestBatchSystem *system = (TestBatchSystem *)system_entity->data;
     system->items = movement_items;
     system->size = 0;
-    system_entity->state = (darken_state)test_system_movement;
+    system_entity->state = test_system_movement;
     darken_entity active_entity = darken_spawn(&entities);
     darken_entity paused_entity = darken_spawn(&entities);
     TestSystemEntity *active = (TestSystemEntity *)active_entity->data;
@@ -208,8 +208,8 @@ static void test_entity_system_paused_entity(void)
     paused->y = 200;
     paused->vx = 3;
     paused->vy = 4;
-    active_entity->state = (darken_state)state_noop;
-    paused_entity->state = (darken_state)state_noop;
+    active_entity->state = state_noop;
+    paused_entity->state = state_noop;
     movement_items[system->size++] = &active->x;
     movement_items[system->size++] = &active->y;
     movement_items[system->size++] = &active->vx;
@@ -232,26 +232,32 @@ typedef struct TestDeSystemEntity
     uint16_t frame;
 } TestDeSystemEntity;
 
-static void test_darksys_movement(darksys system)
+static void *test_darksys_movement(darksys system)
 {
     DARKSYS_FOREACH(system, int16_t *x, int16_t *y, int16_t *vx, int16_t *vy, {
         *x += *vx;
         *y += *vy;
     });
+
+    return 1;
 }
 
-static void test_darksys_physics(darksys system)
+static void *test_darksys_physics(darksys system)
 {
     DARKSYS_FOREACH(system, int16_t *vy, {
         *vy += 1;
     });
+
+    return DARKEN_LOOP;
 }
 
-static void test_darksys_frames(darksys system)
+static void *test_darksys_frames(darksys system)
 {
     DARKSYS_FOREACH(system, uint16_t *frame, {
         *frame += 1;
     });
+
+    return DARKEN_LOOP;
 }
 
 static void test_darksys_init_add(void)
@@ -340,9 +346,9 @@ static void test_darksys_as_entities(void)
     DARKSYS_STORAGE(physics_storage, 2, 1);
     darksys_init(physics, DARKSYS_ARGS(physics_storage));
 
-    frames_entity->state = (darken_state)test_darksys_frames;
-    movement_entity->state = (darken_state)test_darksys_movement;
-    physics_entity->state = (darken_state)test_darksys_physics;
+    frames_entity->state = test_darksys_frames;
+    movement_entity->state = test_darksys_movement;
+    physics_entity->state = test_darksys_physics;
 
     darken_entity e1 = darken_spawn(&entities);
     darken_entity e2 = darken_spawn(&entities);
@@ -360,8 +366,8 @@ static void test_darksys_as_entities(void)
     p2->vy = 5;
     p2->frame = 10;
 
-    e1->state = (darken_state)state_noop;
-    e2->state = (darken_state)state_noop;
+    e1->state = state_noop;
+    e2->state = state_noop;
 
     darksys_add(movement, &p1->x, &p1->y, &p1->vx, &p1->vy);
     darksys_add(movement, &p2->x, &p2->y, &p2->vx, &p2->vy);
@@ -393,8 +399,8 @@ static void test_darksys_shared_payload(void)
     darksys frames = (darksys)frames_entity->data;
     darksys_init(movement, movement_pool, 1, 4);
     darksys_init(frames, frames_pool, 1, 1);
-    movement_entity->state = (darken_state)test_darksys_movement;
-    frames_entity->state = (darken_state)test_darksys_frames;
+    movement_entity->state = test_darksys_movement;
+    frames_entity->state = test_darksys_frames;
     darken_entity entity = darken_spawn(&entities);
     TestDeSystemEntity *data = (TestDeSystemEntity *)entity->data;
     data->x = 50;
