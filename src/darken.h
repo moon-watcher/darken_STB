@@ -296,10 +296,11 @@ void darken_entity_resume(darken_entity $)
 {
     DARKEN_ASSERT(_DARKEN_ENTITY_IS_PAUSED($), );
 
-    _darken_entity_swap($->owner->pool, $->slot, $->owner->paused);
-    _darken_entity_swap($->owner->pool, $->slot, $->owner->size);
-
     darken manager = $->owner;
+    uint16_t slot = $->slot;
+
+    _darken_entity_swap(manager->pool, slot, manager->paused);
+    _darken_entity_swap(manager->pool, slot, manager->size);
 
     ++manager->paused;
     ++manager->size;

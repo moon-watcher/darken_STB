@@ -87,7 +87,7 @@ static void *test_system_frames(void *data)
 
 static void test_entity_system_basic(void)
 {
-    kprintf("-- test_entity_system_basic --");
+    // kprintf("-- test_entity_system_basic --");
     struct darken entities, systems;
     DARKEN_STORAGE(entities_storage, 3, sizeof(TestSystemEntity));
     darken_init(&entities, DARKEN_ARGS(entities_storage));
@@ -147,7 +147,7 @@ static void test_entity_system_basic(void)
 
 static void test_entity_system_shared_data(void)
 {
-    kprintf("-- test_entity_system_shared_data --");
+    // kprintf("-- test_entity_system_shared_data --");
     struct darken entities, systems;
     DARKEN_STORAGE(entities_storage, 2, sizeof(TestSystemEntity));
     darken_init(&entities, DARKEN_ARGS(entities_storage));
@@ -184,7 +184,7 @@ static void test_entity_system_shared_data(void)
 
 static void test_entity_system_paused_entity(void)
 {
-    kprintf("-- test_entity_system_paused_entity --");
+    // kprintf("-- test_entity_system_paused_entity --");
     struct darken entities, systems;
     DARKEN_STORAGE(entities_storage, 2, sizeof(TestSystemEntity));
     darken_init(&entities, DARKEN_ARGS(entities_storage));
@@ -256,7 +256,7 @@ static void test_darksys_frames(darksys system)
 
 static void test_darksys_init_add(void)
 {
-    kprintf("-- test_darksys_init_add --");
+    // kprintf("-- test_darksys_init_add --");
     struct darksys sys;
     void *pool[12];
     darksys_init(&sys, pool, 3, 4);
@@ -271,7 +271,7 @@ static void test_darksys_init_add(void)
 
 static void test_darksys_multiple_groups(void)
 {
-    kprintf("-- test_darksys_multiple_groups --");
+    // kprintf("-- test_darksys_multiple_groups --");
     struct darksys sys;
     void *pool[12];
     darksys_init(&sys, pool, 3, 4);
@@ -285,7 +285,7 @@ static void test_darksys_multiple_groups(void)
 
 static void test_darksys_remove(void)
 {
-    kprintf("-- test_darksys_remove --");
+    // kprintf("-- test_darksys_remove --");
     struct darksys sys;
     void *pool[12];
     darksys_init(&sys, pool, 3, 4);
@@ -301,7 +301,7 @@ static void test_darksys_remove(void)
 
 static void test_darksys_capacity(void)
 {
-    kprintf("-- test_darksys_capacity --");
+    // kprintf("-- test_darksys_capacity --");
     struct darksys sys;
     void *pool[8];
     darksys_init(&sys, pool, 2, 4);
@@ -315,7 +315,7 @@ static void test_darksys_capacity(void)
 
 static void test_darksys_as_entities(void)
 {
-    kprintf("-- test_darksys_as_entities --");
+    // kprintf("-- test_darksys_as_entities --");
 
     struct darken entities, systems;
     DARKEN_STORAGE(entities_storage, 2, sizeof(TestDeSystemEntity));
@@ -381,7 +381,7 @@ static void test_darksys_as_entities(void)
 
 static void test_darksys_shared_payload(void)
 {
-    kprintf("-- test_darksys_shared_payload --");
+    // kprintf("-- test_darksys_shared_payload --");
     struct darken entities, systems;
     DARKEN_STORAGE(entities_storage, 1, sizeof(TestDeSystemEntity));
     darken_init(&entities, DARKEN_ARGS(entities_storage));
@@ -413,7 +413,7 @@ struct darksys sys;
 
 static void test_system_foreach_direct(void)
 {
-    kprintf("-- test_system_foreach_direct --");
+    // kprintf("-- test_system_foreach_direct --");
 
     void *pool[12];
     darksys_init(&sys, pool, 3, 4);
@@ -428,7 +428,7 @@ static void test_system_foreach_direct(void)
 
 static void test_system_add_various_arity(void)
 {
-    kprintf("-- test_system_add_various_arity --");
+    // kprintf("-- test_system_add_various_arity --");
     struct darksys sys1, sys2, sys3, sys5;
     void *p1[3], *p2[6], *p3[9], *p5[15];
     darksys_init(&sys1, p1, 3, 1);
@@ -445,7 +445,7 @@ static void test_system_add_various_arity(void)
 
 static void test_system_remove_first(void)
 {
-    kprintf("-- test_system_remove_first --");
+    // kprintf("-- test_system_remove_first --");
     struct darksys sys;
     void *pool[12];
     darksys_init(&sys, pool, 3, 4);
@@ -460,7 +460,7 @@ static void test_system_remove_first(void)
 
 static void test_system_remove_last(void)
 {
-    kprintf("-- test_system_remove_last --");
+    // kprintf("-- test_system_remove_last --");
     struct darksys sys;
     void *pool[12];
     darksys_init(&sys, pool, 3, 4);
@@ -475,7 +475,7 @@ static void test_system_remove_last(void)
 
 static void test_empty_system(void)
 {
-    kprintf("-- test_empty_system --");
+    // kprintf("-- test_empty_system --");
     struct darksys sys;
     void *pool[4];
     darksys_init(&sys, pool, 1, 4);
