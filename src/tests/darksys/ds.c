@@ -395,7 +395,7 @@ TEST(test_system_iterator_macro)
     //     (*y) += 2;
     // });
 
-    void *result = (void *) test_sys_iterator(&test_sys);
+    void *result = test_sys_iterator(&test_sys);
     CHECK(result == (void *) 1234);
     CHECK(a == 11);
     CHECK(b == 22);

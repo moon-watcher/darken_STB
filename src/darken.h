@@ -179,13 +179,13 @@ void darken_reset(darken);
 #define _DARKEN_ARGS(NAME) \
     (NAME).pool, (NAME).data, (NAME).capacity, (NAME).payload_size
 
-#define _DARKEN_FOREACH(MANAGER, CODE) _DARKEN_BLOCK( \
-    uint16_t INDEX = (MANAGER)->size;                 \
-    darken_entity *POOL = (MANAGER)->pool;            \
-                                                      \
-    while (INDEX--) {                                 \
-        darken_entity ENTITY = POOL[INDEX];           \
-        CODE;                                         \
+#define _DARKEN_FOREACH(MANAGER, CODE) _DARKEN_BLOCK(               \
+    uint16_t INDEX = (MANAGER)->size;                               \
+    darken_entity *POOL = (MANAGER)->pool;                          \
+                                                                    \
+    while (INDEX--) {                                               \
+        darken_entity ENTITY __attribute__((unused)) = POOL[INDEX]; \
+        CODE;                                                       \
     })
 
 #define DARKEN_ASSERT(COND, RET) _DARKEN_BLOCK( \
