@@ -135,6 +135,9 @@ void darken_reset(darken *);
         CODE                \
     } while (0)
 
+#define _DARKEN_ASSERT(COND, RET) _DARKEN_BLOCK( \
+    if (!(COND)) return RET;)
+
 #define _DARKEN_DATA(TYPE, VAR, ENTITY) TYPE *VAR = (TYPE *)(ENTITY)->data;
 
 #define _DARKEN_DELETE ((void *)0)
@@ -202,9 +205,6 @@ void darken_reset(darken *);
         darken_entity ENTITY __attribute__((unused)) = POOL[INDEX]; \
         CODE;                                                       \
     })
-
-#define _DARKEN_ASSERT(COND, RET) _DARKEN_BLOCK( \
-    if (!(COND)) return RET;)
 
 #endif // DARKEN_H
 
