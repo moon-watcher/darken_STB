@@ -1,6 +1,8 @@
 /**
  * darken.h — Darken (DARKula ENgine) 2.0 Entity System
- *
+ * 
+ * darken-2.0.0-dev
+ * 
  * Full documentation: README.Darken.md
  *
  * GNU C note:
@@ -103,7 +105,6 @@ void darken_entity_pause(darken_entity);
 void darken_entity_resume(darken_entity);
 void darken_entity_delete(darken_entity);
 
-#define DARKEN _DARKEN_STORAGE
 #define DARKEN_STORAGE _DARKEN_STORAGE
 #define DARKEN_ARGS _DARKEN_ARGS
 #define DARKEN_FOREACH _DARKEN_FOREACH
@@ -297,10 +298,9 @@ void darken_entity_resume(darken_entity $)
     DARKEN_ASSERT(_DARKEN_ENTITY_IS_PAUSED($), );
 
     darken manager = $->owner;
-    uint16_t slot = $->slot;
 
-    _darken_entity_swap(manager->pool, slot, manager->paused);
-    _darken_entity_swap(manager->pool, slot, manager->size);
+    _darken_entity_swap(manager->pool, $->slot, manager->paused);
+    _darken_entity_swap(manager->pool, $->slot, manager->size);
 
     ++manager->paused;
     ++manager->size;
