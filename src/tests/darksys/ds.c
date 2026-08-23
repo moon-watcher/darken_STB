@@ -110,7 +110,7 @@ static struct darken test_mgr;
 #define TEST_SYS_CAPACITY 32
 #define TEST_SYS_PARAMS 2
 DARKSYS_STORAGE(test_sys_storage, TEST_SYS_CAPACITY, TEST_SYS_PARAMS);
-static struct darksys test_sys;
+static darksys test_sys;
 
 static void init_test_manager(void)
 {
@@ -374,7 +374,7 @@ TEST(test_system_init_add_remove)
     CHECK(sum == 3 + 4);
 }
 
-static uint16_t test_sys_iterator(darksys system)
+static uint16_t test_sys_iterator(darksys *system)
 {
     DARKSYS_FOREACH(system, int *x, int *y, {
         (*x) += 1;
@@ -431,7 +431,7 @@ static struct darken bench_mgr;
 #define BENCH_SYS_CAPACITY 128
 #define BENCH_SYS_PARAMS 2
 DARKSYS_STORAGE(bench_sys_storage, BENCH_SYS_CAPACITY, BENCH_SYS_PARAMS);
-static struct darksys bench_sys;
+static darksys bench_sys;
 
 static void bench_entity_new_delete(void)
 {

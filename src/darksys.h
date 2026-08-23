@@ -23,15 +23,13 @@
 #include <stdint.h>
 #include <stdarg.h>
 
-typedef struct darksys *darksys;
-
-struct darksys
+typedef struct
 {
     void **pool;
     uint16_t capacity;
     uint16_t size;
     uint16_t params;
-};
+} darksys;
 
 /* ============================================================================
  * PUBLIC API
@@ -41,10 +39,10 @@ struct darksys
 #define DARKSYS_ARGS _DARKSYS_ARGS
 #define DARKSYS_FOREACH(...) _DARKSYS_FOREACH_DISPATCH(_DARKSYS_NARGS(__VA_ARGS__), __VA_ARGS__)
 
-void darksys_init(darksys, void **, uint16_t, uint16_t);
-uint16_t darksys_add(darksys, ...);
-uint16_t darksys_remove(darksys, void *);
-void darksys_clear(darksys);
+void darksys_init(darksys *, void **, uint16_t, uint16_t);
+uint16_t darksys_add(darksys *, ...);
+uint16_t darksys_remove(darksys *, void *);
+void darksys_clear(darksys *);
 
 /* ============================================================================
  * INTERNAL MACRO IMPLEMENTATIONS
@@ -67,7 +65,7 @@ void darksys_clear(darksys);
 #define _DARKSYS_FOREACH(SYSTEM, CODE)      \
     do                                      \
     {                                       \
-        darksys _system = (SYSTEM);         \
+        darksys *_system = (SYSTEM);        \
         uint16_t _size = _system->size;     \
         void **_pool = _system->pool;       \
         uint16_t _params = _system->params; \
@@ -101,7 +99,7 @@ void darksys_clear(darksys);
 
 #ifdef DARKSYS_IMPLEMENTATION
 
-void darksys_init(darksys $, void **storage, uint16_t capacity_groups, uint16_t params)
+void darksys_init(darksys *$, void **storage, uint16_t capacity_groups, uint16_t params)
 {
     $->pool = storage;
     $->capacity = capacity_groups * params;
@@ -109,7 +107,7 @@ void darksys_init(darksys $, void **storage, uint16_t capacity_groups, uint16_t 
     $->params = params;
 }
 
-uint16_t darksys_add(darksys $, ...)
+uint16_t darksys_add(darksys *$, ...)
 {
     uint16_t size = $->size;
     uint16_t params = $->params;
@@ -131,7 +129,7 @@ uint16_t darksys_add(darksys $, ...)
     return 1;
 }
 
-uint16_t darksys_remove(darksys $, void *first)
+uint16_t darksys_remove(darksys *$, void *first)
 {
     uint16_t params = $->params;
     void **pool = $->pool;
@@ -156,7 +154,7 @@ uint16_t darksys_remove(darksys $, void *first)
     return 0;
 }
 
-void darksys_clear(darksys $)
+void darksys_clear(darksys *$)
 {
     $->size = 0;
 }

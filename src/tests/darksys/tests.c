@@ -232,7 +232,7 @@ typedef struct TestDeSystemEntity
     uint16_t frame;
 } TestDeSystemEntity;
 
-static void *test_darksys_movement(darksys system)
+static void *test_darksys_movement(darksys *system)
 {
     DARKSYS_FOREACH(system, int16_t *x, int16_t *y, int16_t *vx, int16_t *vy, {
         *x += *vx;
@@ -242,7 +242,7 @@ static void *test_darksys_movement(darksys system)
     return 1;
 }
 
-static void *test_darksys_physics(darksys system)
+static void *test_darksys_physics(darksys *system)
 {
     DARKSYS_FOREACH(system, int16_t *vy, {
         *vy += 1;
@@ -251,7 +251,7 @@ static void *test_darksys_physics(darksys system)
     return DARKEN_LOOP;
 }
 
-static void *test_darksys_frames(darksys system)
+static void *test_darksys_frames(darksys *system)
 {
     DARKSYS_FOREACH(system, uint16_t *frame, {
         *frame += 1;
@@ -263,7 +263,7 @@ static void *test_darksys_frames(darksys system)
 static void test_darksys_init_add(void)
 {
     // kprintf("-- test_darksys_init_add --");
-    struct darksys sys;
+    darksys sys;
     void *pool[12];
     darksys_init(&sys, pool, 3, 4);
     CHECK("darksys init: size 0", sys.size == 0);
@@ -278,7 +278,7 @@ static void test_darksys_init_add(void)
 static void test_darksys_multiple_groups(void)
 {
     // kprintf("-- test_darksys_multiple_groups --");
-    struct darksys sys;
+    darksys sys;
     void *pool[12];
     darksys_init(&sys, pool, 3, 4);
     int a1, b1, c1, d1, a2, b2, c2, d2;
@@ -292,7 +292,7 @@ static void test_darksys_multiple_groups(void)
 static void test_darksys_remove(void)
 {
     // kprintf("-- test_darksys_remove --");
-    struct darksys sys;
+    darksys sys;
     void *pool[12];
     darksys_init(&sys, pool, 3, 4);
     int a1, b1, c1, d1, a2, b2, c2, d2, a3, b3, c3, d3;
@@ -308,7 +308,7 @@ static void test_darksys_remove(void)
 static void test_darksys_capacity(void)
 {
     // kprintf("-- test_darksys_capacity --");
-    struct darksys sys;
+    darksys sys;
     void *pool[8];
     darksys_init(&sys, pool, 2, 4);
     int a[2], b[2], c[2], d[2];
@@ -326,16 +326,16 @@ static void test_darksys_as_entities(void)
     darken entities, systems;
     DARKEN_STORAGE(entities_storage, 2, sizeof(TestDeSystemEntity));
     darken_init(&entities, DARKEN_ARGS(entities_storage));
-    DARKEN_STORAGE(systems_storage, 3, sizeof(struct darksys));
+    DARKEN_STORAGE(systems_storage, 3, sizeof(darksys));
     darken_init(&systems, DARKEN_ARGS(systems_storage));
 
     darken_entity frames_entity = darken_spawn(&systems);
     darken_entity movement_entity = darken_spawn(&systems);
     darken_entity physics_entity = darken_spawn(&systems);
 
-    darksys frames = (darksys)frames_entity->data;
-    darksys movement = (darksys)movement_entity->data;
-    darksys physics = (darksys)physics_entity->data;
+    darksys *frames = (darksys *)frames_entity->data;
+    darksys *movement = (darksys *)movement_entity->data;
+    darksys *physics = (darksys *)physics_entity->data;
 
     DARKSYS_STORAGE(frames_storage, 2, 1);
     darksys_init(frames, DARKSYS_ARGS(frames_storage));
@@ -352,7 +352,7 @@ static void test_darksys_as_entities(void)
 
     darken_entity e1 = darken_spawn(&entities);
     darken_entity e2 = darken_spawn(&entities);
-    TestDeSystemEntity *p1 = (TestDeSystemEntity *)e1->data;
+    DARKEN_DATA(TestDeSystemEntity, p1, e1);
     TestDeSystemEntity *p2 = (TestDeSystemEntity *)e2->data;
 
     p1->x = 10;
@@ -391,12 +391,12 @@ static void test_darksys_shared_payload(void)
     darken entities, systems;
     DARKEN_STORAGE(entities_storage, 1, sizeof(TestDeSystemEntity));
     darken_init(&entities, DARKEN_ARGS(entities_storage));
-    DARKEN_STORAGE(systems_storage, 2, sizeof(struct darksys));
+    DARKEN_STORAGE(systems_storage, 2, sizeof(darksys*));
     darken_init(&systems, DARKEN_ARGS(systems_storage));
     void *movement_pool[4], *frames_pool[1];
     darken_entity movement_entity = darken_spawn(&systems), frames_entity = darken_spawn(&systems);
-    darksys movement = (darksys)movement_entity->data;
-    darksys frames = (darksys)frames_entity->data;
+    darksys *movement = (darksys *)movement_entity->data;
+    darksys *frames = (darksys *)frames_entity->data;
     darksys_init(movement, movement_pool, 1, 4);
     darksys_init(frames, frames_pool, 1, 1);
     movement_entity->state = test_darksys_movement;
@@ -415,7 +415,7 @@ static void test_darksys_shared_payload(void)
     CHECK("darksys shared: frames usa el mismo payload", data->frame == 4);
 }
 
-struct darksys sys;
+darksys sys;
 
 static void test_system_foreach_direct(void)
 {
@@ -435,7 +435,7 @@ static void test_system_foreach_direct(void)
 static void test_system_add_various_arity(void)
 {
     // kprintf("-- test_system_add_various_arity --");
-    struct darksys sys1, sys2, sys3, sys5;
+    darksys sys1, sys2, sys3, sys5;
     void *p1[3], *p2[6], *p3[9], *p5[15];
     darksys_init(&sys1, p1, 3, 1);
     darksys_init(&sys2, p2, 3, 2);
@@ -452,7 +452,7 @@ static void test_system_add_various_arity(void)
 static void test_system_remove_first(void)
 {
     // kprintf("-- test_system_remove_first --");
-    struct darksys sys;
+    darksys sys;
     void *pool[12];
     darksys_init(&sys, pool, 3, 4);
     int a1, b1, c1, d1, a2, b2, c2, d2, a3, b3, c3, d3;
@@ -467,7 +467,7 @@ static void test_system_remove_first(void)
 static void test_system_remove_last(void)
 {
     // kprintf("-- test_system_remove_last --");
-    struct darksys sys;
+    darksys sys;
     void *pool[12];
     darksys_init(&sys, pool, 3, 4);
     int a1, b1, c1, d1, a2, b2, c2, d2, a3, b3, c3, d3;
@@ -482,7 +482,7 @@ static void test_system_remove_last(void)
 static void test_empty_system(void)
 {
     // kprintf("-- test_empty_system --");
-    struct darksys sys;
+    darksys sys;
     void *pool[4];
     darksys_init(&sys, pool, 1, 4);
     CHECK("empty system: size 0", sys.size == 0);
