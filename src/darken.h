@@ -101,15 +101,6 @@ struct darken_entity
 #define DARKEN_LOOP _DARKEN_LOOP
 #define DARKEN_PAUSE _DARKEN_PAUSE
 
-#define DARKEN_STATE_IS_DELETED _DARKEN_STATE_IS_DELETED
-#define DARKEN_STATE_IS_LOOP _DARKEN_STATE_IS_LOOP
-#define DARKEN_STATE_IS_PAUSED _DARKEN_STATE_IS_PAUSED
-#define DARKEN_STATE_IS_ACTIVE _DARKEN_STATE_IS_ACTIVE
-
-#define DARKEN_ENTITY_IN_ACTIVE _DARKEN_ENTITY_IN_ACTIVE
-#define DARKEN_ENTITY_IN_PAUSED _DARKEN_ENTITY_IN_PAUSED
-#define DARKEN_ENTITY_IN_FREE _DARKEN_ENTITY_IN_FREE
-
 void darken_entity_run(darken_entity);
 void darken_entity_update(darken_entity);
 void darken_entity_pause(darken_entity);
