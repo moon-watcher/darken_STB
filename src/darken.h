@@ -62,7 +62,6 @@
 typedef void *(*darken_state)(void *);
 
 typedef struct darken_entity *darken_entity;
-typedef struct darken *darken_manager;
 typedef struct darken *darken;
 
 struct darken_entity
