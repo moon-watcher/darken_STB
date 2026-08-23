@@ -68,11 +68,18 @@ static void *test_destructor(void *data)
     return DARKEN_DELETE;
 }
 
-static void *state_inc(TestData *d)
+static void *state_inc2(TestData *d)
 {
     d->value++;
     d->updates++;
     return DARKEN_LOOP;
+}
+
+static void *state_inc(TestData *d)
+{
+    d->value++;
+    d->updates++;
+    return state_inc2;
 }
 
 static void *state_pause_after_1(void *data)
@@ -180,7 +187,7 @@ TEST(test_entity_update_loop)
     // CHECK(e->state == DARKEN_LOOP);
     CHECK(d->value == 1);
     CHECK(d->updates == 1);
-    CHECK(e->state == state_inc);
+    CHECK(e->state == state_inc2);
 }
 
 TEST(test_entity_update_pause_transition)
