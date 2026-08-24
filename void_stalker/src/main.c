@@ -1,16 +1,13 @@
 /* ============================================================================
- * DARKEN SHMUP for SEGA GENESIS — SGDK Version
- *
- * A complete vertical shoot 'em up using Darken 2.0 entity system.
- * All graphics generated from code — no external resources needed.
+ * DARKEN SECTOR — Shoot 'em up for SEGA GENESIS (SGDK)
  *
  * Compile with SGDK:
  *   %GDK_WIN%\bin\make -f %GDK_WIN%\makefile.gen
  *
  * Controls (Genesis pad):
- *   D-Pad         — Move ship
- *   A / B / C     — Shoot
- *   START         — Pause / Resume / Restart
+ *   D-Pad      — Move ship
+ *   A / B / C  — Shoot
+ *   START      — Pause / Resume / Restart (Game Over)
  * ============================================================================ */
 
 #define DARKEN_IMPLEMENTATION
@@ -18,7 +15,7 @@
 #include <genesis.h>
 
 /* ============================================================================
- * GAME CONSTANTS
+ * CONSTANTS
  * ============================================================================ */
 
 #define TILE_SIZE       8
@@ -28,7 +25,6 @@
 #define MAX_ENTITIES    128
 #define PAYLOAD_SIZE    32
 
-/* Entity tags */
 #define TAG_PLAYER          1
 #define TAG_PLAYER_BULLET   2
 #define TAG_ENEMY           3
@@ -38,12 +34,10 @@
 #define TAG_BOSS            7
 #define TAG_BOSS_SHIELD     8
 
-/* Power-up types */
 #define PWR_SPREAD      1
 #define PWR_BOMB        2
 #define PWR_SHIELD      3
 
-/* VRAM tile indices */
 #define TILE_EMPTY      0
 #define TILE_SHIP       1
 #define TILE_ENEMY0     2
@@ -58,7 +52,7 @@
 #define TILE_STAR       11
 
 /* ============================================================================
- * TILE GRAPHICS (8x8, 4bpp, 8 x u32)
+ * TILE GRAPHICS (8x8, 4bpp)
  * ============================================================================ */
 
 static const u32 GFX_SHIP[8] = {
@@ -117,7 +111,7 @@ static const u32 GFX_STAR[8] = {
 };
 
 /* ============================================================================
- * PALETTE (16 colors, PAL0)
+ * PALETTE
  * ============================================================================ */
 
 static const u16 PALETTE[16] = {
@@ -229,19 +223,19 @@ static const s16 SIN_TABLE[32] = {
  * FORWARD DECLARATIONS
  * ============================================================================ */
 
-static void *state_player_alive(void *data);
-static void *state_player_invulnerable(void *data);
-static void *state_player_dead(void *data);
-static void *state_bullet_fly(void *data);
-static void *state_enemy_sine(void *data);
-static void *state_enemy_straight(void *data);
-static void *state_enemy_shooter(void *data);
-static void *state_boss_shield(void *data);
-static void *state_boss_enter(void *data);
-static void *state_boss_attack(void *data);
-static void *state_boss_defeated(void *data);
-static void *state_powerup_fall(void *data);
-static void *state_particle_fade(void *data);
+static void *state_player_alive(ship_data *s);
+static void *state_player_invulnerable(ship_data *s);
+static void *state_player_dead(ship_data *s);
+static void *state_bullet_fly(bullet_data *b);
+static void *state_enemy_sine(enemy_data *e);
+static void *state_enemy_straight(enemy_data *e);
+static void *state_enemy_shooter(enemy_data *e);
+static void *state_boss_shield(enemy_data *e);
+static void *state_boss_enter(boss_data *b);
+static void *state_boss_attack(boss_data *b);
+static void *state_boss_defeated(boss_data *b);
+static void *state_powerup_fall(powerup_data *p);
+static void *state_particle_fade(particle_data *p);
 
 static void spawn_player_bullet(s16 x, s16 y, s16 vx, s16 vy);
 static void spawn_enemy_bullet(s16 x, s16 y, s16 vx, s16 vy);
@@ -250,7 +244,7 @@ static void spawn_boss(void);
 static void spawn_particle(s16 x, s16 y, u8 color);
 
 /* ============================================================================
- * VRAM / RENDERING HELPERS
+ * VRAM HELPERS
  * ============================================================================ */
 
 static inline s16 clamp_s16(s16 v, s16 lo, s16 hi)
@@ -287,9 +281,14 @@ static void setup_background(void)
     }
 }
 
-static void clear_plane_a(void)
+static void clear_game_area(void)
 {
-    VDP_clearTileMapRect(BG_A, 0, 2, SCREEN_W_T, GAME_H_T);
+    u16 y, x;
+    for (y = 2; y < SCREEN_H_T; ++y) {
+        for (x = 0; x < SCREEN_W_T; ++x) {
+            VDP_setTileMapXY(BG_A, TILE_ATTR_FULL(PAL0, 0, 0, 0, TILE_EMPTY), x, y);
+        }
+    }
 }
 
 static void draw_tile(s16 px, s16 py, u16 tile_idx)
@@ -305,9 +304,8 @@ static void draw_tile(s16 px, s16 py, u16 tile_idx)
  * DESTRUCTORS
  * ============================================================================ */
 
-static void destructor_enemy(void *data)
+static void destructor_enemy(enemy_data *ed)
 {
-    enemy_data *ed = (enemy_data *)data;
     if (pending_count < 8) {
         pending_x[pending_count] = ed->x;
         pending_y[pending_count] = ed->y;
@@ -316,22 +314,23 @@ static void destructor_enemy(void *data)
     G.score += 10;
 }
 
-static void destructor_boss(void *data)
+static void *destructor_boss(boss_data *b)
 {
-    (void)data;
+    (void)b;
     G.score += 100;
     G.shake = 20;
     G.boss_spawned = 0;
     G.wave_timer = 120;
+
+    return 0;
 }
 
 /* ============================================================================
  * ENTITY STATES
  * ============================================================================ */
 
-static void *state_player_alive(void *data)
+static void *state_player_alive(ship_data *s)
 {
-    ship_data *s = (ship_data *)data;
     u16 joy = JOY_readJoypad(JOY_1);
 
     s->vx = 0; s->vy = 0;
@@ -343,7 +342,6 @@ static void *state_player_alive(void *data)
     s->x = clamp_s16(s->x + s->vx, 8, 312);
     s->y = clamp_s16(s->y + s->vy, 16, 216);
 
-    /* Shoot */
     if ((joy & (BUTTON_A | BUTTON_B | BUTTON_C)) && s->inv_timer < 6) {
         if (s->power == 1) {
             spawn_player_bullet(s->x, s->y - 8, 0, -4);
@@ -358,15 +356,13 @@ static void *state_player_alive(void *data)
         s->inv_timer = 8;
     }
     if (s->inv_timer > 0) s->inv_timer--;
-
     if (s->shield_timer > 0) s->shield_timer--;
 
     return DARKEN_LOOP;
 }
 
-static void *state_player_invulnerable(void *data)
+static void *state_player_invulnerable(ship_data *s)
 {
-    ship_data *s = (ship_data *)data;
     s->x = clamp_s16(s->x + s->vx, 8, 312);
     s->y = clamp_s16(s->y + s->vy, 16, 216);
     if (--s->inv_timer == 0)
@@ -374,16 +370,15 @@ static void *state_player_invulnerable(void *data)
     return DARKEN_LOOP;
 }
 
-static void *state_player_dead(void *data)
+static void *state_player_dead(ship_data *s)
 {
-    (void)data;
+    (void)s;
     G.game_over = 1;
     return DARKEN_LOOP;
 }
 
-static void *state_bullet_fly(void *data)
+static void *state_bullet_fly(bullet_data *b)
 {
-    bullet_data *b = (bullet_data *)data;
     b->x += b->vx;
     b->y += b->vy;
     if (b->x < 0 || b->x >= 320 || b->y < 0 || b->y >= 224)
@@ -391,9 +386,8 @@ static void *state_bullet_fly(void *data)
     return DARKEN_LOOP;
 }
 
-static void *state_enemy_sine(void *data)
+static void *state_enemy_sine(enemy_data *e)
 {
-    enemy_data *e = (enemy_data *)data;
     e->t = (e->t + 1) & 31;
     e->x = e->origin_x + (SIN_TABLE[e->t] >> 3);
     e->y += 1;
@@ -402,18 +396,16 @@ static void *state_enemy_sine(void *data)
     return DARKEN_LOOP;
 }
 
-static void *state_enemy_straight(void *data)
+static void *state_enemy_straight(enemy_data *e)
 {
-    enemy_data *e = (enemy_data *)data;
     e->y += 2;
     if (e->y > 224)
         return DARKEN_DELETE;
     return DARKEN_LOOP;
 }
 
-static void *state_enemy_shooter(void *data)
+static void *state_enemy_shooter(enemy_data *e)
 {
-    enemy_data *e = (enemy_data *)data;
     e->y += 1;
     if (++e->shoot_timer > 50) {
         e->shoot_timer = 0;
@@ -435,24 +427,22 @@ static void *state_enemy_shooter(void *data)
     return DARKEN_LOOP;
 }
 
-static void *state_boss_shield(void *data)
+static void *state_boss_shield(enemy_data *e)
 {
-    (void)data;
+    (void)e;
     return DARKEN_LOOP;
 }
 
-static void *state_boss_enter(void *data)
+static void *state_boss_enter(boss_data *b)
 {
-    boss_data *b = (boss_data *)data;
     b->y += 1;
     if (b->y > 40)
         return state_boss_attack;
     return DARKEN_LOOP;
 }
 
-static void *state_boss_attack(void *data)
+static void *state_boss_attack(boss_data *b)
 {
-    boss_data *b = (boss_data *)data;
     b->t = (b->t + 1) & 31;
     b->x = 160 + (SIN_TABLE[b->t] >> 1);
 
@@ -479,9 +469,8 @@ static void *state_boss_attack(void *data)
     return DARKEN_LOOP;
 }
 
-static void *state_boss_defeated(void *data)
+static void *state_boss_defeated(boss_data *b)
 {
-    boss_data *b = (boss_data *)data;
     b->y += 2;
     if ((random() % 4) == 0) {
         spawn_particle(b->x + (random() % 20) - 10, b->y + (random() % 12) - 6, 1);
@@ -491,9 +480,8 @@ static void *state_boss_defeated(void *data)
     return DARKEN_LOOP;
 }
 
-static void *state_powerup_fall(void *data)
+static void *state_powerup_fall(powerup_data *p)
 {
-    powerup_data *p = (powerup_data *)data;
     p->y += p->vy;
     p->blink++;
     if (p->y > 224)
@@ -501,9 +489,8 @@ static void *state_powerup_fall(void *data)
     return DARKEN_LOOP;
 }
 
-static void *state_particle_fade(void *data)
+static void *state_particle_fade(particle_data *p)
 {
-    particle_data *p = (particle_data *)data;
     p->x += p->vx;
     p->y += p->vy;
     if (--p->life == 0)
@@ -548,7 +535,7 @@ static void spawn_enemy(u8 etype, s16 x, s16 y)
     ed->hp = (etype == 2) ? 3 : 1;
     ed->type = etype;
     ed->shoot_timer = 0;
-    e->destructor = (darken_state)destructor_enemy;
+    e->destructor = destructor_enemy;
     e->tag = TAG_ENEMY;
 
     switch (etype) {
@@ -596,7 +583,7 @@ static void spawn_boss(void)
     b->shield_left = 0;
     b->shield_right = 0;
     boss->state = state_boss_enter;
-    boss->destructor = (darken_state)destructor_boss;
+    boss->destructor = destructor_boss;
     boss->tag = TAG_BOSS;
 
     darken_entity sl = darken_spawn(&world);
@@ -751,8 +738,9 @@ static void update_wave(void)
         spawned++;
     } else {
         u8 alive = 0;
-        for (int i = 0; i < world.size; ++i)
-            if (world.pool[i]->tag == TAG_ENEMY) alive++;
+        DARKEN_FOREACH(&world, {
+            if (ENTITY->tag == TAG_ENEMY) alive++;
+        });
         if (alive == 0) {
             spawn_boss();
             spawned = 0;
@@ -793,10 +781,9 @@ static void render_hud(void)
 
 static void render_entities(void)
 {
-    s16 i;
     s16 ox = 0, oy = 0;
 
-    clear_plane_a();
+    clear_game_area();
 
     if (G.shake > 0) {
         G.shake--;
@@ -804,55 +791,53 @@ static void render_entities(void)
         oy = (random() % 5) - 2;
     }
 
-    for (i = 0; i < world.size; ++i) {
-        darken_entity e = world.pool[i];
-        switch (e->tag) {
+    DARKEN_FOREACH(&world, {
+        switch (ENTITY->tag) {
             case TAG_PLAYER: {
-                ship_data *s = (ship_data *)e->data;
+                ship_data *s = (ship_data *)ENTITY->data;
                 if (s->inv_timer > 0 && ((s->inv_timer >> 2) & 1)) break;
                 draw_tile(s->x + ox, s->y + oy, TILE_SHIP);
                 break;
             }
             case TAG_PLAYER_BULLET: {
-                bullet_data *b = (bullet_data *)e->data;
+                bullet_data *b = (bullet_data *)ENTITY->data;
                 draw_tile(b->x + ox, b->y + oy, TILE_BULLET_P);
                 break;
             }
             case TAG_ENEMY: {
-                enemy_data *ed = (enemy_data *)e->data;
+                enemy_data *ed = (enemy_data *)ENTITY->data;
                 u16 tile = (ed->type == 0) ? TILE_ENEMY0 : (ed->type == 1) ? TILE_ENEMY1 : TILE_ENEMY2;
                 draw_tile(ed->x + ox, ed->y + oy, tile);
                 break;
             }
             case TAG_ENEMY_BULLET: {
-                bullet_data *b = (bullet_data *)e->data;
+                bullet_data *b = (bullet_data *)ENTITY->data;
                 draw_tile(b->x + ox, b->y + oy, TILE_BULLET_E);
                 break;
             }
             case TAG_POWERUP: {
-                powerup_data *pwr = (powerup_data *)e->data;
+                powerup_data *pwr = (powerup_data *)ENTITY->data;
                 if ((pwr->blink >> 2) & 1)
                     draw_tile(pwr->x + ox, pwr->y + oy, TILE_POWERUP);
                 break;
             }
             case TAG_BOSS: {
-                boss_data *b = (boss_data *)e->data;
+                boss_data *b = (boss_data *)ENTITY->data;
                 draw_tile(b->x + ox, b->y + oy, TILE_BOSS);
                 break;
             }
             case TAG_BOSS_SHIELD: {
-                enemy_data *sed = (enemy_data *)e->data;
+                enemy_data *sed = (enemy_data *)ENTITY->data;
                 draw_tile(sed->x + ox, sed->y + oy, TILE_SHIELD);
                 break;
             }
         }
-    }
+    });
 
-    for (i = 0; i < fx_world.size; ++i) {
-        darken_entity e = fx_world.pool[i];
-        particle_data *p = (particle_data *)e->data;
+    DARKEN_FOREACH(&fx_world, {
+        particle_data *p = (particle_data *)ENTITY->data;
         draw_tile(p->x + ox, p->y + oy, TILE_PARTICLE);
-    }
+    });
 }
 
 /* ============================================================================
@@ -897,13 +882,13 @@ static void handle_input(void)
             } else {
                 G.paused = !G.paused;
                 if (G.paused) {
-                    s16 i;
-                    for (i = world.size - 1; i >= 0; --i) {
-                        if (world.pool[i] != player_entity)
-                            darken_entity_pause(world.pool[i]);
-                    }
-                    for (i = fx_world.size - 1; i >= 0; --i)
-                        darken_entity_pause(fx_world.pool[i]);
+                    DARKEN_FOREACH(&world, {
+                        if (ENTITY != player_entity)
+                            darken_entity_pause(ENTITY);
+                    });
+                    DARKEN_FOREACH(&fx_world, {
+                        darken_entity_pause(ENTITY);
+                    });
                 } else {
                     while (world.paused < world.capacity)
                         darken_entity_resume(world.pool[world.paused]);
@@ -923,13 +908,13 @@ int main(bool hardReset)
     (void)hardReset;
 
     VDP_setScreenWidth320();
-    VDP_setPlaneSize(64, 32, 3);
+    VDP_setPlaneSize(64, 32, TRUE);
     VDP_setScrollingMode(HSCROLL_PLANE, VSCROLL_PLANE);
 
     PAL_setColors(0, PALETTE, 16, CPU);
     load_tiles();
     setup_background();
-    VDP_clearTileMap(BG_A, 0, 1, 0);
+    VDP_clearPlane(BG_A, TRUE);
 
     darken_init(&world, DARKEN_ARGS(world_storage));
     darken_init(&fx_world, DARKEN_ARGS(fx_storage));
@@ -944,9 +929,8 @@ int main(bool hardReset)
             darken_update(&fx_world);
 
             {
-                u8 i;
+                u8 i, k;
                 for (i = 0; i < pending_count; ++i) {
-                    u8 k;
                     for (k = 0; k < 4; ++k)
                         spawn_particle(pending_x[i], pending_y[i], 1);
                 }
@@ -957,7 +941,7 @@ int main(bool hardReset)
             update_wave();
 
             G.scroll_y = (G.scroll_y + 1) & 0xFF;
-            VDP_setVerticalScrollTile(BG_B, 0, &G.scroll_y, 1, 0);
+            VDP_setVerticalScrollTile(BG_B, 0, &G.scroll_y, 1, CPU);
         }
 
         render_entities();
