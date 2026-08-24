@@ -314,15 +314,13 @@ static void destructor_enemy(enemy_data *ed)
     G.score += 10;
 }
 
-static void *destructor_boss(boss_data *b)
+static void destructor_boss(boss_data *b)
 {
     (void)b;
     G.score += 100;
     G.shake = 20;
     G.boss_spawned = 0;
     G.wave_timer = 120;
-
-    return 0;
 }
 
 /* ============================================================================
@@ -509,7 +507,7 @@ static void spawn_player_bullet(s16 x, s16 y, s16 vx, s16 vy)
     bullet_data *bul = (bullet_data *)b->data;
     bul->x = x; bul->y = y;
     bul->vx = vx; bul->vy = vy;
-    b->state = state_bullet_fly;
+    b->state = (darken_state)state_bullet_fly;
     b->tag = TAG_PLAYER_BULLET;
 }
 
@@ -520,7 +518,7 @@ static void spawn_enemy_bullet(s16 x, s16 y, s16 vx, s16 vy)
     bullet_data *bul = (bullet_data *)b->data;
     bul->x = x; bul->y = y;
     bul->vx = vx; bul->vy = vy;
-    b->state = state_bullet_fly;
+    b->state = (darken_state)state_bullet_fly;
     b->tag = TAG_ENEMY_BULLET;
 }
 
@@ -535,13 +533,13 @@ static void spawn_enemy(u8 etype, s16 x, s16 y)
     ed->hp = (etype == 2) ? 3 : 1;
     ed->type = etype;
     ed->shoot_timer = 0;
-    e->destructor = destructor_enemy;
+    e->destructor = (darken_state)destructor_enemy;
     e->tag = TAG_ENEMY;
 
     switch (etype) {
-        case 0: e->state = state_enemy_sine;     break;
-        case 1: e->state = state_enemy_straight; break;
-        case 2: e->state = state_enemy_shooter;  break;
+        case 0: e->state = (darken_state)state_enemy_sine;     break;
+        case 1: e->state = (darken_state)state_enemy_straight; break;
+        case 2: e->state = (darken_state)state_enemy_shooter;  break;
     }
 }
 
@@ -554,7 +552,7 @@ static void spawn_powerup(s16 x, s16 y)
     pwr->vy = 1;
     pwr->kind = 1 + (random() % 3);
     pwr->blink = 0;
-    e->state = state_powerup_fall;
+    e->state = (darken_state)state_powerup_fall;
     e->tag = TAG_POWERUP;
 }
 
@@ -568,7 +566,7 @@ static void spawn_particle(s16 x, s16 y, u8 color)
     pt->vy = (random() % 5) - 2;
     pt->life = 10 + (random() % 10);
     pt->color = color;
-    p->state = state_particle_fade;
+    p->state = (darken_state)state_particle_fade;
     p->tag = TAG_PARTICLE;
 }
 
@@ -582,8 +580,8 @@ static void spawn_boss(void)
     b->t = 0; b->timer = 0;
     b->shield_left = 0;
     b->shield_right = 0;
-    boss->state = state_boss_enter;
-    boss->destructor = destructor_boss;
+    boss->state = (darken_state)state_boss_enter;
+    boss->destructor = (darken_state)destructor_boss;
     boss->tag = TAG_BOSS;
 
     darken_entity sl = darken_spawn(&world);
@@ -591,7 +589,7 @@ static void spawn_boss(void)
         enemy_data *sed = (enemy_data *)sl->data;
         sed->x = b->x - 24; sed->y = b->y;
         sed->hp = 15;
-        sl->state = state_boss_shield;
+        sl->state = (darken_state)state_boss_shield;
         sl->tag = TAG_BOSS_SHIELD;
         b->shield_left = sl;
     }
@@ -600,7 +598,7 @@ static void spawn_boss(void)
         enemy_data *sed = (enemy_data *)sr->data;
         sed->x = b->x + 24; sed->y = b->y;
         sed->hp = 15;
-        sr->state = state_boss_shield;
+        sr->state = (darken_state)state_boss_shield;
         sr->tag = TAG_BOSS_SHIELD;
         b->shield_right = sr;
     }
@@ -706,9 +704,9 @@ static void check_collisions(void)
             if (e->tag == TAG_ENEMY_BULLET) darken_entity_delete(e);
 
             if (ps->hp <= 0) {
-                player_entity->state = state_player_dead;
+                player_entity->state = (darken_state)state_player_dead;
             } else {
-                player_entity->state = state_player_invulnerable;
+                player_entity->state = (darken_state)state_player_invulnerable;
             }
         }
     }
@@ -866,7 +864,7 @@ static void reset_game(void)
     s->bombs = 2;
     s->inv_timer = 0;
     s->shield_timer = 0;
-    player_entity->state = state_player_alive;
+    player_entity->state = (darken_state)state_player_alive;
     player_entity->tag = TAG_PLAYER;
 }
 
