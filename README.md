@@ -1,158 +1,170 @@
-# Darken 2.0 — Guía de uso para un RPG pequeño
+# Darken 2.0 — Guía de uso para un shoot 'em up
 
 > *Darken* es un gestor de entidades mínimo en C puro. No hay clases, no hay herencia, no hay `malloc` en caliente. Solo punteros a funciones, memoria contigua y tres zonas lógicas que hacen la magia.
 >
-> Esta guía te muestra cómo construir un RPG sencillo —con héroes, enemigos, pociones y menús de pausa— usando cada pieza del API público.
+> Esta guía te muestra cómo construir un shmup sencillo —con nave del jugador, enemigos en formación, ráfagas de balas y jefes de fin de oleada— usando cada pieza del API público.
 
 ---
 
 ## Tabla de contenidos
 
 1. [El mundo del juego](#1-el-mundo-del-juego)
-2. [Macros de control y estados](#2-macros-de-control-y-estados)
-3. [Macros de introspección](#3-macros-de-introspección)
-4. [Ciclo de vida de una entidad](#4-ciclo-de-vida-de-una-entidad)
-5. [El manager y el bucle principal](#5-el-manager-y-el-bucle-principal)
-6. [Características del motor](#6-características-del-motor)
-7. [Avisos y consejos de uso](#7-avisos-y-consejos-de-uso)
+2. [Paso a paso: de cero a gameplay](#2-paso-a-paso-de-cero-a-gameplay)
+3. [Macros de control y estados](#3-macros-de-control-y-estados)
+4. [Macros de introspección](#4-macros-de-introspección)
+5. [Ciclo de vida de una entidad](#5-ciclo-de-vida-de-una-entidad)
+6. [Iteración y renderizado](#6-iteración-y-renderizado)
+7. [Características del motor](#7-características-del-motor)
+8. [Avisos y consejos de uso](#8-avisos-y-consejos-de-uso)
 
 ---
 
-## El mundo del juego
+## 1. El mundo del juego
 
-Imagina un RPG clásico de vista cenital. Existen tres tipos de cosas en pantalla:
+Imagina un shmup vertical clásico. En pantalla conviven varios tipos de entidades:
 
-- **Héroe y enemigos**: se mueven, atacan, reciben daño. Son *entidades activas*.
-- **Cofres y puertas**: esperan a que el jugador interactúe. Cuando se abren, desaparecen o cambian de estado. Pueden *pausarse* si sales de la habitación.
-- **Menús y diálogos**: cuando abres el inventario, el mundo sige existiendo pero *no se actualiza*. Las entidades del mundo pasan a la zona de pausa.
+- **Nave del jugador**: se mueve con el stick, dispara, recoge power-ups. Siempre activa mientras haya vidas.
+- **Enemigos**: entran por los bordes, siguen trayectorias (línea recta, seno, espiral) y disparan. Son *entidades activas*.
+- **Balas**: del jugador y de los enemigos. Se spawnean a decenas por segundo y se autodestruyen al salir de pantalla o impactar. Vida muy corta.
+- **Power-ups**: quedan flotando tras destruir ciertos enemigos. Si el jugador no los recoge a tiempo, pueden *pausarse* al entrar en un menú de pausa o *borrarse* al cambiar de oleada.
+- **Jefe de fin de oleada**: una entidad compleja con múltiples fases. Puede *pausar* partes de su cuerpo (escudos) mientras ataca con otras.
+- **Partículas**: explosiones, chispas, humo. Entidades efímeras que nacen y mueren en pocos frames.
 
-Todas estas cosas son entidades gestionadas por un único `darken` manager.
+Todas estas cosas son entidades gestionadas por uno o varios managers `darken`.
 
-### La estructura de datos del jugador
+### Estructura de datos de la nave
 
-Cada entidad lleva un `data[]` flexible al final de su estructura. Para un personaje del RPG podría ser:
+Cada entidad lleva un `data[]` flexible al final de su estructura. Para la nave del jugador podría ser:
 
 ```c
-struct hero_data{
-    int16_t x, y;       // Posición en el mapa
-    int16_t hp, max_hp; // Vida
-    uint16_t atk, def;  // Estadísticas
-    uint8_t  facing;    // Dirección (0=N,1=E,2=S,3=O)
-    uint8_t  is_boss;   // 1 si es jefe final
+struct ship_data {
+    int16_t x, y;        // Posición en pantalla (fixed-point o píxeles)
+    int16_t vx, vy;      // Velocidad
+    int16_t hp;          // Escudo / vida
+    uint8_t power;       // Nivel de disparo (1 = simple, 4 = spread)
+    uint8_t inv_timer;   // Frames de invencibilidad post-golpe
+    uint8_t bombs;       // Bombas restantes
+};
+```
+
+Para una bala, el payload es mucho más ligero:
+
+```c
+struct bullet_data {
+    int16_t x, y;
+    int16_t vx, vy;
+    uint8_t owner;       // 0 = jugador, 1 = enemigo
+    uint8_t damage;
 };
 ```
 
 ---
-## Paso a paso
+
+## 2. Paso a paso: de cero a gameplay
 
 ### `DARKEN_STORAGE(nombre, capacidad, tamaño_payload)`
 
-Declara el almacenamiento.
+Declara el almacenamiento estático. Reserva el pool de punteros, el bloque de memoria para los datos de las entidades, y metadatos de capacidad. Todo en una sola estructura anónima, sin fragmentación ni `malloc`.
 
-Reserva la memoria en el stack o en el segmento de datos (según dónde declares la variable) sin fragmentación ni asignación dinámica de memoria.
- 
 ```c
-// Hasta 64 entidades cada una de 50 bytes tamaño.
-DARKEN_STORAGE(rpg_world, 64, 50);
+// Hasta 128 entidades, cada una con 32 bytes de payload.
+// En un shmup, 128 es suficiente para: 1 jugador + ~30 enemigos +
+// ~80 balas + partículas y power-ups.
+DARKEN_STORAGE(shmup_world, 128, 32);
 ```
 
 ### `DARKEN_ARGS(nombre)`
 
-Expande los argumentos que necesita `darken_init()` a partir de una variable creada con `DARKEN_STORAGE`.
+Expande los cuatro argumentos que necesita `darken_init()` a partir de una variable creada con `DARKEN_STORAGE`.
 
 ```c
-DARKEN_ARGS(rpg_world);
+darken_init(&world, DARKEN_ARGS(shmup_world));
+// Equivalente a:
+// darken_init(&world, shmup_world.pool, shmup_world.data, 128, 32);
 ```
 
 ### `darken_init(manager, pool, storage, capacidad, bytes_payload)`
 
-Inicializa el manager. Se llama una sola vez.
-
-Particiona el bloque de memoria en entidades contiguas, rellena el pool de punteros y deja todo listo para `darken_spawn()`.
+Inicializa el manager. Particiona el bloque de memoria en entidades contiguas, rellena el pool de punteros y deja todo listo para `darken_spawn()`. Se llama una sola vez al arrancar el juego.
 
 ```c
 darken world;
+DARKEN_STORAGE(shmup_world, 128, 32);
 
-/**
- * Equivalente a:
- * darken_init(&world, rpg_world.pool, rpg_world.data, 64, 32);
- */
-darken_init(&world, DARKEN_ARGS(rpg_world));
+darken_init(&world, DARKEN_ARGS(shmup_world));
 ```
 
 ### `darken_spawn(manager)`
 
-Devuelve una entidad libre del pool.
+Devuelve una entidad libre del pool. A partir de aquí, tú decides qué es: una nave, una bala, una explosión.
 
 ```c
-darken_entity hero = darken_spawn(world);
+darken_entity player = darken_spawn(&world);
 ```
-
-<!-- A partir de aquí, tú decides qué es: un ```hero```, una poción, una partícula de sangre. -->
 
 ### `DARKEN_DATA(Tipo, variable, entidad)`
 
-Declara un puntero local al *payload* de una entidad, ya casteado al tipo que necesitas.
-
-Hace el código legible y evita errores de tipeo.
+Declara un puntero local al *payload* de una entidad, ya casteado al tipo que necesitas. Evita errores de tipeo y hace el código legible.
 
 ```c
-/**
- * Equivalente a:
- * struct hero_data *h = (struct hero_data *) entity->data;
- */ 
-DARKEN_DATA(struct hero_data, h, entity);
+DARKEN_DATA(struct ship_data, ship, player);
+
+ship->x = 120;   // Centro de pantalla (240px de ancho)
+ship->y = 200;
+ship->hp = 3;
+ship->power = 1;
+ship->bombs = 2;
+
+player->state = state_player_alive;
+player->destructor = destructor_player;
+player->tag = TAG_PLAYER;
+player->usr = 0;   // Usaremos esto como temporizador de parpadeo post-golpe
 ```
 
 ### `darken_update(manager)`
 
-Recorre las entidades activas de atrás hacia adelante, ejecuta sus estados, y aplica transiciones (borrado, pausa, cambio de estado).
+Recorre las entidades activas de atrás hacia adelante, ejecuta sus callbacks `state`, y aplica transiciones (borrado, pausa, cambio de estado). Este es el núcleo del bucle de juego.
 
 ```c
 while (game_running) {
     read_input();
-    darken_update(&world); // Actualiza todas las entidades
+    darken_update(&world);   // Toda la IA, física y lógica ocurre aquí
     render_frame();
     vsync_wait();
 }
 ```
+
+El orden inverso es intencional: si una entidad se borra o pausa durante su update, el swap no afecta a las entidades que aún no han sido procesadas este frame.
 
 ### `darken_reset(manager)`
 
-Borra las entidades activas, ejecutando sus destructores, y devuelve el manager a su estado inicial.
+Borra todas las entidades activas, ejecutando sus destructores, y devuelve el manager a su estado inicial. Útil al cambiar de oleada o tras un Game Over.
 
 ```c
+// El jugador pierde todas las vidas. Limpiamos el mundo para la pantalla de título.
 darken_reset(&world);
 ```
 
+### Ejemplo completo de setup
 
-
-
-
-
-
-**Uso en el RPG:**
 ```c
-DARKEN_STORAGE(rpg_world, 64, 50);
+DARKEN_STORAGE(shmup_world, 128, 32);
 
 darken world;
-darken_init(&world, DARKEN_ARGS(rpg_world));
+darken_init(&world, DARKEN_ARGS(shmup_world));
 
-darken_entity hero = darken_spawn(world);
-DARKEN_DATA(struct hero_data, hero, entity);
+darken_entity player = darken_spawn(&world);
+DARKEN_DATA(struct ship_data, ship, player);
 
-hero_data->x = x;
-hero_data->y = y;
-hero_data->hp = 20;
+ship->x = 120; ship->y = 200;
+ship->hp = 3; ship->power = 1;
 
-hero->state = state_slime_idle;
-hero->destructor = destructor_slime;  // Libera recursos gráficos si hace falta
-hero->tag = TAG_ENEMY;                // Para colisiones y filtros
-hero->usr = 0;                        // Lo usaremos como contador de frames de invencibilidad
+player->state = state_player_alive;
+player->tag = TAG_PLAYER;
 
 while (game_running) {
     read_input();
-    darken_update(&world); // Actualiza todas las entidades
+    darken_update(&world);
     render_frame();
     vsync_wait();
 }
@@ -160,41 +172,31 @@ while (game_running) {
 darken_reset(&world);
 ```
 
-
-
 ---
 
-
-
-
-
-///////////////////////////////////////
-
----
-
-
-
-## Macros de control y estados
-
-
----
+## 3. Macros de control y estados
 
 ### `DARKEN_LOOP`
 
 Devuélvelo desde tu callback de estado para indicar: *"este frame no ha pasado nada especial, repite el mismo estado el próximo frame"*.
 
-**Uso en el RPG:**
+**Uso en el shmup:**
 ```c
-void *state_enemy_patrol(void *data) {
-    DARKEN_DATA(enemy_data, e, entity);
-    e->x += patrol_speed[e->facing];
+void *state_enemy_sine(void *data) {
+    DARKEN_DATA(struct enemy_data, e, entity);
 
-    // El enemigo sigue patrullando...
-    return DARKEN_LOOP;
+    e->x = e->origin_x + (int16_t)(sin(e->t * 0.05f) * 60);
+    e->y += e->speed;
+    e->t++;
+
+    if (e->y > SCREEN_H + 16)
+        return DARKEN_DELETE;   // Se fue por abajo
+
+    return DARKEN_LOOP;         // Sigue oscilando
 }
 ```
 
-Es el valor por defecto para la mayoría de estados: caminar, esperar, animar.
+Es el valor por defecto para la mayoría de estados: volar, caer, animar, perseguir.
 
 ---
 
@@ -202,22 +204,23 @@ Es el valor por defecto para la mayoría de estados: caminar, esperar, animar.
 
 Devuélvelo cuando la entidad debe desaparecer del mundo. El manager la moverá a la zona libre y, si tiene `destructor` asignado, lo ejecutará antes.
 
-**Uso en el RPG:**
+**Uso en el shmup:**
 ```c
-void *state_potion_effect(void *data) {
-    DARKEN_DATA(potion_data, p, entity);
+void *state_bullet_fly(void *data) {
+    DARKEN_DATA(struct bullet_data, b, entity);
 
-    p->timer--;
-    if (p->timer == 0) {
-        spawn_heal_particles(p->x, p->y);
-        return DARKEN_DELETE;   // La poción se consume y desaparece
-    }
+    b->x += b->vx;
+    b->y += b->vy;
+
+    // Fuera de pantalla o impacto confirmado por el sistema de colisiones
+    if (b->y < -8 || b->y > SCREEN_H + 8 || b->x < -8 || b->x > SCREEN_W + 8)
+        return DARKEN_DELETE;
 
     return DARKEN_LOOP;
 }
 ```
 
-Útil para: proyectiles que impactan, enemigos que mueren, objetos consumibles, partículas que terminan su vida.
+Útil para: balas que salen de pantalla, enemigos destruidos, power-ups que expiran, partículas que terminan su animación.
 
 ---
 
@@ -225,25 +228,31 @@ void *state_potion_effect(void *data) {
 
 Devuélvelo para sacar la entidad del bucle de actualización sin destruirla. La entidad pasa a la zona pausada y deja de consumir CPU.
 
-**Uso en el RPG:**
+**Uso en el shmup:**
 ```c
-void *state_chest_opening(void *data) {
-    DARKEN_DATA(chest_data, c, entity);
+void *state_powerup_float(void *data) {
+    DARKEN_DATA(struct powerup_data, p, entity);
 
-    if (c->open_animation_done) {
-        give_loot_to_player(c->contents);
-        return DARKEN_PAUSE;   // El cofre sigue en el mapa, pero ya no hace nada
-    }
+    p->y += 1;   // Cae lentamente
+    p->blink++;
+
+    if (p->y > SCREEN_H + 8)
+        return DARKEN_DELETE;   // Se perdió
+
+    // Si el jugador abre el menú de pausa, el juego pausará esta entidad
+    // desde fuera. Pero también puede pausarse a sí misma en ciertos casos:
+    if (boss_intro_is_playing)
+        return DARKEN_PAUSE;   // Congela el power-up durante la intro del jefe
 
     return DARKEN_LOOP;
 }
 ```
 
-También es la clave para el **sistema de menús**: cuando abres el inventario, pausas todas las entidades del mundo y solo dejas activas las del menú.
+También es la clave para el **menú de pausa**: congelas todas las entidades del mundo y solo dejas activas las del HUD de pausa.
 
 ---
 
-## Macros de introspección
+## 4. Macros de introspección
 
 Estas macros te permiten preguntarle al sistema cómo está una entidad o un estado, sin acceder a campos privados.
 
@@ -251,15 +260,19 @@ Estas macros te permiten preguntarle al sistema cómo está una entidad o un est
 
 Devuelve verdadero si el estado es un puntero a función real (es decir, la entidad está viva y procesándose).
 
-**Uso en el RPG:**
+**Uso en el shmup:**
 ```c
-void *state_boss_phase_transition(void *data) {
-    // El jefe cambia de fase. Verificamos que el estado anterior era activo
-    // antes de tocar estadísticas que podrían estar medio borradas.
-    if (DARKEN_STATE_IS_ACTIVE(previous_state)) {
-        boost_boss_stats();
+void *state_boss_core(void *data) {
+    DARKEN_DATA(struct boss_data, boss, entity);
+
+    // El núcleo solo ataca si sus escudos (entidades separadas) siguen activos.
+    // Si los escudos fueron destruidos, el jefe entra en fase de furia.
+    if (!DARKEN_STATE_IS_ACTIVE(boss->shield_left->state) &&
+        !DARKEN_STATE_IS_ACTIVE(boss->shield_right->state)) {
+        return state_boss_frenzy;
     }
-    return state_boss_enraged;
+
+    return DARKEN_LOOP;
 }
 ```
 
@@ -269,18 +282,20 @@ void *state_boss_phase_transition(void *data) {
 
 Te dicen si un puntero de estado vale `DARKEN_LOOP`, `DARKEN_PAUSE` o `DARKEN_DELETE`.
 
-**Uso en el RPG:**
+**Uso en el shmup:**
 ```c
-void *state_trap_triggered(void *data) {
-    DARKEN_DATA(trap_data, t, entity);
+void *state_homing_missile(void *data) {
+    DARKEN_DATA(struct missile_data, m, entity);
 
-    // Si el héroe ya ha sido marcado para borrar este frame (por ejemplo,
-    // cayó al vacío justo antes), no aplicamos daño adicional.
-    if (DARKEN_STATE_IS_DELETED(hero_entity->state))
-        return DARKEN_LOOP;
+    // Si el objetivo ya fue marcado para borrar este frame (destruido por
+    // otra bala justo antes), el misil pierde el lock y vuela recto.
+    if (DARKEN_STATE_IS_DELETED(m->target->state)) {
+        m->target = NULL;
+        return state_missile_dumb;   // Vuela en línea recta
+    }
 
-    apply_damage(hero_entity, t->damage);
-    return DARKEN_PAUSE;  // La trampa se desactiva tras un solo uso
+    steer_towards(m, m->target);
+    return DARKEN_LOOP;
 }
 ```
 
@@ -290,15 +305,17 @@ void *state_trap_triggered(void *data) {
 
 Te dicen en qué zona del pool vive una entidad en este momento.
 
-**Uso en el RPG:**
+**Uso en el shmup:**
 ```c
-void *state_magic_mirror(void *data) {
-    DARKEN_DATA(mirror_data, m, entity);
+void *state_formation_leader(void *data) {
+    DARKEN_DATA(struct enemy_data, leader, entity);
 
-    // El espejo mágico solo funciona si el reflejo (otra entidad)
-    // sigue activo en el mundo. Si está pausado o libre, no hay reflejo.
-    if (DARKEN_ENTITY_IN_ACTIVE(m->reflection)) {
-        sync_position_with_reflection(m);
+    // Soy el líder de una formación de 5 naves. Si algún aliado fue
+    // destruido, reajusto la formación para cerrar el hueco.
+    for (int i = 0; i < 4; ++i) {
+        if (!DARKEN_ENTITY_IN_USED(leader->wingmen[i])) {
+            leader->wingmen[i] = leader->wingmen[--leader->wingmen_count];
+        }
     }
 
     return DARKEN_LOOP;
@@ -311,20 +328,29 @@ void *state_magic_mirror(void *data) {
 
 ---
 
-## Ciclo de vida de una entidad
+## 5. Ciclo de vida de una entidad
 
 ### `darken_entity_run(entity)`
 
 Ejecuta el callback `state` de la entidad **una sola vez**, de forma inmediata. No espera al `darken_update()` del manager.
 
-**Uso en el RPG:**
+**Uso en el shmup:**
 ```c
-// El jugador pulsa el botón de atacar. Queremos que el ataque se resuelva
+// El jugador pulsa el botón de disparo. Queremos que la bala nazca
 // AHORA, no en el próximo frame del manager.
-darken_entity_run(hero_entity);
+if (input_pressed(BUTTON_A)) {
+    darken_entity bullet = darken_spawn(&world);
+    DARKEN_DATA(struct bullet_data, b, bullet);
+    b->x = player_x; b->y = player_y - 8;
+    b->vy = -4;
+    bullet->state = state_bullet_fly;
+    bullet->tag = TAG_PLAYER_BULLET;
+
+    darken_entity_run(bullet);   // Avanza un frame de inmediato
+}
 ```
 
-Ideal para eventos síncronos: pulsar un botón, recibir un comando de red, activar un quick-time event.
+Ideal para eventos síncronos: pulsar un botón, recibir un comando de red, activar una bomba.
 
 ---
 
@@ -332,12 +358,17 @@ Ideal para eventos síncronos: pulsar un botón, recibir un comando de red, acti
 
 Fuerza la actualización de una entidad concreta, aplicando la misma lógica que `darken_update()` haría si la encontrara en la zona activa.
 
-**Uso en el RPG:**
+**Uso en el shmup:**
 ```c
-// En un combate por turnos, solo el combatiente activo actúa.
-// Las demás entidades enemigas esperan sin ejecutar su IA.
-if (current_turn == ENEMY_TURN) {
-    darken_entity_update(active_enemy);
+// En un modo de juego a cámara lenta (bullet time), solo el jugador
+// y sus balas se actualizan a velocidad normal. El resto del mundo
+// va a mitad de velocidad.
+if (bullet_time_active) {
+    darken_entity_update(player);
+    DARKEN_FOREACH(&world, {
+        if (ENTITY->tag == TAG_PLAYER_BULLET)
+            darken_entity_update(ENTITY);
+    });
 }
 ```
 
@@ -349,17 +380,15 @@ Te permite tener granularidad sobre quién se actualiza sin romper la arquitectu
 
 Mueve una entidad activa a la zona de pausada. Deja de ser visitada por `DARKEN_FOREACH` y por `darken_update()`.
 
-**Uso en el RPG:**
+**Uso en el shmup:**
 ```c
-// Al entrar en una tienda, congelamos al héroe y a todos los enemigos.
-// El mundo sigue existiendo, pero no se mueve.
-void enter_shop(void) {
-    darken_entity_pause(hero_entity);
-    DARKEN_FOREACH(&world_manager, {
-        if (ENTITY != hero_entity)
-            darken_entity_pause(ENTITY);
+// El jugador pulsa START. Congelamos todo el mundo.
+void enter_pause(void) {
+    darken_entity_pause(player);
+    DARKEN_FOREACH(&world, {
+        darken_entity_pause(ENTITY);
     });
-    spawn_shop_ui();
+    spawn_pause_menu();
 }
 ```
 
@@ -369,19 +398,20 @@ void enter_shop(void) {
 
 Saca una entidad de la zona pausada y la devuelve a la zona activa, justo al final del array de activas.
 
-**Uso en el RPG:**
+**Uso en el shmup:**
 ```c
-// Al salir de la tienda, reactivamos todo.
-void exit_shop(void) {
-    darken_entity_resume(hero_entity);
-    DARKEN_FOREACH(&world_manager, {
-        // Nota: este foreach solo ve activas, así que necesitamos
-        // otro mecanismo o un array auxiliar para las pausadas.
-    });
+// El jugador pulsa START de nuevo. Descongelamos todo.
+void exit_pause(void) {
+    // Nota: DARKEN_FOREACH solo ve activas, así que necesitamos
+    // otro mecanismo para iterar las pausadas. Una opción es
+    // mantener un array auxiliar de entidades pausadas.
+    for (int i = world.paused; i < world.capacity; ++i) {
+        darken_entity_resume(world.pool[i]);
+    }
 }
 ```
 
-También sirve para **spawnear entidades ya pausadas** y activarlas más tarde: creas un cofre sellado pausado, y cuando el jugador consigue la llave, haces `darken_entity_resume(chest_entity)`.
+También sirve para **spawnear entidades ya pausadas** y activarlas más tarde: creas una oleada de enemigos pausados fuera de pantalla, y cuando el jugador llega al trigger, haces `darken_entity_resume(enemy)` para cada uno.
 
 ---
 
@@ -389,68 +419,89 @@ También sirve para **spawnear entidades ya pausadas** y activarlas más tarde: 
 
 Borra una entidad inmediatamente, ejecutando su destructor si lo tiene.
 
-**Uso en el RPG:**
+**Uso en el shmup:**
 ```c
-// El jugador usa un hechizo de disipación sobre un enemigo invocado.
-// El enemigo muere al instante, sin esperar al próximo darken_update().
-void cast_banish(darken_entity target) {
-    play_sfx(SFX_BANISH);
-    darken_entity_delete(target);
+// El jugador usa una bomba. Todos los proyectiles enemigos en
+// pantalla se destruyen al instante.
+void use_bomb(void) {
+    play_sfx(SFX_BOMB);
+    screen_flash(3);
+
+    DARKEN_FOREACH(&world, {
+        if (ENTITY->tag == TAG_ENEMY_BULLET) {
+            spawn_particle_explosion(ENTITY);   // Efecto visual
+            darken_entity_delete(ENTITY);       // Muere ahora, no al final del frame
+        }
+    });
 }
 ```
 
-Útil cuando necesitas feedback inmediato: destrucción de muros por explosiones, eliminación de items del suelo al recogerlos, etc.
+Útil cuando necesitas feedback inmediato: destrucción masiva por bomba, colisión jugador-enemigo, recoger un power-up.
 
 ---
 
-
-
+## 6. Iteración y renderizado
 
 ### `DARKEN_FOREACH(manager, código)`
 
 Itera sobre todas las entidades activas. Define la variable `ENTITY` automáticamente.
 
-**Uso en el RPG:**
+**Uso en el shmup:**
 ```c
-// Detectar colisiones entre el héroe y todos los enemigos
+// Sistema de colisiones: balas del jugador contra enemigos
 DARKEN_FOREACH(&world, {
-    DARKEN_DATA(struct hero_data, h, ENTITY);
+    if (ENTITY->tag != TAG_PLAYER_BULLET) continue;
 
-    if (h->tag == TAG_ENEMY && rects_overlap(hero_rect, enemy_rect(ENTITY))) {
-        apply_damage(hero_entity, h->atk);
-    }
+    DARKEN_DATA(struct bullet_data, b, ENTITY);
+    rect_t bullet_rect = {b->x - 2, b->y - 2, 4, 4};
+
+    DARKEN_FOREACH(&world, {   // Bucle anidado: buscamos enemigos
+        if (INNER_ENTITY->tag != TAG_ENEMY) continue;
+
+        DARKEN_DATA(struct enemy_data, e, INNER_ENTITY);
+        if (rects_overlap(bullet_rect, enemy_rect(e))) {
+            e->hp -= b->damage;
+            darken_entity_delete(ENTITY);   // Borra la bala
+
+            if (e->hp <= 0) {
+                spawn_explosion(e->x, e->y);
+                darken_entity_delete(INNER_ENTITY);   // Borra el enemigo
+            }
+            break;   // Una bala no atraviesa (a menos que sea piercing)
+        }
+    });
 });
 ```
 
 Otro ejemplo: dibujar todas las entidades en orden:
 ```c
 DARKEN_FOREACH(&world, {
-    DARKEN_DATA(sprite_data, spr, ENTITY);
+    DARKEN_DATA(struct sprite_data, spr, ENTITY);
     draw_sprite(spr->gfx_id, spr->x, spr->y);
 });
 ```
 
-Como itera hacia atrás, si dibujas en ese orden las entidades creadas después se pintan encima (útil para capas de efectos sobre personajes).
+Como itera hacia atrás, las entidades creadas más recientemente se procesan primero. En un shmup esto es útil para el *z-ordering*: si spawneas primero el fondo estrellado, luego las naves, después las balas y al final las partículas, el `FOREACH` las dibujará en el orden inverso (partículas encima de balas, balas encima de naves).
 
 ---
 
-## Características del motor
+## 7. Características del motor
 
-| Característica                            | Qué significa para tu RPG                                                                                                                                                                                                        |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Sin asignación dinámica**               | Todo el memoria se reserva al inicio. Nunca hay pausas por `malloc` en medio del combate. Ideal para consolas retro o sistemas embebidos.                                                                                        |
-| **Punteros estables a datos**             | Una vez spawneas una entidad, su dirección `entity->data` nunca cambia. Puedes guardar punteros cruzados entre entidades (un hechizo que sigue a su objetivo, un jefe que referencia a sus esbirros) sin miedo a invalidaciones. |
-| **O(1) en spawn, delete, pause y resume** | Spawneas 50 partículas de una explosión, borras 20 enemigos y pausas el mundo para abrir un menú: todo es constante, sin bucles de búsqueda.                                                                                     |
-| **Máquina de estados por callbacks**      | Cada entidad define su comportamiento como una cadena de funciones. Un enemigo puede pasar de `patrol → chase → attack → hurt → die` simplemente retornando el siguiente estado.                                                 |
-| **Tres zonas lógicas**                    | Activas, libres y pausadas conviven en el mismo array. Pausar el mundo para un menú es tan barato como mover punteros.                                                                                                           |
-| **Alineación a 4 bytes**                  | Pensado para arquitecturas donde el acceso desalineado es costoso o ilegal (Motorola 68000, algunos ARM). Los payloads se redondean automáticamente.                                                                             |
-| **Destructor por entidad**                | Cada entidad puede llevar su propia función de limpieza. Un enemigo libera su sprite, una partícula libera su sonido, un cofre guarda su estado en el disco.                                                                     |
-| **Iteración inversa segura**              | `darken_update` y `DARKEN_FOREACH` recorren de atrás adelante. Puedes borrar o pausar entidades durante la iteración sin corromper el bucle.                                                                                     |
-| **Header-only**                           | `#define DARKEN_IMPLEMENTATION` en un solo archivo `.c`. Sin bibliotecas externas, sin CMake, sin dependencias.                                                                                                                  |
+| Característica                            | Qué significa para tu shmup                                                                                                                                                                                                   |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Sin asignación dinámica**               | Todo el memoria se reserva al inicio. Nunca hay pausas por `malloc` en medio de una oleada con 80 balas en pantalla. Ideal para consolas retro o sistemas embebidos.                                                          |
+| **Punteros estables a datos**             | Una vez spawneas una entidad, su dirección `entity->data` nunca cambia. Puedes guardar punteros cruzados entre entidades (un misil que sigue a su objetivo, un jefe que referencia a sus escudos) sin miedo a invalidaciones. |
+| **O(1) en spawn, delete, pause y resume** | Spawneas 30 balas de un spread shot, borras 20 enemigos y pausas el mundo para un menú: todo es constante, sin bucles de búsqueda.                                                                                            |
+| **Máquina de estados por callbacks**      | Cada entidad define su comportamiento como una cadena de funciones. Un enemigo puede pasar de `enter → attack → hurt → explode → delete` simplemente retornando el siguiente estado.                                          |
+| **Tres zonas lógicas**                    | Activas, libres y pausadas conviven en el mismo array. Pausar el mundo para un menú de pausa es tan barato como mover punteros.                                                                                               |
+| **Alineación a 4 bytes**                  | Pensado para arquitecturas donde el acceso desalineado es costoso o ilegal (Motorola 68000, algunos ARM). Los payloads se redondean automáticamente.                                                                          |
+| **Destructor por entidad**                | Cada entidad puede llevar su propia función de limpieza. Un enemigo libera su sprite, una bala libera su sonido, una explosión guarda su puntuación en el disco.                                                              |
+| **Iteración inversa segura**              | `darken_update` y `DARKEN_FOREACH` recorren de atrás adelante. Puedes borrar o pausar entidades durante la iteración sin corromper el bucle.                                                                                  |
+| **Header-only**                           | `#define DARKEN_IMPLEMENTATION` en un solo archivo `.c`. Sin bibliotecas externas, sin CMake, sin dependencias.                                                                                                               |
 
 ---
 
-## Avisos y consejos de uso
+## 8. Avisos y consejos de uso
 
 ### Sobre el diseño de estados
 
@@ -459,11 +510,11 @@ Cada callback de estado recibe `void *data` y devuelve `void *`. Ese valor de re
 **Consejo:** Diseña tus estados como si fueran *frames de una animación*. Cada llamada avanza un tick. Si necesitas un temporizador, guárdalo en `entity->usr` o en tu payload.
 
 ```c
-void *state_enemy_stunned(void *data) {
-    DARKEN_DATA(enemy_data, e, entity);
+void *state_enemy_flash(void *data) {
+    DARKEN_DATA(struct enemy_data, e, entity);
     if (--entity->usr == 0)
-        return state_enemy_recover;   // Se acabó el aturdimiento
-    return DARKEN_LOOP;               // Sigue aturdido
+        return state_enemy_recover;   // Se acabó el frame de invencibilidad
+    return DARKEN_LOOP;               // Sigue parpadeando
 }
 ```
 
@@ -473,8 +524,10 @@ void *state_enemy_stunned(void *data) {
 
 Son dos campos públicos que Darken no toca. Úsalos para lo que necesites:
 
-- **`tag` (32 bits):** Identificador de tipo. Define constantes como `TAG_HERO`, `TAG_ENEMY`, `TAG_ITEM`. Te permite filtrar entidades en un `DARKEN_FOREACH` sin mirar el payload.
+- **`tag` (32 bits):** Identificador de tipo. Define constantes como `TAG_PLAYER`, `TAG_ENEMY`, `TAG_PLAYER_BULLET`, `TAG_ENEMY_BULLET`, `TAG_POWERUP`. Te permite filtrar entidades en un `DARKEN_FOREACH` sin mirar el payload.
 - **`usr` (16 bits):** Variable de uso general. Temporizadores, contadores de frames, índices de animación, flags de estado. Es parte de la entidad, no del payload, así que sobrevive aunque cambies el tipo de datos.
+
+En un shmup, `tag` es especialmente útil para el sistema de colisiones: puedes descartar rápidamente entidades que no participan en una colisión concreta.
 
 ---
 
@@ -482,12 +535,12 @@ Son dos campos públicos que Darken no toca. Úsalos para lo que necesites:
 
 `entity->destructor` solo se ejecuta si es un puntero a función válido. Si no necesitas limpieza especial, déjalo a `NULL` (o a `0`).
 
-**Consejo:** Si tu entidad reservó recursos externos (un canal de audio, un sprite en VRAM, una entrada en una tabla de colisiones), el destructor es el lugar correcto para liberarlos. No lo hagas dentro del estado de borrado, porque `darken_entity_delete()` también invoca el destructor.
+**Consejo:** Si tu entidad reservó recursos externos (un canal de audio, un sprite en VRAM, una entrada en una tabla de colisiones espacial), el destructor es el lugar correcto para liberarlos. No lo hagas dentro del estado de borrado, porque `darken_entity_delete()` también invoca el destructor.
 
 ```c
 void destructor_explosion(void *data) {
-    DARKEN_DATA(explosion_data, ex, entity);
-    free_audio_channel(ex->channel);  // O devolverlo a un pool tuyo
+    DARKEN_DATA(struct particle_data, p, entity);
+    return_vram_sprite(p->gfx_slot);   // Devuelve el slot gráfico a tu pool
 }
 ```
 
@@ -495,24 +548,24 @@ void destructor_explosion(void *data) {
 
 ### Sobre pausar y reanudar
 
-Cuando pausas una entidad, su puntero `data` sigue siendo válido. Esto es poderoso: puedes seguir leyendo sus coordenadas para dibujar el mapa congelado, o consultar su vida mientras eliges un objetivo para un hechizo en el menú de pausa.
+Cuando pausas una entidad, su puntero `data` sigue siendo válido. Esto es poderoso: puedes seguir leyendo sus coordenadas para dibujar el mundo congelado detrás del menú de pausa.
 
-**Consejo:** No pauses entidades que estén en medio de una transición crítica. Si un enemigo pausa justo cuando ha iniciado un ataque pero antes de aplicar daño, al reanudar continuará desde ese punto exacto. A veces eso es lo que quieres; otras veces, querrás resetear su estado al reanudar.
+**Consejo:** No pauses entidades que estén en medio de una transición crítica. Si una bala enemigo pausa justo cuando ha iniciado su animación de spawn pero antes de volverse dañina, al reanudar continuará desde ese punto exacto. A veces eso es lo que quieres; otras veces, querrás resetear su estado al reanudar.
 
 ---
 
 ### Sobre el tamaño del payload
 
-`DARKEN_STORAGE` fija el tamaño de `data[]` para **todas** las entidades del manager. Si tu RPG tiene entidades muy dispares (un héroe con 32 bytes de stats y una partícula con solo 4 bytes de posición), tienes dos opciones:
+`DARKEN_STORAGE` fija el tamaño de `data[]` para **todas** las entidades del manager. Si tu shmup tiene entidades muy dispares (un jefe con 48 bytes de estado interno y una bala con solo 8 bytes de posición/velocidad), tienes dos opciones:
 
 1. **Usar un payload único grande** que contenga un `union` de todos los tipos.
-2. **Usar múltiples managers**: uno para el mundo (payload grande) y otro para efectos visuales (payload pequeño).
+2. **Usar múltiples managers**: uno para el mundo (naves, jefes, power-ups) y otro para efectos de partículas (payload pequeño).
 
-La segunda opción es más eficiente en memoria caché y permite iterar solo sobre lo que necesitas.
+La segunda opción es más eficiente en memoria caché y permite iterar solo sobre lo que necesitas. En un shmup con muchas partículas, un manager dedicado para ellas mejora el rendimiento.
 
 ```c
-DARKEN_STORAGE(world_entities, 32, sizeof(struct hero_data));
-DARKEN_STORAGE(fx_entities, 128, sizeof(particle_data));
+DARKEN_STORAGE(game_entities, 64, sizeof(struct ship_data));
+DARKEN_STORAGE(fx_entities, 256, sizeof(struct particle_data));
 ```
 
 ---
@@ -532,13 +585,15 @@ e->usr = 0;
 // Luego inicializa tu payload...
 ```
 
+En un shmup donde spawneas decenas de balas por segundo, olvidar inicializar `vx` o `damage` provoca comportamientos erráticos difíciles de debuggear.
+
 ---
 
 ### Sobre `darken_reset`
 
-`darken_reset` ejecuta los destructores de todas las entidades activas y devuelve el manager a cero. Es la forma correcta de cambiar de nivel, de escena o de reiniciar tras un Game Over.
+`darken_reset` ejecuta los destructores de todas las entidades activas y devuelve el manager a cero. Es la forma correcta de cambiar de oleada, de escena o de reiniciar tras un Game Over.
 
-**Consejo:** Si tienes entidades pausadas que quieres preservar entre escenas (por ejemplo, el estado del inventario del jugador), no uses `darken_reset` ciegamente. Muévelas a otro manager o guárdalas en variables globales antes de resetear.
+**Consejo:** Si tienes entidades pausadas que quieres preservar entre escenas (por ejemplo, el estado del jugador entre oleadas), no uses `darken_reset` ciegamente. Muévelas a otro manager o guárdalas en variables globales antes de resetear.
 
 ---
 
@@ -546,13 +601,13 @@ e->usr = 0;
 
 `DARKEN_FOREACH` itera de atrás hacia adelante. Esto significa que las entidades creadas más recientemente se procesan primero.
 
-En un RPG esto es útil para el *z-ordering*: si spawneas primero el suelo, luego las paredes, después los personajes y al final las partículas, el `FOREACH` las dibujará en el orden inverso (partículas encima de personajes, personajes encima de paredes).
+En un shmup esto es útil para el *z-ordering*: si spawneas primero el fondo estrellado, luego las naves, después las balas y al final las partículas, el `FOREACH` las dibujará en el orden inverso (partículas encima de balas, balas encima de naves).
 
 Si necesitas un orden diferente, ordena tu `pool` manualmente o usa múltiples managers por capa.
 
 ---
 
-## mplo mínimo completo: un héroe y un slime
+## Ejemplo mínimo completo: nave y un enemigo
 
 ```c
 #define DARKEN_IMPLEMENTATION
@@ -561,45 +616,45 @@ Si necesitas un orden diferente, ordena tu `pool` manualmente o usa múltiples m
 
 typedef struct {
     int16_t x, y;
-    int16_t hp;
+    int16_t hp;b
 } actor;
 
-void *state_hero_idle(void *data) {
+void *state_player(void *data) {
     DARKEN_DATA(actor, a, entity);
     // ... leer input, mover a ...
     return DARKEN_LOOP;
 }
 
-void *state_slime_chase(void *data) {
+void *state_enemy(void *data) {
     DARKEN_DATA(actor, a, entity);
-    // ... IA simple hacia el héroe ...
-    if (a->hp <= 0) return DARKEN_DELETE;
+    a->y += 2;   // Baja en línea recta
+    if (a->y > 240) return DARKEN_DELETE;
     return DARKEN_LOOP;
 }
 
-void destructor_slime(void *data) {
-    printf("¡El slime ha muerto!\n");
+void destructor_enemy(void *data) {
+    printf("¡Enemigo destruido!\n");
 }
 
 int main(void) {
     darken world;
-    DARKEN_STORAGE(rpg, 16, sizeof(actor));
-    darken_init(&world, DARKEN_ARGS(rpg));
+    DARKEN_STORAGE(shmup, 32, sizeof(actor));
+    darken_init(&world, DARKEN_ARGS(shmup));
 
-    darken_entity hero = darken_spawn(&world);
-    DARKEN_DATA(actor, h, hero);
-    h->x = 100; h->y = 100; h->hp = 50;
-    hero->state = state_hero_idle;
-    hero->tag = 1;  // TAG_HERO
+    darken_entity player = darken_spawn(&world);
+    DARKEN_DATA(actor, p, player);
+    p->x = 120; p->y = 200; p->hp = 3;
+    player->state = state_player;
+    player->tag = 1;  // TAG_PLAYER
 
-    darken_entity slime = darken_spawn(&world);
-    DARKEN_DATA(actor, s, slime);
-    s->x = 200; s->y = 200; s->hp = 10;
-    slime->state = state_slime_chase;
-    slime->destructor = destructor_slime;
-    slime->tag = 2;  // TAG_ENEMY
+    darken_entity enemy = darken_spawn(&world);
+    DARKEN_DATA(actor, e, enemy);
+    e->x = 120; e->y = -16; e->hp = 5;
+    enemy->state = state_enemy;
+    enemy->destructor = destructor_enemy;
+    enemy->tag = 2;  // TAG_ENEMY
 
-    for (int frame = 0; frame < 60; ++frame) {
+    for (int frame = 0; frame < 120; ++frame) {
         darken_update(&world);
     }
 
