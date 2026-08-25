@@ -18,12 +18,11 @@
  * CONSTANTS
  * ============================================================================ */
 
-#define TILE_SIZE       8
 #define SCREEN_W_T      40
 #define SCREEN_H_T      28
-#define GAME_H_T        25
 #define MAX_ENTITIES    128
 #define PAYLOAD_SIZE    32
+#define MAX_DIRTY       256
 
 #define TAG_PLAYER          1
 #define TAG_PLAYER_BULLET   2
@@ -115,22 +114,8 @@ static const u32 GFX_STAR[8] = {
  * ============================================================================ */
 
 static const u16 PALETTE[16] = {
-    0x0000, /* 0  transparent */
-    0x0EEE, /* 1  white    */
-    0x00E0, /* 2  green    */
-    0x0E00, /* 3  red      */
-    0x000E, /* 4  blue     */
-    0x0EE0, /* 5  yellow   */
-    0x0E08, /* 6  orange   */
-    0x00EE, /* 7  cyan     */
-    0x0888, /* 8  gray     */
-    0x0E0E, /* 9  magenta  */
-    0x0CCC, /* 10 light gray */
-    0x0444, /* 11 dark gray  */
-    0x0E44, /* 12 unused */
-    0x0400, /* 13 unused */
-    0x0040, /* 14 unused */
-    0x0004  /* 15 unused */
+    0x0000, 0x0EEE, 0x00E0, 0x0E00, 0x000E, 0x0EE0, 0x0E08,
+    0x00EE, 0x0888, 0x0E0E, 0x0CCC, 0x0444, 0x0E44, 0x0400, 0x0040, 0x0004
 };
 
 /* ============================================================================
@@ -214,6 +199,11 @@ static s16 pending_x[8];
 static s16 pending_y[8];
 static u8  pending_count = 0;
 
+/* Dirty tile tracking: only clear tiles that were drawn last frame */
+static u16 dirty_tx[MAX_DIRTY];
+static u16 dirty_ty[MAX_DIRTY];
+static u16 dirty_count = 0;
+
 static const s16 SIN_TABLE[32] = {
     0, 25, 49, 71, 90, 106, 117, 125, 128, 125, 117, 106, 90, 71, 49, 25,
     0, -25, -49, -71, -90, -106, -117, -125, -128, -125, -117, -106, -90, -71, -49, -25
@@ -281,22 +271,18 @@ static void setup_background(void)
     }
 }
 
-static void clear_game_area(void)
-{
-    u16 y, x;
-    for (y = 2; y < SCREEN_H_T; ++y) {
-        for (x = 0; x < SCREEN_W_T; ++x) {
-            VDP_setTileMapXY(BG_A, TILE_ATTR_FULL(PAL0, 0, 0, 0, TILE_EMPTY), x, y);
-        }
-    }
-}
-
-static void draw_tile(s16 px, s16 py, u16 tile_idx)
+/* Draw a tile and register it as dirty for next-frame cleanup */
+static void draw_entity_tile(s16 px, s16 py, u16 tile_idx)
 {
     s16 tx = px >> 3;
     s16 ty = (py >> 3) + 2;
     if (tx >= 0 && tx < SCREEN_W_T && ty >= 2 && ty < SCREEN_H_T) {
         VDP_setTileMapXY(BG_A, TILE_ATTR_FULL(PAL0, 0, 0, 0, tile_idx), (u16)tx, (u16)ty);
+        if (dirty_count < MAX_DIRTY) {
+            dirty_tx[dirty_count] = (u16)tx;
+            dirty_ty[dirty_count] = (u16)ty;
+            dirty_count++;
+        }
     }
 }
 
@@ -304,7 +290,7 @@ static void draw_tile(s16 px, s16 py, u16 tile_idx)
  * DESTRUCTORS
  * ============================================================================ */
 
-static void destructor_enemy(enemy_data *ed)
+static void *destructor_enemy(enemy_data *ed)
 {
     if (pending_count < 8) {
         pending_x[pending_count] = ed->x;
@@ -312,15 +298,17 @@ static void destructor_enemy(enemy_data *ed)
         pending_count++;
     }
     G.score += 10;
+    return 0;
 }
 
-static void destructor_boss(boss_data *b)
+static void *destructor_boss(boss_data *b)
 {
     (void)b;
     G.score += 100;
     G.shake = 20;
     G.boss_spawned = 0;
     G.wave_timer = 120;
+    return 0;
 }
 
 /* ============================================================================
@@ -408,7 +396,7 @@ static void *state_enemy_shooter(enemy_data *e)
     if (++e->shoot_timer > 50) {
         e->shoot_timer = 0;
         if (player_entity && DARKEN_ENTITY_IN_ACTIVE(player_entity)) {
-            ship_data *ps = (ship_data *)player_entity->data;
+            DARKEN_DATA(ship_data, ps, player_entity);
             s16 dx = ps->x - e->x;
             s16 dy = ps->y - e->y;
             s16 dist = (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
@@ -452,12 +440,12 @@ static void *state_boss_attack(boss_data *b)
     }
 
     if (b->shield_left && DARKEN_STATE_IS_ACTIVE(b->shield_left->state)) {
-        enemy_data *sl = (enemy_data *)b->shield_left->data;
+        DARKEN_DATA(enemy_data, sl, b->shield_left);
         sl->x = b->x - 24;
         sl->y = b->y;
     }
     if (b->shield_right && DARKEN_STATE_IS_ACTIVE(b->shield_right->state)) {
-        enemy_data *sr = (enemy_data *)b->shield_right->data;
+        DARKEN_DATA(enemy_data, sr, b->shield_right);
         sr->x = b->x + 24;
         sr->y = b->y;
     }
@@ -504,10 +492,10 @@ static void spawn_player_bullet(s16 x, s16 y, s16 vx, s16 vy)
 {
     darken_entity b = darken_spawn(&world);
     if (!b) return;
-    bullet_data *bul = (bullet_data *)b->data;
+    DARKEN_DATA(bullet_data, bul, b);
     bul->x = x; bul->y = y;
     bul->vx = vx; bul->vy = vy;
-    b->state = (darken_state)state_bullet_fly;
+    b->state = state_bullet_fly;
     b->tag = TAG_PLAYER_BULLET;
 }
 
@@ -515,10 +503,10 @@ static void spawn_enemy_bullet(s16 x, s16 y, s16 vx, s16 vy)
 {
     darken_entity b = darken_spawn(&world);
     if (!b) return;
-    bullet_data *bul = (bullet_data *)b->data;
+    DARKEN_DATA(bullet_data, bul, b);
     bul->x = x; bul->y = y;
     bul->vx = vx; bul->vy = vy;
-    b->state = (darken_state)state_bullet_fly;
+    b->state = state_bullet_fly;
     b->tag = TAG_ENEMY_BULLET;
 }
 
@@ -526,20 +514,20 @@ static void spawn_enemy(u8 etype, s16 x, s16 y)
 {
     darken_entity e = darken_spawn(&world);
     if (!e) return;
-    enemy_data *ed = (enemy_data *)e->data;
+    DARKEN_DATA(enemy_data, ed, e);
     ed->x = x; ed->y = y;
     ed->origin_x = x;
     ed->t = 0;
     ed->hp = (etype == 2) ? 3 : 1;
     ed->type = etype;
     ed->shoot_timer = 0;
-    e->destructor = (darken_state)destructor_enemy;
+    e->destructor = destructor_enemy;
     e->tag = TAG_ENEMY;
 
     switch (etype) {
-        case 0: e->state = (darken_state)state_enemy_sine;     break;
-        case 1: e->state = (darken_state)state_enemy_straight; break;
-        case 2: e->state = (darken_state)state_enemy_shooter;  break;
+        case 0: e->state = state_enemy_sine;     break;
+        case 1: e->state = state_enemy_straight; break;
+        case 2: e->state = state_enemy_shooter;  break;
     }
 }
 
@@ -547,12 +535,12 @@ static void spawn_powerup(s16 x, s16 y)
 {
     darken_entity e = darken_spawn(&world);
     if (!e) return;
-    powerup_data *pwr = (powerup_data *)e->data;
+    DARKEN_DATA(powerup_data, pwr, e);
     pwr->x = x; pwr->y = y;
     pwr->vy = 1;
     pwr->kind = 1 + (random() % 3);
     pwr->blink = 0;
-    e->state = (darken_state)state_powerup_fall;
+    e->state = state_powerup_fall;
     e->tag = TAG_POWERUP;
 }
 
@@ -560,13 +548,13 @@ static void spawn_particle(s16 x, s16 y, u8 color)
 {
     darken_entity p = darken_spawn(&fx_world);
     if (!p) return;
-    particle_data *pt = (particle_data *)p->data;
+    DARKEN_DATA(particle_data, pt, p);
     pt->x = x; pt->y = y;
     pt->vx = (random() % 5) - 2;
     pt->vy = (random() % 5) - 2;
     pt->life = 10 + (random() % 10);
     pt->color = color;
-    p->state = (darken_state)state_particle_fade;
+    p->state = state_particle_fade;
     p->tag = TAG_PARTICLE;
 }
 
@@ -574,31 +562,31 @@ static void spawn_boss(void)
 {
     darken_entity boss = darken_spawn(&world);
     if (!boss) return;
-    boss_data *b = (boss_data *)boss->data;
+    DARKEN_DATA(boss_data, b, boss);
     b->x = 160; b->y = -16;
     b->hp = 60; b->max_hp = 60;
     b->t = 0; b->timer = 0;
     b->shield_left = 0;
     b->shield_right = 0;
-    boss->state = (darken_state)state_boss_enter;
-    boss->destructor = (darken_state)destructor_boss;
+    boss->state = state_boss_enter;
+    boss->destructor = destructor_boss;
     boss->tag = TAG_BOSS;
 
     darken_entity sl = darken_spawn(&world);
     if (sl) {
-        enemy_data *sed = (enemy_data *)sl->data;
+        DARKEN_DATA(enemy_data, sed, sl);
         sed->x = b->x - 24; sed->y = b->y;
         sed->hp = 15;
-        sl->state = (darken_state)state_boss_shield;
+        sl->state = state_boss_shield;
         sl->tag = TAG_BOSS_SHIELD;
         b->shield_left = sl;
     }
     darken_entity sr = darken_spawn(&world);
     if (sr) {
-        enemy_data *sed = (enemy_data *)sr->data;
+        DARKEN_DATA(enemy_data, sed, sr);
         sed->x = b->x + 24; sed->y = b->y;
         sed->hp = 15;
-        sr->state = (darken_state)state_boss_shield;
+        sr->state = state_boss_shield;
         sr->tag = TAG_BOSS_SHIELD;
         b->shield_right = sr;
     }
@@ -623,7 +611,7 @@ static void check_collisions(void)
     for (i = world.size - 1; i >= 0; --i) {
         darken_entity bul = world.pool[i];
         if (bul->tag != TAG_PLAYER_BULLET) continue;
-        bullet_data *bd = (bullet_data *)bul->data;
+        DARKEN_DATA(bullet_data, bd, bul);
 
         for (j = world.size - 1; j >= 0; --j) {
             darken_entity target = world.pool[j];
@@ -632,20 +620,20 @@ static void check_collisions(void)
 
             int hit = 0;
             if (target->tag == TAG_ENEMY) {
-                enemy_data *ed = (enemy_data *)target->data;
+                DARKEN_DATA(enemy_data, ed, target);
                 if (rect_hit(bd->x - 2, bd->y - 2, 4, 4, ed->x - 4, ed->y - 4, 8, 8)) {
                     ed->hp--;
                     if (ed->hp <= 0) darken_entity_delete(target);
                     hit = 1;
                 }
             } else if (target->tag == TAG_BOSS) {
-                boss_data *bd2 = (boss_data *)target->data;
+                DARKEN_DATA(boss_data, bd2, target);
                 if (rect_hit(bd->x - 2, bd->y - 2, 4, 4, bd2->x - 12, bd2->y - 8, 24, 16)) {
                     bd2->hp--;
                     hit = 1;
                 }
             } else if (target->tag == TAG_BOSS_SHIELD) {
-                enemy_data *sed = (enemy_data *)target->data;
+                DARKEN_DATA(enemy_data, sed, target);
                 if (rect_hit(bd->x - 2, bd->y - 2, 4, 4, sed->x - 4, sed->y - 4, 8, 8)) {
                     sed->hp--;
                     if (sed->hp <= 0) darken_entity_delete(target);
@@ -664,7 +652,7 @@ static void check_collisions(void)
     if (!player_entity || !DARKEN_ENTITY_IN_ACTIVE(player_entity))
         return;
 
-    ship_data *ps = (ship_data *)player_entity->data;
+    DARKEN_DATA(ship_data, ps, player_entity);
     if (ps->inv_timer > 0 || ps->shield_timer > 0)
         return;
 
@@ -675,16 +663,16 @@ static void check_collisions(void)
         int hit = 0;
 
         if (e->tag == TAG_ENEMY_BULLET) {
-            bullet_data *bd = (bullet_data *)e->data;
+            DARKEN_DATA(bullet_data, bd, e);
             if (rect_hit(px, py, 8, 8, bd->x - 2, bd->y - 2, 4, 4)) hit = 1;
         } else if (e->tag == TAG_ENEMY) {
-            enemy_data *ed = (enemy_data *)e->data;
+            DARKEN_DATA(enemy_data, ed, e);
             if (rect_hit(px, py, 8, 8, ed->x - 4, ed->y - 4, 8, 8)) hit = 1;
         } else if (e->tag == TAG_BOSS) {
-            boss_data *bd = (boss_data *)e->data;
+            DARKEN_DATA(boss_data, bd, e);
             if (rect_hit(px, py, 8, 8, bd->x - 12, bd->y - 8, 24, 16)) hit = 1;
         } else if (e->tag == TAG_POWERUP) {
-            powerup_data *pwr = (powerup_data *)e->data;
+            DARKEN_DATA(powerup_data, pwr, e);
             if (rect_hit(px, py, 8, 8, pwr->x - 4, pwr->y - 4, 8, 8)) {
                 if (pwr->kind == PWR_SPREAD && ps->power < 3) ps->power++;
                 else if (pwr->kind == PWR_BOMB && ps->bombs < 5) ps->bombs++;
@@ -704,9 +692,9 @@ static void check_collisions(void)
             if (e->tag == TAG_ENEMY_BULLET) darken_entity_delete(e);
 
             if (ps->hp <= 0) {
-                player_entity->state = (darken_state)state_player_dead;
+                player_entity->state = state_player_dead;
             } else {
-                player_entity->state = (darken_state)state_player_invulnerable;
+                player_entity->state = state_player_invulnerable;
             }
         }
     }
@@ -763,7 +751,7 @@ static void render_hud(void)
     VDP_drawText(buf, 30, 0);
 
     if (player_entity && DARKEN_ENTITY_IN_USED(player_entity)) {
-        ship_data *ps = (ship_data *)player_entity->data;
+        DARKEN_DATA(ship_data, ps, player_entity);
         sprintf(buf, "HP:%d B:%d", ps->hp, ps->bombs);
         VDP_drawText(buf, 1, 1);
     }
@@ -779,9 +767,14 @@ static void render_hud(void)
 
 static void render_entities(void)
 {
+    u16 i;
     s16 ox = 0, oy = 0;
 
-    clear_game_area();
+    /* Clear only tiles that were drawn last frame — O(entities), not O(screen) */
+    for (i = 0; i < dirty_count; ++i) {
+        VDP_setTileMapXY(BG_A, TILE_ATTR_FULL(PAL0, 0, 0, 0, TILE_EMPTY), dirty_tx[i], dirty_ty[i]);
+    }
+    dirty_count = 0;
 
     if (G.shake > 0) {
         G.shake--;
@@ -792,49 +785,49 @@ static void render_entities(void)
     DARKEN_FOREACH(&world, {
         switch (ENTITY->tag) {
             case TAG_PLAYER: {
-                ship_data *s = (ship_data *)ENTITY->data;
+                DARKEN_DATA(ship_data, s, ENTITY);
                 if (s->inv_timer > 0 && ((s->inv_timer >> 2) & 1)) break;
-                draw_tile(s->x + ox, s->y + oy, TILE_SHIP);
+                draw_entity_tile(s->x + ox, s->y + oy, TILE_SHIP);
                 break;
             }
             case TAG_PLAYER_BULLET: {
-                bullet_data *b = (bullet_data *)ENTITY->data;
-                draw_tile(b->x + ox, b->y + oy, TILE_BULLET_P);
+                DARKEN_DATA(bullet_data, b, ENTITY);
+                draw_entity_tile(b->x + ox, b->y + oy, TILE_BULLET_P);
                 break;
             }
             case TAG_ENEMY: {
-                enemy_data *ed = (enemy_data *)ENTITY->data;
+                DARKEN_DATA(enemy_data, ed, ENTITY);
                 u16 tile = (ed->type == 0) ? TILE_ENEMY0 : (ed->type == 1) ? TILE_ENEMY1 : TILE_ENEMY2;
-                draw_tile(ed->x + ox, ed->y + oy, tile);
+                draw_entity_tile(ed->x + ox, ed->y + oy, tile);
                 break;
             }
             case TAG_ENEMY_BULLET: {
-                bullet_data *b = (bullet_data *)ENTITY->data;
-                draw_tile(b->x + ox, b->y + oy, TILE_BULLET_E);
+                DARKEN_DATA(bullet_data, b, ENTITY);
+                draw_entity_tile(b->x + ox, b->y + oy, TILE_BULLET_E);
                 break;
             }
             case TAG_POWERUP: {
-                powerup_data *pwr = (powerup_data *)ENTITY->data;
+                DARKEN_DATA(powerup_data, pwr, ENTITY);
                 if ((pwr->blink >> 2) & 1)
-                    draw_tile(pwr->x + ox, pwr->y + oy, TILE_POWERUP);
+                    draw_entity_tile(pwr->x + ox, pwr->y + oy, TILE_POWERUP);
                 break;
             }
             case TAG_BOSS: {
-                boss_data *b = (boss_data *)ENTITY->data;
-                draw_tile(b->x + ox, b->y + oy, TILE_BOSS);
+                DARKEN_DATA(boss_data, b, ENTITY);
+                draw_entity_tile(b->x + ox, b->y + oy, TILE_BOSS);
                 break;
             }
             case TAG_BOSS_SHIELD: {
-                enemy_data *sed = (enemy_data *)ENTITY->data;
-                draw_tile(sed->x + ox, sed->y + oy, TILE_SHIELD);
+                DARKEN_DATA(enemy_data, sed, ENTITY);
+                draw_entity_tile(sed->x + ox, sed->y + oy, TILE_SHIELD);
                 break;
             }
         }
     });
 
     DARKEN_FOREACH(&fx_world, {
-        particle_data *p = (particle_data *)ENTITY->data;
-        draw_tile(p->x + ox, p->y + oy, TILE_PARTICLE);
+        DARKEN_DATA(particle_data, p, ENTITY);
+        draw_entity_tile(p->x + ox, p->y + oy, TILE_PARTICLE);
     });
 }
 
@@ -844,6 +837,8 @@ static void render_entities(void)
 
 static void reset_game(void)
 {
+    u16 i;
+
     darken_reset(&world);
     darken_reset(&fx_world);
 
@@ -855,16 +850,22 @@ static void reset_game(void)
     G.paused = 0;
     G.shake = 0;
     pending_count = 0;
+    dirty_count = 0;
+
+    /* Ensure plane A is fully clean before starting */
+    for (i = 2; i < SCREEN_H_T; ++i) {
+        VDP_clearTileMapRect(BG_A, 0, i, SCREEN_W_T, 1);
+    }
 
     player_entity = darken_spawn(&world);
-    ship_data *s = (ship_data *)player_entity->data;
+    DARKEN_DATA(ship_data, s, player_entity);
     s->x = 160; s->y = 200;
     s->hp = 3;
     s->power = 1;
     s->bombs = 2;
     s->inv_timer = 0;
     s->shield_timer = 0;
-    player_entity->state = (darken_state)state_player_alive;
+    player_entity->state = state_player_alive;
     player_entity->tag = TAG_PLAYER;
 }
 
