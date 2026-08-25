@@ -218,13 +218,13 @@ void darken_reset(darken *);
 #define _DARKEN_ARGS(NAME) \
     (NAME).pool, (NAME).data, (NAME).capacity, (NAME).payload_size
 
-#define _DARKEN_FOREACH(MANAGER, CODE) _DARKEN_BLOCK(               \
-    uint16_t INDEX = (MANAGER)->size;                               \
-    darken_entity *POOL = (MANAGER)->pool;                          \
-                                                                    \
-    while (INDEX--) {                                               \
-        darken_entity ENTITY __attribute__((unused)) = POOL[INDEX]; \
-        CODE;                                                       \
+#define _DARKEN_FOREACH(MANAGER, CODE) _DARKEN_BLOCK(                  \
+    uint16_t _index = (MANAGER)->size;                                 \
+    darken_entity *_pool = (MANAGER)->pool;                            \
+                                                                       \
+    while (_index--) {                                                 \
+        darken_entity _entity __attribute__((unused)) = _pool[_index]; \
+        CODE;                                                          \
     })
 
 #endif // DARKEN_H
@@ -302,7 +302,7 @@ void darken_update(darken *$)
 
 void darken_reset(darken *$)
 {
-    DARKEN_FOREACH($, _DARKEN_ENTITY_DELETE(ENTITY));
+    DARKEN_FOREACH($, _DARKEN_ENTITY_DELETE(_entity));
 
     $->size = 0;
     $->paused = $->capacity;

@@ -69,8 +69,8 @@ static void darken_bench_apply(void)
         }
         // DARKEN_MANAGER_APPLY(&m, (ENTITY->tag % 2) == 0, darken_entity_delete);
         DARKEN_FOREACH(&m, {
-            if (ENTITY->tag % 2 == 0)
-                darken_entity_delete(ENTITY);
+            if (_entity->tag % 2 == 0)
+                darken_entity_delete(_entity);
         });
         darken_reset(&m);
     }

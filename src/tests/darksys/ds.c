@@ -413,7 +413,7 @@ TEST(test_manager_iterate_macro)
     int count = 0;
     DARKEN_FOREACH(&test_mgr, {
         count++;
-        CHECK(ENTITY != 0);
+        CHECK(_entity != 0);
     });
     CHECK(count == 1);
 }

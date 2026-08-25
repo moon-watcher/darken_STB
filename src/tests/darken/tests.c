@@ -730,7 +730,7 @@ static void darken_test_apply_active_only(void)
     }
     CHECK("apply active: size 1", m.size == 1);
     bool foundTag1 = FALSE;
-    DARKEN_FOREACH(&m, { if (ENTITY->tag == 1) foundTag1 = TRUE; });
+    DARKEN_FOREACH(&m, { if (_entity->tag == 1) foundTag1 = TRUE; });
     CHECK("apply active: tag 1 borrado", !foundTag1);
 }
 
