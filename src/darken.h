@@ -122,7 +122,6 @@ uint16_t darken_entity_delete(darken_entity);
 #define DARKEN_FOREACH _DARKEN_FOREACH
 
 #define DARKEN_DATA_GET_ENTITY _DARKEN_DATA_GET_ENTITY
-#define DARKEN_DATA_GET_OWNER _DARKEN_DATA_GET_OWNER
 
 void darken_init(darken *, darken_entity[], void *, uint16_t, uint16_t);
 darken_entity darken_spawn(darken *);
@@ -160,7 +159,6 @@ void darken_reset(darken *);
 #define _DARKEN_ENTITY_IN_FREE(ENTITY) (!_DARKEN_ENTITY_IN_USED(ENTITY))
 
 #define _DARKEN_DATA_GET_ENTITY(DATA) ((darken_entity)((uint8_t *)(DATA) - (uint32_t)&((darken_entity)0)->data))
-#define _DARKEN_DATA_GET_OWNER(DATA) (DARKEN_DATA_GET_ENTITY(DATA)->owner)
 
 /**
  * Align a byte count to a 4-byte boundary.
