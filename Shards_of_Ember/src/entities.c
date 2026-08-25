@@ -2,24 +2,21 @@
  * entities.c — spawn helpers and the enemy AI state machine.
  *
  * Enemies alternate between two darken_state functions, enemy_state_patrol
- * and enemy_state_chase. Each one returns DARKEN_LOOP to keep going, or the
- * *other* function's pointer to switch behavior — the exact mechanism
+ * and enemy_state_chase. Each returns DARKEN_LOOP to keep going, or the
+ * *other* function's pointer to switch behavior — the mechanism
  * darken_state exists for. When a chasing enemy reaches the player it calls
  * battle_start() and returns DARKEN_PAUSE, so darken itself moves the enemy
  * into the paused zone on its next tick.
  */
 
-// #include <stdio.h>
-// #include <stdlib.h>
-#include <genesis.h>
-
 #include "game.h"
+#include "darken.h"
 
 static const struct
 {
     char glyph;
     const char *name;
-    int hp, atk, def, exp_reward, gold_reward;
+    s16 hp, atk, def, exp_reward, gold_reward;
 } ENEMY_TABLE[] = {
     [ENEMY_SLIME] = {'s', "Slime", 10, 3, 1, 5, 3},
     [ENEMY_BAT] = {'b', "Bat", 8, 4, 0, 6, 2},
@@ -37,17 +34,19 @@ void *passive_state(void *data)
     return DARKEN_LOOP;
 }
 
-static int in_range(int ax, int ay, int bx, int by, int radius)
+static u16 in_range(s16 ax, s16 ay, s16 bx, s16 by, s16 radius)
 {
-    int dx = ax - bx, dy = ay - by;
+    s16 dx = ax - bx, dy = ay - by;
     if (dx < 0) dx = -dx;
     if (dy < 0) dy = -dy;
     return (dx > dy ? dx : dy) <= radius;
 }
 
-static void step_toward(EnemyData *e, int tx, int ty)
+static void step_toward(EnemyData *e, s16 tx, s16 ty)
 {
-    int nx = e->x, ny = e->y;
+    s16 nx = e->x, ny = e->y;
+    darken_entity blocker;
+
     if (e->x != tx)
         nx += (tx > e->x) ? 1 : -1;
     else if (e->y != ty)
@@ -55,7 +54,7 @@ static void step_toward(EnemyData *e, int tx, int ty)
 
     if (tile_blocked(nx, ny))
         return;
-    darken_entity blocker = entity_at(nx, ny);
+    blocker = entity_at(nx, ny);
     if (blocker && (blocker->tag == KIND_NPC || blocker->tag == KIND_ENEMY || blocker->tag == KIND_ITEM))
         return;
 
@@ -67,16 +66,16 @@ void *enemy_state_patrol(void *data)
 {
     EnemyData *e = (EnemyData *)data;
     PlayerData *p = (PlayerData *)g_player->data;
+    darken_entity self = darken_entity_from_data(data);
 
-    if (g_map == (MapId)darken_entity_from_data(data)->usr &&
-        in_range(e->x, e->y, p->x, p->y, AGGRO_RADIUS))
+    if (g_map == (MapId)self->usr && in_range(e->x, e->y, p->x, p->y, AGGRO_RADIUS))
         return (darken_state)enemy_state_chase;
 
-    if (random() % 3 == 0)
+    if ((random() % 3) == 0)
     {
-        int dir = random() % 4;
-        static const int off[4][2] = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}};
-        int nx = e->x + off[dir][0], ny = e->y + off[dir][1];
+        static const s8 off[4][2] = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}};
+        u16 dir = random() % 4;
+        s16 nx = e->x + off[dir][0], ny = e->y + off[dir][1];
 
         if (in_range(nx, ny, e->spawn_x, e->spawn_y, 3) && !tile_blocked(nx, ny))
         {
@@ -118,9 +117,10 @@ static void *enemy_destructor(void *data)
     /* A chance of bonus loot when a monster falls. Note: darken only calls
      * a destructor for entities removed from the ACTIVE zone (see
      * darken_entity_delete) — battle.c always resolves kills while the
-     * enemy is still active, so this reliably fires. */
-    if (random() % 100 < 30)
-        spawn_item(ITEM_GOLD, e->x, e->y, 5 + random() % 10, (MapId)self->usr);
+     * enemy is still active (see the comment at the top of battle.c), so
+     * this reliably fires. */
+    if ((random() % 100) < 30)
+        spawn_item(ITEM_GOLD, e->x, e->y, 5 + (random() % 10), (MapId)self->usr);
 
     return DARKEN_DELETE;
 }
@@ -131,15 +131,16 @@ static void *item_destructor(void *data)
     return DARKEN_DELETE;
 }
 
-darken_entity spawn_player(int x, int y)
+darken_entity spawn_player(s16 x, s16 y)
 {
     darken_entity e = darken_spawn(&g_world);
+    PlayerData *p = (PlayerData *)e->data;
+
     e->tag = KIND_PLAYER;
     e->usr = 0;
     e->state = (darken_state)passive_state;
     e->destructor = NULL;
 
-    PlayerData *p = (PlayerData *)e->data;
     memset(p, 0, sizeof(*p));
     p->x = x;
     p->y = y;
@@ -154,15 +155,16 @@ darken_entity spawn_player(int x, int y)
     return e;
 }
 
-darken_entity spawn_enemy(EnemyType type, int x, int y, MapId map)
+darken_entity spawn_enemy(EnemyType type, s16 x, s16 y, MapId map)
 {
     darken_entity e = darken_spawn(&g_world);
+    EnemyData *d = (EnemyData *)e->data;
+
     e->tag = KIND_ENEMY;
-    e->usr = (uint16_t)map;
+    e->usr = (u16)map;
     e->state = (darken_state)enemy_state_patrol;
     e->destructor = (darken_state)enemy_destructor;
 
-    EnemyData *d = (EnemyData *)e->data;
     d->x = x;
     d->y = y;
     d->spawn_x = x;
@@ -176,15 +178,16 @@ darken_entity spawn_enemy(EnemyType type, int x, int y, MapId map)
     return e;
 }
 
-darken_entity spawn_item(ItemType type, int x, int y, int value, MapId map)
+darken_entity spawn_item(ItemType type, s16 x, s16 y, s16 value, MapId map)
 {
     darken_entity e = darken_spawn(&g_world);
+    ItemData *d = (ItemData *)e->data;
+
     e->tag = KIND_ITEM;
-    e->usr = (uint16_t)map;
+    e->usr = (u16)map;
     e->state = (darken_state)passive_state;
     e->destructor = (darken_state)item_destructor;
 
-    ItemData *d = (ItemData *)e->data;
     d->x = x;
     d->y = y;
     d->type = type;
@@ -192,15 +195,16 @@ darken_entity spawn_item(ItemType type, int x, int y, int value, MapId map)
     return e;
 }
 
-darken_entity spawn_npc(const char *name, int x, int y, MapId map)
+darken_entity spawn_npc(const char *name, s16 x, s16 y, MapId map)
 {
     darken_entity e = darken_spawn(&g_world);
+    NpcData *d = (NpcData *)e->data;
+
     e->tag = KIND_NPC;
-    e->usr = (uint16_t)map;
+    e->usr = (u16)map;
     e->state = (darken_state)passive_state;
     e->destructor = NULL;
 
-    NpcData *d = (NpcData *)e->data;
     d->x = x;
     d->y = y;
     strncpy(d->name, name, sizeof(d->name) - 1);
@@ -236,7 +240,7 @@ void spawn_world(void)
     switch_map(MAP_OVERWORLD);
 }
 
-void player_gain_exp(int amount)
+void player_gain_exp(s16 amount)
 {
     PlayerData *p = (PlayerData *)g_player->data;
     p->exp += amount;
@@ -251,6 +255,6 @@ void player_gain_exp(int amount)
         p->def += 1;
         p->hp = p->hp_max;
         p->mp = p->mp_max;
-        kprintf("\n  *** Level up! You are now level %d. ***\n", p->level);
+        sprintf(g_msg2, "Level up! You are Lv%d now.", p->level);
     }
 }

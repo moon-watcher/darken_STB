@@ -1,27 +1,22 @@
 /**
- * main.c — "Shards of Ember"
+ * main.c — "Shards of Ember" for SGDK (Sega Genesis / Mega Drive).
  *
- * A tiny turn-based terminal RPG built on darken.h.
+ * Controls
+ *   Explore : D-Pad move, A talk/interact, B status toggle
+ *   Battle  : A attack, B fireball (3 MP), C potion, START flee
+ *   Shop    : A buy potion (10g), B leave
+ *   Title / end screens: START to begin / play again
  *
- * NOTE on including darken.h twice: darken.h's declarations are guarded by
- * #ifndef DARKEN_H, but its implementation block (guarded only by #ifdef
- * DARKEN_IMPLEMENTATION, with no include-guard of its own) is not. game.h
- * includes darken.h too, so we #undef DARKEN_IMPLEMENTATION right after our
- * own include to make sure the implementation is compiled exactly once in
- * this translation unit.
+ * There is no keyboard, no stdio, no blocking read: every screen is driven
+ * by polling JOY_readJoypad(JOY_1) once per frame and edge-detecting which
+ * buttons just went down (state & ~prevState), so holding a direction
+ * doesn't repeat every single frame.
  */
 
-#define DARKEN_IMPLEMENTATION
 #include "darken.h"
-#undef DARKEN_IMPLEMENTATION
+#define DARKEN_IMPLEMENTATION
 
 #include "game.h"
-
-// #include <stdio.h>
-// #include <stdlib.h>
-// #include <string.h>
-// #include <time.h>
-#include <genesis.h>
 
 /* ---------------------------------------------------------------------- */
 /* Globals                                                                 */
@@ -29,145 +24,208 @@
 
 darken g_world;
 darken_entity g_player;
-GameState g_state = GS_EXPLORE;
+GameState g_state = GS_TITLE;
 MapId g_map = MAP_OVERWORLD;
 darken_entity g_battle_enemy = NULL;
-char g_msg[256] = "";
+char g_msg[40] = "";
+char g_msg2[40] = "";
 
 static DARKEN_STORAGE(world_storage, MAX_ENTITIES, sizeof(EntityData));
 
-extern void build_maps(void); /* world.c */
+/* -------------------------------------------------------------- Shop -- */
 
-static int read_choice(void)
-{
-    char line[64];
-    if (!fgets(line, sizeof(line), stdin))
-        return -1;
-    while (line[0] == ' ' || line[0] == '\t')
-        memmove(line, line + 1, strlen(line));
-    return line[0];
-}
-
-static int run_shop(void)
+void render_shop(void)
 {
     PlayerData *p = (PlayerData *)g_player->data;
 
-    for (;;)
-    {
-        printf("\n  === Mira's Shop ===\n");
-        printf("  Gold: %d   Potions: %d\n", p->gold, p->potions);
-        printf("  1) Buy a potion (10 gold)   2) Leave\n  > ");
-        int c = read_choice();
-        if (c == -1)
-            return 0;
+    VDP_clearTextArea(0, 0, 40, 28);
+    VDP_drawText("=== MIRA'S SHOP ===", 2, 2);
+    ui_printf(2, 4, "Gold: %d   Potions: %d", p->gold, p->potions);
+    VDP_drawText("A  Buy a potion (10 gold)", 2, 7);
+    VDP_drawText("B  Leave", 2, 8);
+    if (g_msg[0])
+        VDP_drawText(g_msg, 2, 10);
+}
 
-        if (c == '1')
+void shop_input(u16 pressed)
+{
+    PlayerData *p = (PlayerData *)g_player->data;
+
+    strclr(g_msg);
+
+    if (pressed & BUTTON_A)
+    {
+        if (p->gold >= 10)
         {
-            if (p->gold >= 10)
-            {
-                p->gold -= 10;
-                p->potions++;
-                printf("  Bought a potion.\n");
-            }
-            else
-            {
-                printf("  Not enough gold.\n");
-            }
+            p->gold -= 10;
+            p->potions++;
+            sprintf(g_msg, "Bought a potion.");
         }
         else
         {
-            snprintf(g_msg, sizeof(g_msg), "Safe travels.");
-            g_state = GS_EXPLORE;
-            return 1;
+            sprintf(g_msg, "Not enough gold.");
         }
+        render_shop();
+    }
+    else if (pressed & BUTTON_B)
+    {
+        sprintf(g_msg, "Safe travels.");
+        g_state = GS_EXPLORE;
+        render_explore();
     }
 }
 
-static void print_intro(void)
+/* ------------------------------------------------------------ Status -- */
+
+void render_status(void)
 {
-    printf("======================================================\n");
-    printf("               S H A R D S   O F   E M B E R\n");
-    printf("======================================================\n");
-    printf("A small RPG demo built on the Darken entity system.\n\n");
-    printf("Controls:\n");
-    printf("  w/a/s/d  move\n");
-    printf("  e        talk / interact\n");
-    printf("  i        check your status\n");
-    printf("  q        quit\n\n");
-    printf("Fight your way through the overworld, find the stairs\n");
-    printf("('>'), and defeat what waits at the bottom of the\n");
-    printf("dungeon. Good luck.\n");
+    PlayerData *p = (PlayerData *)g_player->data;
+
+    VDP_clearTextArea(0, 0, 40, 28);
+    VDP_drawText("=== STATUS ===", 2, 2);
+    ui_printf(2, 4, "Level %d   Exp %d", p->level, p->exp);
+    ui_printf(2, 5, "HP %d/%d   MP %d/%d", p->hp, p->hp_max, p->mp, p->mp_max);
+    ui_printf(2, 6, "ATK %d   DEF %d", p->atk, p->def);
+    ui_printf(2, 7, "Gold %d   Potions %d", p->gold, p->potions);
+    VDP_drawText("Press B to return", 2, 9);
 }
 
-int main(void)
+/* ------------------------------------------------------- Title / end -- */
+
+static void render_title(void)
 {
-    setvbuf(stdout, NULL, _IONBF, 0); /* flush every write: safe for piped/interactive play alike */
-    srand((unsigned)time(NULL));
+    VDP_clearTextArea(0, 0, 40, 28);
+    VDP_drawText("SHARDS OF EMBER", 12, 6);
+    VDP_drawText("an RPG demo built on the", 8, 9);
+    VDP_drawText("Darken entity system", 9, 10);
+    VDP_drawText("D-PAD move   A talk   B status", 6, 15);
+    VDP_drawText("Fight your way through the", 6, 17);
+    VDP_drawText("overworld, find the stairs (>),", 6, 18);
+    VDP_drawText("and defeat what waits below.", 6, 19);
+    VDP_drawText("PRESS START", 14, 23);
+}
 
-    darken_init(&g_world, DARKEN_ARGS(world_storage));
-    build_maps();
-    spawn_world();
-
-    print_intro();
-
-    while (g_state == GS_EXPLORE || g_state == GS_BATTLE || g_state == GS_SHOP)
-    {
-        if (g_state == GS_EXPLORE)
-        {
-            render_explore();
-            printf("  > ");
-            int c = read_choice();
-            switch (c)
-            {
-            case 'w': try_move_player(0, -1); break;
-            case 's': try_move_player(0, 1); break;
-            case 'a': try_move_player(-1, 0); break;
-            case 'd': try_move_player(1, 0); break;
-            case 'e': try_interact(); break;
-            case 'i':
-            {
-                PlayerData *p = (PlayerData *)g_player->data;
-                printf("\n  Lv%d  HP %d/%d  MP %d/%d  ATK %d  DEF %d  EXP %d  Gold %d  Potions %d\n",
-                       p->level, p->hp, p->hp_max, p->mp, p->mp_max, p->atk, p->def,
-                       p->exp, p->gold, p->potions);
-                break;
-            }
-            case 'q':
-                printf("\n  Farewell, traveler.\n");
-                return 0;
-            case -1:
-                return 0;
-            default:
-                snprintf(g_msg, sizeof(g_msg), "Unknown command.");
-                break;
-            }
-        }
-        else if (g_state == GS_BATTLE)
-        {
-            render_battle();
-            printf("  > ");
-            int c = read_choice();
-            if (c == -1)
-                return 0;
-            battle_turn(c - '0');
-        }
-        else /* GS_SHOP */
-        {
-            if (!run_shop())
-                return 0;
-        }
-    }
-
-    if (g_state == GS_GAMEOVER)
-    {
-        printf("\n  You have fallen. GAME OVER.\n");
-        return 0;
-    }
+static void render_end(void)
+{
+    VDP_clearTextArea(0, 0, 40, 28);
     if (g_state == GS_WIN)
     {
-        printf("\n  The Ember Dragon falls. Its light returns to the land.\n");
-        printf("  *** YOU WIN ***\n");
-        return 0;
+        VDP_drawText("THE EMBER DRAGON FALLS.", 8, 10);
+        VDP_drawText("*** YOU WIN ***", 12, 12);
     }
+    else
+    {
+        VDP_drawText("You have fallen.", 12, 10);
+        VDP_drawText("*** GAME OVER ***", 11, 12);
+    }
+    VDP_drawText("PRESS START to play again", 7, 16);
+}
+
+/* Wait for a fresh START press. Also used on the title screen to gather a
+ * player-timing-dependent random seed, since there's no clock to seed from
+ * otherwise. */
+static void wait_for_start(u16 seed_random)
+{
+    u16 prev = JOY_readJoypad(JOY_1);
+    u32 ticks = 0;
+
+    for (;;)
+    {
+        u16 state = JOY_readJoypad(JOY_1);
+        u16 pressed = state & ~prev;
+        prev = state;
+
+        if (pressed & BUTTON_START)
+            break;
+
+        ticks++;
+        SYS_doVBlankProcess();
+    }
+
+    if (seed_random)
+        setRandomSeed((u16)ticks);
+
+    /* Drain the press so the next screen doesn't see a stale START edge. */
+    while (JOY_readJoypad(JOY_1) & BUTTON_START)
+        SYS_doVBlankProcess();
+}
+
+/* ------------------------------------------------------------- Main --- */
+
+int main(bool hardReset)
+{
+    u16 prevState;
+
+    JOY_init();
+    darken_init(&g_world, DARKEN_ARGS(world_storage));
+    build_maps();
+
+    for (;;)
+    {
+        g_state = GS_TITLE;
+        render_title();
+        wait_for_start(TRUE);
+
+        darken_reset(&g_world);
+        spawn_world();
+        g_map = MAP_OVERWORLD;
+        g_state = GS_EXPLORE;
+        strclr(g_msg);
+        render_explore();
+
+        prevState = JOY_readJoypad(JOY_1);
+
+        while (g_state != GS_GAMEOVER && g_state != GS_WIN)
+        {
+            u16 state = JOY_readJoypad(JOY_1);
+            u16 pressed = state & ~prevState;
+            prevState = state;
+
+            if (pressed)
+            {
+                switch (g_state)
+                {
+                case GS_EXPLORE:
+                    if (pressed & BUTTON_UP)
+                        try_move_player(0, -1);
+                    else if (pressed & BUTTON_DOWN)
+                        try_move_player(0, 1);
+                    else if (pressed & BUTTON_LEFT)
+                        try_move_player(-1, 0);
+                    else if (pressed & BUTTON_RIGHT)
+                        try_move_player(1, 0);
+                    else if (pressed & BUTTON_A)
+                        try_interact();
+                    else if (pressed & BUTTON_B)
+                    {
+                        g_state = GS_STATUS;
+                        render_status();
+                    }
+                    break;
+                case GS_STATUS:
+                    if (pressed & BUTTON_B)
+                    {
+                        g_state = GS_EXPLORE;
+                        render_explore();
+                    }
+                    break;
+                case GS_BATTLE:
+                    battle_input(pressed);
+                    break;
+                case GS_SHOP:
+                    shop_input(pressed);
+                    break;
+                default:
+                    break;
+                }
+            }
+
+            SYS_doVBlankProcess();
+        }
+
+        render_end();
+        wait_for_start(FALSE);
+    }
+
     return 0;
 }

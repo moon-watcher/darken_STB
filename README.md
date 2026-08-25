@@ -182,9 +182,8 @@ Devuélvelo desde tu callback de estado para indicar: *"este frame no ha pasado 
 
 **Uso en el shmup:**
 ```c
-void *state_enemy_sine(void *data) {
-    DARKEN_DATA(struct enemy_data, e, entity);
-
+void *state_enemy_sine(struct enemy_data *e)
+{
     e->x = e->origin_x + (int16_t)(sin(e->t * 0.05f) * 60);
     e->y += e->speed;
     e->t++;
@@ -206,9 +205,8 @@ Devuélvelo cuando la entidad debe desaparecer del mundo. El manager la moverá 
 
 **Uso en el shmup:**
 ```c
-void *state_bullet_fly(void *data) {
-    DARKEN_DATA(struct bullet_data, b, entity);
-
+void *state_bullet_fly(struct bullet_data *b)
+{
     b->x += b->vx;
     b->y += b->vy;
 
@@ -230,9 +228,8 @@ Devuélvelo para sacar la entidad del bucle de actualización sin destruirla. La
 
 **Uso en el shmup:**
 ```c
-void *state_powerup_float(void *data) {
-    DARKEN_DATA(struct powerup_data, p, entity);
-
+void *state_powerup_float(struct powerup_data *p)
+{
     p->y += 1;   // Cae lentamente
     p->blink++;
 
@@ -262,9 +259,8 @@ Devuelve verdadero si el estado es un puntero a función real (es decir, la enti
 
 **Uso en el shmup:**
 ```c
-void *state_boss_core(void *data) {
-    DARKEN_DATA(struct boss_data, boss, entity);
-
+void *state_boss_core(struct boss_data *boss)
+{
     // El núcleo solo ataca si sus escudos (entidades separadas) siguen activos.
     // Si los escudos fueron destruidos, el jefe entra en fase de furia.
     if (!DARKEN_STATE_IS_ACTIVE(boss->shield_left->state) &&
@@ -284,9 +280,8 @@ Te dicen si un puntero de estado vale `DARKEN_LOOP`, `DARKEN_PAUSE` o `DARKEN_DE
 
 **Uso en el shmup:**
 ```c
-void *state_homing_missile(void *data) {
-    DARKEN_DATA(struct missile_data, m, entity);
-
+void *state_homing_missile(struct missile_data *m)
+{
     // Si el objetivo ya fue marcado para borrar este frame (destruido por
     // otra bala justo antes), el misil pierde el lock y vuela recto.
     if (DARKEN_STATE_IS_DELETED(m->target->state)) {
@@ -307,16 +302,13 @@ Te dicen en qué zona del pool vive una entidad en este momento.
 
 **Uso en el shmup:**
 ```c
-void *state_formation_leader(void *data) {
-    DARKEN_DATA(struct enemy_data, leader, entity);
-
+void *state_formation_leader(struct enemy_data *leader)
+{
     // Soy el líder de una formación de 5 naves. Si algún aliado fue
     // destruido, reajusto la formación para cerrar el hueco.
-    for (int i = 0; i < 4; ++i) {
-        if (!DARKEN_ENTITY_IN_USED(leader->wingmen[i])) {
+    for (int i = 0; i < 4; ++i)
+        if (!DARKEN_ENTITY_IN_USED(leader->wingmen[i]))
             leader->wingmen[i] = leader->wingmen[--leader->wingmen_count];
-        }
-    }
 
     return DARKEN_LOOP;
 }
@@ -383,9 +375,11 @@ Mueve una entidad activa a la zona de pausada. Deja de ser visitada por `DARKEN_
 **Uso en el shmup:**
 ```c
 // El jugador pulsa START. Congelamos todo el mundo.
-void enter_pause(void) {
+void enter_pause(void)
+{
     darken_entity_pause(player);
-    DARKEN_FOREACH(&world, {
+    DARKEN_FOREACH(&world,
+    {
         darken_entity_pause(ENTITY);
     });
     spawn_pause_menu();
@@ -401,7 +395,8 @@ Saca una entidad de la zona pausada y la devuelve a la zona activa, justo al fin
 **Uso en el shmup:**
 ```c
 // El jugador pulsa START de nuevo. Descongelamos todo.
-void exit_pause(void) {
+void exit_pause(void)
+{
     // Nota: DARKEN_FOREACH solo ve activas, así que necesitamos
     // otro mecanismo para iterar las pausadas. Una opción es
     // mantener un array auxiliar de entidades pausadas.
@@ -423,11 +418,13 @@ Borra una entidad inmediatamente, ejecutando su destructor si lo tiene.
 ```c
 // El jugador usa una bomba. Todos los proyectiles enemigos en
 // pantalla se destruyen al instante.
-void use_bomb(void) {
+void use_bomb(void)
+{
     play_sfx(SFX_BOMB);
     screen_flash(3);
 
-    DARKEN_FOREACH(&world, {
+    DARKEN_FOREACH(&world,
+    {
         if (ENTITY->tag == TAG_ENEMY_BULLET) {
             spawn_particle_explosion(ENTITY);   // Efecto visual
             darken_entity_delete(ENTITY);       // Muere ahora, no al final del frame
@@ -449,7 +446,8 @@ Itera sobre todas las entidades activas. Define la variable `ENTITY` automática
 **Uso en el shmup:**
 ```c
 // Sistema de colisiones: balas del jugador contra enemigos
-DARKEN_FOREACH(&world, {
+DARKEN_FOREACH(&world,
+{
     if (ENTITY->tag != TAG_PLAYER_BULLET) continue;
 
     DARKEN_DATA(struct bullet_data, b, ENTITY);
@@ -510,10 +508,11 @@ Cada callback de estado recibe `void *data` y devuelve `void *`. Ese valor de re
 **Consejo:** Diseña tus estados como si fueran *frames de una animación*. Cada llamada avanza un tick. Si necesitas un temporizador, guárdalo en `entity->usr` o en tu payload.
 
 ```c
-void *state_enemy_flash(void *data) {
-    DARKEN_DATA(struct enemy_data, e, entity);
+void *state_enemy_flash(struct enemy_data *entity)
+{
     if (--entity->usr == 0)
         return state_enemy_recover;   // Se acabó el frame de invencibilidad
+
     return DARKEN_LOOP;               // Sigue parpadeando
 }
 ```
@@ -538,8 +537,8 @@ En un shmup, `tag` es especialmente útil para el sistema de colisiones: puedes 
 **Consejo:** Si tu entidad reservó recursos externos (un canal de audio, un sprite en VRAM, una entrada en una tabla de colisiones espacial), el destructor es el lugar correcto para liberarlos. No lo hagas dentro del estado de borrado, porque `darken_entity_delete()` también invoca el destructor.
 
 ```c
-void destructor_explosion(void *data) {
-    DARKEN_DATA(struct particle_data, p, entity);
+void destructor_explosion(struct particle_data *p)
+{
     return_vram_sprite(p->gfx_slot);   // Devuelve el slot gráfico a tu pool
 }
 ```
@@ -614,29 +613,32 @@ Si necesitas un orden diferente, ordena tu `pool` manualmente o usa múltiples m
 #include "darken.h"
 #include <stdio.h>
 
-typedef struct {
+typedef struct
+{
     int16_t x, y;
     int16_t hp;b
 } actor;
 
-void *state_player(void *data) {
-    DARKEN_DATA(actor, a, entity);
+void *state_player(actor *a)
+{
     // ... leer input, mover a ...
     return DARKEN_LOOP;
 }
 
-void *state_enemy(void *data) {
-    DARKEN_DATA(actor, a, entity);
+void *state_enemy(actor *a)
+{
     a->y += 2;   // Baja en línea recta
     if (a->y > 240) return DARKEN_DELETE;
     return DARKEN_LOOP;
 }
 
-void destructor_enemy(void *data) {
+void destructor_enemy(void *data)
+{
     printf("¡Enemigo destruido!\n");
 }
 
-int main(void) {
+int main(void)
+{
     darken world;
     DARKEN_STORAGE(shmup, 32, sizeof(actor));
     darken_init(&world, DARKEN_ARGS(shmup));
@@ -654,9 +656,8 @@ int main(void) {
     enemy->destructor = destructor_enemy;
     enemy->tag = 2;  // TAG_ENEMY
 
-    for (int frame = 0; frame < 120; ++frame) {
+    while (1)
         darken_update(&world);
-    }
 
     darken_reset(&world);
     return 0;
