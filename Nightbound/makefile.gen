@@ -1,0 +1,3 @@
+# SGDK project makefile entry point.
+# Run this directory with SGDK's standard make infrastructure.
+include $(GDK)/makefile.gen
