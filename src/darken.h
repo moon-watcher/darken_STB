@@ -140,8 +140,8 @@ void darken_reset(darken *);
 #define _DARKEN_ASSERT(COND) _DARKEN_BLOCK( \
     if (!(COND)) return 0;)
 
-#define _DARKEN_DATA(TYPE, VAR, ENTITY) \
-    TYPE *VAR = (TYPE *)(ENTITY)->data;
+#define _DARKEN_DATA(TYPE, VAR, ENTITY) TYPE *VAR = (TYPE *)(ENTITY)->data;
+#define _DARKEN_DATA_GET_ENTITY(DATA) ((darken_entity)((uint8_t *)(DATA) - (uint32_t)&((darken_entity)0)->data))
 
 #define _DARKEN_DELETE ((void *)0)
 #define _DARKEN_LOOP ((void *)1)
@@ -156,8 +156,6 @@ void darken_reset(darken *);
 #define _DARKEN_ENTITY_IN_PAUSED(ENTITY) ((ENTITY)->slot >= (ENTITY)->owner->paused)
 #define _DARKEN_ENTITY_IN_USED(ENTITY) (DARKEN_ENTITY_IN_ACTIVE(ENTITY) || DARKEN_ENTITY_IN_PAUSED(ENTITY))
 #define _DARKEN_ENTITY_IN_FREE(ENTITY) (!DARKEN_ENTITY_IN_USED(ENTITY))
-
-#define _DARKEN_DATA_GET_ENTITY(DATA) ((darken_entity)((uint8_t *)(DATA) - (uint32_t)&((darken_entity)0)->data))
 
 /**
  * Align a byte count to a 4-byte boundary.
@@ -178,7 +176,7 @@ void darken_reset(darken *);
 #define _DARKEN_ENTITY_UPDATE(ENTITY) _DARKEN_BLOCK( \
     void *state = _DARKEN_ENTITY_RUN(ENTITY);        \
                                                      \
-    if (!DARKEN_STATE_IS_LOOP(state))               \
+    if (!DARKEN_STATE_IS_LOOP(state))                \
         ENTITY->state = state;)
 
 #define _DARKEN_ENTITY_PAUSE(ENTITY) _DARKEN_BLOCK(                                \
@@ -197,7 +195,7 @@ void darken_reset(darken *);
 #define _DARKEN_ENTITY_DELETE(ENTITY) _DARKEN_BLOCK( \
     darken *manager = ENTITY->owner;                 \
                                                      \
-    if (DARKEN_STATE_IS_ACTIVE(ENTITY->destructor)) \
+    if (DARKEN_STATE_IS_ACTIVE(ENTITY->destructor))  \
         ENTITY->destructor(ENTITY->data);            \
                                                      \
     _darken_entity_swap(manager->pool, ENTITY->slot, --manager->size);)
