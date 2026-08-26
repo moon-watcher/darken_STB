@@ -39,7 +39,7 @@ res/
 
 No se define `DARKEN_IMPLEMENTATION` en `main.c` ni en ningún header.
 
-Esto permite usar el header de Darken con su modelo STB-style sin producir redefiniciones de `_darken_entity_swap`, `darken_init`, `darken_spawn`, etc.
+Esto permite usar el header de Darken con su modelo STB-style sin producir redefiniciones de `_entity_swap`, `darken_init`, `darken_spawn`, etc.
 
 ## Compilación
 

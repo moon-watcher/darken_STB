@@ -95,7 +95,7 @@ class Manager:
         self.size += 1
         return e
 
-    def _swap(self, i, j):
+    def _entity_swap(self, i, j):
         if i == j:
             return
         self.pool[i], self.pool[j] = self.pool[j], self.pool[i]
@@ -114,12 +114,12 @@ class Manager:
                 if e.destructor:
                     e.destructor(e)
                 self.size -= 1
-                self._swap(i, self.size)
+                self._entity_swap(i, self.size)
             elif result == "PAUSE":
                 self.size -= 1
                 self.paused -= 1
-                self._swap(i, self.size)
-                self._swap(self.size, self.paused)
+                self._entity_swap(i, self.size)
+                self._entity_swap(self.size, self.paused)
             elif result == "LOOP":
                 pass
             else:
@@ -138,14 +138,14 @@ class Manager:
             return
         self.size -= 1
         self.paused -= 1
-        self._swap(e.slot, self.size)
-        self._swap(self.size, self.paused)
+        self._entity_swap(e.slot, self.size)
+        self._entity_swap(self.size, self.paused)
 
     def resume_entity(self, e):
         if e.slot < self.paused:
             return
-        self._swap(e.slot, self.paused)
-        self._swap(self.paused, self.size)
+        self._entity_swap(e.slot, self.paused)
+        self._entity_swap(self.paused, self.size)
         self.paused += 1
         self.size += 1
 
@@ -154,9 +154,9 @@ class Manager:
             e.destructor(e)
         if e.slot < self.size:
             self.size -= 1
-            self._swap(e.slot, self.size)
+            self._entity_swap(e.slot, self.size)
         elif e.slot >= self.paused:
-            self._swap(e.slot, self.paused)
+            self._entity_swap(e.slot, self.paused)
             self.paused += 1
 
     def foreach_active(self, fn):
