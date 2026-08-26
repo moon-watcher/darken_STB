@@ -474,7 +474,7 @@ uint8_t      data[];        // payload de tamaño variable
 - **Buena localidad de caché**: `darken_update` solo recorre `[0, size)`, nunca
   toca slots libres ni pausados.
 - **Diseño consciente de la plataforma**: alineación a 4 bytes calculada en
-  `_ENTITY_STRIDE`, preferencia por miembros de 16 bits — pensado en serio
+  `_DARKEN_ENTITY_STRIDE`, preferencia por miembros de 16 bits — pensado en serio
   para 68K, no solo de nombre.
 - **FSM compacta**: los valores de control (`DELETE`/`LOOP`/`PAUSE`) viajan en el
   valor de retorno del propio callback, sin necesitar un campo de estado aparte.
@@ -490,7 +490,7 @@ uint8_t      data[];        // payload de tamaño variable
   variable local con la posición *antigua* de la entidad en el segundo `swap`, en
   vez de releer su posición actual (que sí cambió tras el primer `swap`). Si en tu
   proyecto pausas más de una entidad a la vez, evita `resume()` hasta corregirlo,
-  o corrígelo tú mismo siguiendo el mismo patrón que usa `_ENTITY_PAUSE`
+  o corrígelo tú mismo siguiendo el mismo patrón que usa `_DARKEN_ENTITY_PAUSE`
   (releer `entidad->slot` en cada paso en vez de cachearlo).
 - **⚠️ Bug confirmado en `darken_reset()`**: reutiliza `DARKEN_FOREACH`, que solo
   recorre la zona activa por diseño (así debe ser para el update por frame). Pero
@@ -614,7 +614,7 @@ invariantes del manager. Trátalos como de solo lectura interna del motor.
 
 ## 3. Funciones públicas
 
-| Función                                                | Qué hace                                                                                                                                                                                                                                                                                    | Precondición (verificada con `_ASSERT`, que solo retorna en silencio si falla)                                                                     |
+| Función                                                | Qué hace                                                                                                                                                                                                                                                                                    | Precondición (verificada con `_DARKEN_ASSERT`, que solo retorna en silencio si falla)                                                                     |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `darken_init(darken*, pool, storage, capacity, bytes)` | Inicializa el manager: reparte `storage` en slots de `capacity` entidades, cada uno de tamaño `align4(sizeof(darken_entity)+bytes)`, y fija `owner`/`slot` de cada una. `size=0`, `paused=capacity` (todo libre).                                                                           | —                                                                                                                                                         |
 | `darken_spawn(darken*)`                                | Toma el siguiente slot libre, lo pasa a la zona activa (`size++`) y devuelve el `darken_entity`.                                                                                                                                                                                            | Debe haber al menos un slot libre (`size < paused`); si no, **devuelve `NULL`**.                                                                          |
@@ -723,13 +723,13 @@ DARKEN_FOREACH(&manager, {
 - **Cero asignación dinámica en tiempo de ejecución**: toda la memoria es un bloque fijo
   proporcionado por el llamador (vía `DARKEN_STORAGE` o memoria propia), ideal para plataformas
   sin heap fiable.
-- **Alineación consciente del hardware**: `_ALIGN4` y `__attribute__((aligned(4)))`
+- **Alineación consciente del hardware**: `_DARKEN_ALIGN4` y `__attribute__((aligned(4)))`
   respetan el requisito de alineación a palabra del 68000.
 - **Máquina de estados compacta**: reutilizar el mismo puntero de función tanto para "próximo
   estado" como para "comando de control" (delete/loop/pause) evita tener flags de vida
   separados; el propio código de la entidad decide su destino.
 - **API pequeña y de bajo overhead**: mucho de lo crítico en rendimiento vive en macros
-  (`_ENTITY_PAUSE`, `_ENTITY_DELETE`) que se inlinean en el sitio de la llamada.
+  (`_DARKEN_ENTITY_PAUSE`, `_DARKEN_ENTITY_DELETE`) que se inlinean en el sitio de la llamada.
 
 ---
 
@@ -740,7 +740,7 @@ DARKEN_FOREACH(&manager, {
 - **"Privado" no está impuesto por el tipo.** `owner`/`slot` son de solo uso interno por
   convención de comentario, pero el struct completo es visible; nada evita que código de
   usuario los toque y rompa los invariantes de zona.
-- **`_ASSERT` es un guard clause silencioso**, no un assert de verdad: si la
+- **`_DARKEN_ASSERT` es un guard clause silencioso**, no un assert de verdad: si la
   precondición falla, la función simplemente retorna sin hacer nada — no hay log, ni abort, ni
   código de error. Un uso incorrecto (p. ej. pausar dos veces la misma entidad) no se detecta en
   ningún sitio; se enmascara como un no-op.
@@ -799,10 +799,10 @@ Comparando la función pública con la macro que usa `darken_update` internament
 ```c
 void darken_entity_delete(darken_entity $)
 {
-    if (_ENTITY_IN_ACTIVE($))
-        _ENTITY_DELETE($);          // <- esta rama SÍ llama al destructor
-    else if (_ENTITY_IN_PAUSED($))
-        _entity_swap($->owner->pool, $->slot, $->owner->paused++); // <- esta NO
+    if (_DARKEN_ENTITY_IN_ACTIVE($))
+        _DARKEN_ENTITY_DELETE($);          // <- esta rama SÍ llama al destructor
+    else if (_DARKEN_ENTITY_IN_PAUSED($))
+        _darken_entity_swap($->owner->pool, $->slot, $->owner->paused++); // <- esta NO
 }
 ```
 
@@ -820,7 +820,7 @@ borrar, o revisa/parchea esta rama si te afecta.
 ```c
 void darken_reset(darken *$)
 {
-    DARKEN_FOREACH($, _ENTITY_DELETE(ENTITY)); // solo recorre [0, size)
+    DARKEN_FOREACH($, _DARKEN_ENTITY_DELETE(ENTITY)); // solo recorre [0, size)
     $->size = 0;
     $->paused = $->capacity; // ¡las pausadas "vuelven a ser libres" sin pasar por aquí!
 }
@@ -867,7 +867,7 @@ es, salvo la primerísima vez) y fija explícitamente **todos** los campos (`sta
 ### 6.5 `DARKEN_FOREACH` usa nombres de variable fijos, sin higiene de macro
 
 ```c
-#define _FOREACH(MANAGER, CODE) _BLOCK( \
+#define _DARKEN_FOREACH(MANAGER, CODE) _DARKEN_BLOCK( \
     uint16_t INDEX = (MANAGER)->size; \
     darken_entity *POOL = (MANAGER)->pool; \
     while (INDEX--) { \
@@ -894,13 +894,13 @@ nombres tus propias variables `ENTITY`/`INDEX`/`POOL`.
 ```c
 darken_entity darken_spawn(darken *$)
 {
-    _ASSERT($->size < $->paused, 0); // devuelve NULL si no hay slots libres
+    _DARKEN_ASSERT($->size < $->paused, 0); // devuelve NULL si no hay slots libres
     return $->pool[$->size++];
 }
 ```
 
 Si el pool está lleno (todo activo + pausado, sin libres), `darken_spawn` devuelve `NULL` sin
-avisar de ninguna otra forma (recordemos: `_ASSERT` es silencioso). Usar el resultado
+avisar de ninguna otra forma (recordemos: `_DARKEN_ASSERT` es silencioso). Usar el resultado
 sin comprobarlo (`darken_spawn(&mgr)->state = ...`) es un null-pointer-dereference clásico bajo
 carga alta — exactamente cuando más entidades tienes en pantalla.
 
@@ -1191,7 +1191,7 @@ DARKEN_FOREACH(&proyectiles, {
 - Si necesitas reaccionar al borrado en el mismo frame (no un frame después), llama a `darken_entity_delete()` directamente en vez de devolver `DARKEN_DELETE` desde el estado.
 - No leas ni escribas `entity->owner` / `entity->slot` desde fuera del motor.
 - Un manager = un tamaño de payload; usa un `darken` distinto por cada tipo de entidad con tamaño distinto.
-- Los "asserts" nunca reportan nada. _ASSERT no devuelve.
+- Los "asserts" nunca reportan nada. _DARKEN_ASSERT no devuelve.
 
 ## Cómo se usa
 
