@@ -143,21 +143,23 @@ uint16_t darken_entity_delete(darken_entity);
 #define DARKEN_ARGS(NAME) \
     (NAME).pool, (NAME).data, (NAME).capacity, (NAME).payload_size
 
-#define DARKEN_FOREACH(MANAGER, CODE)                                          \
-    do                                                                         \
-    {                                                                          \
-        uint16_t _index = (MANAGER)->size;                                     \
-        if (_index)                                                            \
-        {                                                                      \
-            darken_entity *_pool = (MANAGER)->pool;                            \
-                                                                               \
-            while (_index--)                                                   \
-            {                                                                  \
-                darken_entity _entity __attribute__((unused)) = _pool[_index]; \
-                CODE;                                                          \
-            }                                                                  \
-        }                                                                      \
+#define DARKEN_BLOCK(CODE) \
+    do                     \
+    {                      \
+        CODE               \
     } while (0)
+
+#define DARKEN_FOREACH(MANAGER, CODE) DARKEN_BLOCK(                        \
+    uint16_t _index = (MANAGER)->size;                                     \
+    if (_index) {                                                          \
+        darken_entity *_pool = (MANAGER)->pool;                            \
+                                                                           \
+        while (_index--)                                                   \
+        {                                                                  \
+            darken_entity _entity __attribute__((unused)) = _pool[_index]; \
+            CODE;                                                          \
+        }                                                                  \
+    })
 
 void darken_init(darken *, darken_entity[], void *, uint16_t, uint16_t);
 darken_entity darken_spawn(darken *);
@@ -170,29 +172,23 @@ void darken_reset(darken *);
 
 #ifdef DARKEN_IMPLEMENTATION
 
-#define _BLOCK(CODE) \
-    do               \
-    {                \
-        CODE         \
-    } while (0)
-
-#define _ASSERT(COND) _BLOCK( \
+#define _ASSERT(COND) DARKEN_BLOCK( \
     if (!(COND)) return 0;)
 
 #define _RUN(ENTITY) \
     ENTITY->state(ENTITY->data);
 
-#define _UPDATE(ENTITY) _BLOCK(       \
+#define _UPDATE(ENTITY) DARKEN_BLOCK( \
     void *state = _RUN(ENTITY);       \
                                       \
     if (!DARKEN_STATE_IS_LOOP(state)) \
         ENTITY->state = state;)
 
-#define _PAUSE(ENTITY) _BLOCK(                                                     \
+#define _PAUSE(ENTITY) DARKEN_BLOCK(                                               \
     _darken_entity_swap(ENTITY->owner->pool, ENTITY->slot, --ENTITY->owner->size); \
     _darken_entity_swap(ENTITY->owner->pool, ENTITY->slot, --ENTITY->owner->paused);)
 
-#define _RESUME(ENTITY) _BLOCK(                                        \
+#define _RESUME(ENTITY) DARKEN_BLOCK(                                  \
     darken *manager = ENTITY->owner;                                   \
                                                                        \
     _darken_entity_swap(manager->pool, ENTITY->slot, manager->paused); \
@@ -201,7 +197,7 @@ void darken_reset(darken *);
     ++manager->paused;                                                 \
     ++manager->size;)
 
-#define _DELETE(ENTITY) _BLOCK(                     \
+#define _DELETE(ENTITY) DARKEN_BLOCK(               \
     darken *manager = ENTITY->owner;                \
                                                     \
     if (DARKEN_STATE_IS_ACTIVE(ENTITY->destructor)) \
