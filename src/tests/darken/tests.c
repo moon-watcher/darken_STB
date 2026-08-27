@@ -55,31 +55,31 @@ static void darken_test_creation(void)
     DARKEN_STORAGE(m_storage, 3, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
     CHECK("manager empieza con size 0", m.size == 0);
-    darken_entity e0 = darken_spawn(&m);
-    darken_entity e1 = darken_spawn(&m);
-    darken_entity e2 = darken_spawn(&m);
-    darken_entity e3 = darken_spawn(&m);
+    darken_object e0 = darken_spawn(&m);
+    darken_object e1 = darken_spawn(&m);
+    darken_object e2 = darken_spawn(&m);
+    darken_object e3 = darken_spawn(&m);
     CHECK("new valida (1)", e0 != 0);
     CHECK("new valida (2)", e1 != 0);
     CHECK("new valida (3)", e2 != 0);
     CHECK("new devuelve 0 al llenarse", e3 == 0);
     CHECK("size == capacity", m.size == 3);
-    CHECK("arranca en state delete", e0->state == DARKEN_DELETE);
+    CHECK("arranca en state delete", e0->update == DARKEN_DELETE);
     CHECK("arranca con tag 0", e0->tag == 0);
 }
 
 static int g_walkCalls = 0;
-static void *darken_state_walk(void *data)
+static void *darken_callback_walk(void *data)
 {
     struct MyComponent *c = (struct MyComponent *)data;
     c->x += 1;
     ++g_walkCalls;
     return DARKEN_LOOP;
 }
-static void *darken_state_once_then_idle(void *data)
+static void *darken_callback_once_then_idle(void *data)
 {
     (void)data;
-    return darken_state_walk;
+    return darken_callback_walk;
 }
 
 static void darken_test_update(void)
@@ -89,23 +89,23 @@ static void darken_test_update(void)
     darken m;
     DARKEN_STORAGE(m_storage, 2, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity a = darken_spawn(&m);
+    darken_object a = darken_spawn(&m);
     struct MyComponent *c = (struct MyComponent *)a->data;
     c->x = 0;
-    a->state = darken_state_walk;
+    a->update = darken_callback_walk;
     darken_update(&m);
     darken_update(&m);
     darken_update(&m);
-    CHECK("loop no cambia puntero", a->state == darken_state_walk);
+    CHECK("loop no cambia puntero", a->update == darken_callback_walk);
     CHECK("loop ejecuta x3", g_walkCalls == 3 && c->x == 3);
-    darken_entity e2 = darken_spawn(&m);
-    e2->state = darken_state_once_then_idle;
+    darken_object e2 = darken_spawn(&m);
+    e2->update = darken_callback_once_then_idle;
     darken_update(&m);
-    CHECK("transicion actualiza estado", e2->state == darken_state_walk);
+    CHECK("transicion actualiza estado", e2->update == darken_callback_walk);
 }
 
 static int g_idleCalls = 0;
-static void *darken_state_idle_counter(void *data)
+static void *darken_callback_idle_counter(void *data)
 {
     (void)data;
     ++g_idleCalls;
@@ -119,18 +119,18 @@ static void darken_test_pause_resume(void)
     darken m;
     DARKEN_STORAGE(m_storage, 4, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity a = darken_spawn(&m);
-    darken_entity b = darken_spawn(&m);
-    a->state = darken_state_idle_counter;
-    b->state = darken_state_idle_counter;
+    darken_object a = darken_spawn(&m);
+    darken_object b = darken_spawn(&m);
+    a->update = darken_callback_idle_counter;
+    b->update = darken_callback_idle_counter;
     darken_update(&m);
     CHECK("ambas activas: 2 llamadas", g_idleCalls == 2);
-    darken_entity_pause(b);
+    darken_object_pause(b);
     CHECK("b queda en zona pausada", b->slot >= m.paused);
     g_idleCalls = 0;
     darken_update(&m);
     CHECK("con b pausada: 1 llamada", g_idleCalls == 1);
-    darken_entity_resume(b);
+    darken_object_resume(b);
     CHECK("b vuelve a zona activa", b->slot < m.paused);
     g_idleCalls = 0;
     darken_update(&m);
@@ -144,7 +144,7 @@ static void *darken_my_destructor(void *data)
     ++g_destructorCalls;
     return DARKEN_PAUSE;
 }
-static void *darken_state_noop(void *data)
+static void *darken_callback_noop(void *data)
 {
     (void)data;
     return DARKEN_LOOP;
@@ -157,19 +157,19 @@ static void darken_test_delete(void)
     darken m;
     DARKEN_STORAGE(m_storage, 4, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity a = darken_spawn(&m);
-    darken_entity b = darken_spawn(&m);
-    darken_entity c = darken_spawn(&m);
-    a->destructor = darken_my_destructor;
-    b->destructor = darken_my_destructor;
-    c->destructor = darken_my_destructor;
-    b->state = darken_state_noop;
-    c->state = darken_state_noop;
-    a->state = DARKEN_DELETE;
+    darken_object a = darken_spawn(&m);
+    darken_object b = darken_spawn(&m);
+    darken_object c = darken_spawn(&m);
+    a->destroy= darken_my_destructor;
+    b->destroy= darken_my_destructor;
+    c->destroy= darken_my_destructor;
+    b->update = darken_callback_noop;
+    c->update = darken_callback_noop;
+    a->update = DARKEN_DELETE;
     darken_update(&m);
     CHECK("delete via estado: size 2", m.size == 2);
     CHECK("delete via estado: destructor 1 vez", g_destructorCalls == 1);
-    darken_entity_delete(b);
+    darken_object_delete(b);
     CHECK("delete directo: size 1", m.size == 1);
     CHECK("delete directo: destructor 2 veces", g_destructorCalls == 2);
 }
@@ -182,7 +182,7 @@ static void darken_test_apply(void)
     darken_init(&m, DARKEN_ARGS(m_storage));
     for (int i = 0; i < 5; ++i)
     {
-        darken_entity a = darken_spawn(&m);
+        darken_object a = darken_spawn(&m);
         a->tag = i;
     }
 
@@ -190,10 +190,10 @@ static void darken_test_apply(void)
     uint16_t idx = 0;
     while (idx < m.size)
     {
-        darken_entity a = m.pool[idx];
+        darken_object a = m.pool[idx];
         if (a->tag % 2 == 0)
         {
-            darken_entity_delete(a);
+            darken_object_delete(a);
             // No incrementamos idx: la entidad movida al slot actual debe comprobarse
         }
         else
@@ -221,8 +221,8 @@ static void darken_test_reset(void)
     darken_init(&m, DARKEN_ARGS(m_storage));
     for (int i = 0; i < 6; ++i)
     {
-        darken_entity a = darken_spawn(&m);
-        a->destructor = darken_my_destructor;
+        darken_object a = darken_spawn(&m);
+        a->destroy= darken_my_destructor;
     }
     darken_reset(&m);
     CHECK("reset: size 0", m.size == 0);
@@ -230,7 +230,7 @@ static void darken_test_reset(void)
 }
 
 static int g_abortDestructorCalls = 0;
-static void *darken_state_abort_destructor(void *data)
+static void *darken_callback_abort_destructor(void *data)
 {
     (void)data;
     ++g_abortDestructorCalls;
@@ -244,18 +244,18 @@ static void darken_test_destructor_abort(void)
     darken m;
     DARKEN_STORAGE(m_storage, 2, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity a = darken_spawn(&m);
-    a->destructor = darken_state_abort_destructor;
-    a->state = DARKEN_DELETE;
+    darken_object a = darken_spawn(&m);
+    a->destroy= darken_callback_abort_destructor;
+    a->update = DARKEN_DELETE;
     darken_update(&m);
     CHECK("abort: size 1", m.size == 0);
     CHECK("abort: destructor llamado", g_abortDestructorCalls == 1);
     CHECK("abort: entidad viva", a->slot == m.size);
-    CHECK("abort: estado a loop", a->state == DARKEN_DELETE);
+    CHECK("abort: estado a loop", a->update == DARKEN_DELETE);
 }
 
 static int g_selfKillCalls = 0;
-static void *darken_state_self_kill(void *data)
+static void *darken_callback_self_kill(void *data)
 {
     (void)data;
     ++g_selfKillCalls;
@@ -269,13 +269,13 @@ static void darken_test_self_delete(void)
     darken m;
     DARKEN_STORAGE(m_storage, 3, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity a = darken_spawn(&m);
-    darken_entity b = darken_spawn(&m);
-    a->state = darken_state_self_kill;
-    b->state = darken_state_noop;
+    darken_object a = darken_spawn(&m);
+    darken_object b = darken_spawn(&m);
+    a->update = darken_callback_self_kill;
+    b->update = darken_callback_noop;
     darken_update(&m);
     CHECK("self-del f1: ejecutado 1 vez", g_selfKillCalls == 1);
-    CHECK("self-del f1: marcada deleted", a->state == DARKEN_PAUSE);
+    CHECK("self-del f1: marcada deleted", a->update == DARKEN_PAUSE);
     CHECK("self-del f1: size aun 2", m.size == 2);
     darken_update(&m);
     CHECK("self-del f2: size 1", m.size == 1);
@@ -288,20 +288,20 @@ static void darken_test_slot_stability(void)
     darken m;
     DARKEN_STORAGE(m_storage, 4, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity e0 = darken_spawn(&m);
-    darken_entity e1 = darken_spawn(&m);
-    darken_entity e2 = darken_spawn(&m);
-    darken_entity e3 = darken_spawn(&m);
-    e0->state = e1->state = e2->state = e3->state = darken_state_noop;
-    darken_entity_pause(e1);
-    darken_entity_pause(e3);
+    darken_object e0 = darken_spawn(&m);
+    darken_object e1 = darken_spawn(&m);
+    darken_object e2 = darken_spawn(&m);
+    darken_object e3 = darken_spawn(&m);
+    e0->update = e1->update = e2->update = e3->update = darken_callback_noop;
+    darken_object_pause(e1);
+    darken_object_pause(e3);
     bool stable = TRUE;
     for (uint16_t i = 0; i < m.size; ++i)
         if (m.pool[i]->slot != i)
             stable = FALSE;
     CHECK("slots tras pausar", stable);
     CHECK("paused 2", m.paused == 2);
-    darken_entity_delete(e0);
+    darken_object_delete(e0);
     stable = TRUE;
     for (uint16_t i = 0; i < m.size; ++i)
         if (m.pool[i]->slot != i)
@@ -316,12 +316,12 @@ static void darken_test_delete_paused(void)
     darken m;
     DARKEN_STORAGE(m_storage, 4, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity a = darken_spawn(&m);
-    darken_entity b = darken_spawn(&m);
-    darken_entity c = darken_spawn(&m);
-    a->state = b->state = c->state = darken_state_noop;
-    darken_entity_pause(b);
-    darken_entity_delete(b);
+    darken_object a = darken_spawn(&m);
+    darken_object b = darken_spawn(&m);
+    darken_object c = darken_spawn(&m);
+    a->update = b->update = c->update = darken_callback_noop;
+    darken_object_pause(b);
+    darken_object_delete(b);
     CHECK("del pausado: size 2", m.size == 2);
     CHECK("del pausado: paused 4", m.paused == 4);
     CHECK("del pausado: a activa", a->slot < m.paused); 
@@ -334,18 +334,18 @@ static void darken_test_apply_pause(void)
     darken m;
     DARKEN_STORAGE(m_storage, 6, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity entities[6];
+    darken_object entities[6];
     for (int i = 0; i < 6; ++i)
     {
         entities[i] = darken_spawn(&m);
         entities[i]->tag = i;
-        entities[i]->state = darken_state_noop;
+        entities[i]->update = darken_callback_noop;
     }
 
     // Pausar las pares manualmente (seguro)
     for (int i = 0; i < 6; i += 2)
     {
-        darken_entity_pause(entities[i]);
+        darken_object_pause(entities[i]);
     }
 
     CHECK("apply pause: paused 3", m.paused == 3);
@@ -354,7 +354,7 @@ static void darken_test_apply_pause(void)
     // Verificar que pares están en pausa y impares en activa
     for (int i = 0; i < 6; ++i)
     {
-        darken_entity a = entities[i];
+        darken_object a = entities[i];
         bool shouldBePaused = (a->tag % 2) == 0;
         bool isPaused = (a->slot >= m.paused);
         if (shouldBePaused != isPaused)
@@ -372,12 +372,12 @@ static void darken_test_reuse(void)
     darken m;
     DARKEN_STORAGE(m_storage, 3, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity e0 = darken_spawn(&m);
-    e0->state = darken_state_noop;
+    darken_object e0 = darken_spawn(&m);
+    e0->update = darken_callback_noop;
     struct MyComponent *d0 = (struct MyComponent *)e0->data;
     d0->x = 42;
-    darken_entity_delete(e0);
-    darken_entity e1 = darken_spawn(&m);
+    darken_object_delete(e0);
+    darken_object e1 = darken_spawn(&m);
     CHECK("reuse: not null", e1 != 0);
     CHECK("reuse: slot 0", e1->slot == 0);
     CHECK("reuse: size 1", m.size == 1);
@@ -386,13 +386,13 @@ static void darken_test_reuse(void)
 }
 
 static int g_stressCallsA = 0, g_stressCallsB = 0;
-static void *darken_state_stress_a(void *data)
+static void *darken_callback_stress_a(void *data)
 {
     (void)data;
     ++g_stressCallsA;
     return DARKEN_LOOP;
 }
-static void *darken_state_stress_b(void *data)
+static void *darken_callback_stress_b(void *data)
 {
     (void)data;
     ++g_stressCallsB;
@@ -407,23 +407,23 @@ static void darken_test_mixed_stress(void)
     darken m;
     DARKEN_STORAGE(m_storage, 5, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity a[5];
+    darken_object a[5];
     for (int i = 0; i < 5; ++i)
     {
         a[i] = darken_spawn(&m);
         a[i]->tag = i;
-        a[i]->state = (i % 2 == 0) ? darken_state_stress_a : darken_state_stress_b;
+        a[i]->update = (i % 2 == 0) ? darken_callback_stress_a : darken_callback_stress_b;
     }
     darken_update(&m);
     CHECK("stress f1: 5 llamadas", g_stressCallsA + g_stressCallsB == 5);
-    darken_entity_pause(a[1]);
-    a[3]->state = DARKEN_DELETE;
+    darken_object_pause(a[1]);
+    a[3]->update = DARKEN_DELETE;
     g_stressCallsA = 0;
     g_stressCallsB = 0;
     darken_update(&m);
     CHECK("stress f2: 3 activas", g_stressCallsA + g_stressCallsB == 3);
     CHECK("stress f2: size 3", m.size == 3);
-    darken_entity_resume(a[1]);
+    darken_object_resume(a[1]);
     g_stressCallsA = 0;
     g_stressCallsB = 0;
     darken_update(&m);
@@ -441,18 +441,18 @@ static void darken_test_data_integrity(void)
     darken m;
     DARKEN_STORAGE(m_storage, 3, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity a = darken_spawn(&m);
-    darken_entity b = darken_spawn(&m);
-    darken_entity c = darken_spawn(&m);
+    darken_object a = darken_spawn(&m);
+    darken_object b = darken_spawn(&m);
+    darken_object c = darken_spawn(&m);
     struct MyComponent *da = (struct MyComponent *)a->data;
     struct MyComponent *db = (struct MyComponent *)b->data;
     struct MyComponent *dc = (struct MyComponent *)c->data;
     da->x = 111;
     db->x = 333;
     dc->x = 555;
-    a->state = b->state = c->state = darken_state_noop;
-    darken_entity_pause(b);
-    darken_entity_delete(a);
+    a->update = b->update = c->update = darken_callback_noop;
+    darken_object_pause(b);
+    darken_object_delete(a);
     CHECK("integrity a", ((struct MyComponent *)a->data)->x == 111);
     CHECK("integrity b", ((struct MyComponent *)b->data)->x == 333);
     CHECK("integrity c", ((struct MyComponent *)c->data)->x == 555);
@@ -476,9 +476,9 @@ static void darken_test_delete_last(void)
     darken m;
     DARKEN_STORAGE(m_storage, 4, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity a = darken_spawn(&m);
-    a->state = darken_state_noop;
-    darken_entity_delete(a);
+    darken_object a = darken_spawn(&m);
+    a->update = darken_callback_noop;
+    darken_object_delete(a);
     CHECK("last: size 0", m.size == 0);
     CHECK("last: paused 4", m.paused == 4);
 }
@@ -489,7 +489,7 @@ static void darken_test_stress_capacity(void)
     darken m;
     DARKEN_STORAGE(m_storage, 50, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity ents[50];
+    darken_object ents[50];
     for (int i = 0; i < 50; ++i)
     {
         ents[i] = darken_spawn(&m);
@@ -497,11 +497,11 @@ static void darken_test_stress_capacity(void)
     }
     CHECK("capacity 50", m.size == 50);
     for (int i = 0; i < 50; i += 2)
-        darken_entity_delete(ents[i]);
+        darken_object_delete(ents[i]);
     CHECK("tras borrar pares: size 25", m.size == 25);
     for (int i = 0; i < 10; ++i)
     {
-        darken_entity a = darken_spawn(&m);
+        darken_object a = darken_spawn(&m);
         CHECK("rellenar huecos", a != 0);
     }
     CHECK("size final 35", m.size == 35);
@@ -522,21 +522,21 @@ static void darken_test_stress_many_entities(void)
     darken m;
     DARKEN_STORAGE(m_storage, 20, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity a[20];
+    darken_object a[20];
     for (int i = 0; i < 20; ++i)
     {
         a[i] = darken_spawn(&m);
         a[i]->tag = i;
-        a[i]->state = darken_state_noop;
+        a[i]->update = darken_callback_noop;
     }
     for (int i = 1; i < 20; i += 2)
-        darken_entity_delete(a[i]);
+        darken_object_delete(a[i]);
     CHECK("many: size 10 tras borrar impares", m.size == 10);
     for (int i = 0; i < 5; ++i)
     {
-        darken_entity ne = darken_spawn(&m);
+        darken_object ne = darken_spawn(&m);
         ne->tag = 100 + i;
-        ne->state = darken_state_noop;
+        ne->update = darken_callback_noop;
     }
     CHECK("many: size 15 tras recrear", m.size == 15);
     bool unique = TRUE;
@@ -553,21 +553,21 @@ static void darken_test_stress_fragmentation(void)
     darken m;
     DARKEN_STORAGE(m_storage, 20, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity a[20];
+    darken_object a[20];
     for (int i = 0; i < 20; ++i)
     {
         a[i] = darken_spawn(&m);
         a[i]->tag = i;
-        a[i]->state = darken_state_noop;
+        a[i]->update = darken_callback_noop;
     }
     for (int i = 1; i < 20; i += 2)
-        darken_entity_delete(a[i]);
+        darken_object_delete(a[i]);
     CHECK("frag: size 10 tras borrar impares", m.size == 10);
     for (int i = 0; i < 5; ++i)
     {
-        darken_entity ne = darken_spawn(&m);
+        darken_object ne = darken_spawn(&m);
         ne->tag = 100 + i;
-        ne->state = darken_state_noop;
+        ne->update = darken_callback_noop;
     }
     CHECK("frag: size 15 tras recrear", m.size == 15);
     bool unique = TRUE;
@@ -583,7 +583,7 @@ static void darken_test_stress_fragmentation(void)
 // static void *darken_test_
 
 static int g_execCalls = 0;
-static void *darken_state_exec_counter(void *data)
+static void *darken_callback_exec_counter(void *data)
 {
     (void)data;
     ++g_execCalls;
@@ -597,28 +597,28 @@ static void darken_test_entity_exec(void)
     darken m;
     DARKEN_STORAGE(m_storage, 2, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity a = darken_spawn(&m);
-    a->state = darken_state_exec_counter;
-    darken_entity_run(a);
+    darken_object a = darken_spawn(&m);
+    a->update = darken_callback_exec_counter;
+    darken_object_run(a);
     CHECK("exec: llamado 1 vez", g_execCalls == 1);
-    CHECK("exec: estado no cambia", a->state == darken_state_exec_counter);
-    darken_entity_run(a);
-    darken_entity_run(a);
+    CHECK("exec: estado no cambia", a->update == darken_callback_exec_counter);
+    darken_object_run(a);
+    darken_object_run(a);
     CHECK("exec: llamado 3 veces", g_execCalls == 3);
 }
 
 
-static void *darken_state_transition_target(void *data)
+static void *darken_callback_transition_target(void *data)
 {
     struct MyComponent *c = (struct MyComponent *)data;
     c->x = 999;
     return DARKEN_LOOP;
 }
 
-static void *darken_state_transition_source(void *data)
+static void *darken_callback_transition_source(void *data)
 {
     (void)data;
-    return darken_state_transition_target;
+    return darken_callback_transition_target;
 }
 
 static void darken_test_state_transition(void)
@@ -627,12 +627,12 @@ static void darken_test_state_transition(void)
     darken m;
     DARKEN_STORAGE(m_storage, 1, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity a = darken_spawn(&m);
+    darken_object a = darken_spawn(&m);
     struct MyComponent *c = (struct MyComponent *)a->data;
     c->x = 0;
-    a->state = darken_state_transition_source;
+    a->update = darken_callback_transition_source;
     darken_update(&m);
-    CHECK("transicion: estado cambiado", a->state == darken_state_transition_target);
+    CHECK("transicion: estado cambiado", a->update == darken_callback_transition_target);
     darken_update(&m);
     CHECK("transicion: nuevo estado ejecutado", c->x == 999);
 }
@@ -644,12 +644,12 @@ static void darken_test_delete_twice(void)
     darken m;
     DARKEN_STORAGE(m_storage, 2, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity a = darken_spawn(&m);
-    a->destructor = darken_my_destructor;
-    a->state = darken_state_noop;
-    darken_entity_delete(a);
+    darken_object a = darken_spawn(&m);
+    a->destroy= darken_my_destructor;
+    a->update = darken_callback_noop;
+    darken_object_delete(a);
     CHECK("delete twice: size 0 tras primer delete", m.size == 0);
-    darken_entity_delete(a);
+    darken_object_delete(a);
     CHECK("delete twice: size sigue 0 (ya borrada)", m.size == 0);
     CHECK("delete twice: destructor 1 vez", g_destructorCalls == 1);
 }
@@ -660,13 +660,13 @@ static void darken_test_pause_already_paused(void)
     darken m;
     DARKEN_STORAGE(m_storage, 2, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity a = darken_spawn(&m);
-    darken_entity b = darken_spawn(&m);
-    a->state = b->state = darken_state_noop;
-    darken_entity_pause(a);
+    darken_object a = darken_spawn(&m);
+    darken_object b = darken_spawn(&m);
+    a->update = b->update = darken_callback_noop;
+    darken_object_pause(a);
     uint16_t slot_before = a->slot;
     uint16_t pause_before = m.paused;
-    darken_entity_pause(a);
+    darken_object_pause(a);
     CHECK("pause idempotente: slot no cambia", a->slot == slot_before);
     CHECK("pause idempotente: paused no cambia", m.paused == pause_before);
 }
@@ -677,12 +677,12 @@ static void darken_test_resume_already_active(void)
     darken m;
     DARKEN_STORAGE(m_storage, 2, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity a = darken_spawn(&m);
-    darken_entity b = darken_spawn(&m);
-    a->state = b->state = darken_state_noop;
+    darken_object a = darken_spawn(&m);
+    darken_object b = darken_spawn(&m);
+    a->update = b->update = darken_callback_noop;
     uint16_t slot_before = a->slot;
     uint16_t pause_before = m.paused;
-    darken_entity_resume(a);
+    darken_object_resume(a);
     CHECK("resume idempotente: slot no cambia", a->slot == slot_before);
     CHECK("resume idempotente: paused no cambia", m.paused == pause_before);
 }
@@ -695,11 +695,11 @@ static void darken_test_manager_iterate_active_only(void)
     darken_init(&m, DARKEN_ARGS(m_storage));
     for (int i = 0; i < 4; ++i)
     {
-        darken_entity a = darken_spawn(&m);
+        darken_object a = darken_spawn(&m);
         a->tag = i;
-        a->state = darken_state_noop;
+        a->update = darken_callback_noop;
     }
-    darken_entity_pause(m.pool[1]);
+    darken_object_pause(m.pool[1]);
     uint16_t count = 0;
     DARKEN_FOREACH(&m, { count++; });
     CHECK("iterate active: 3 entidades", count == 3);
@@ -713,35 +713,35 @@ static void darken_test_apply_active_only(void)
     darken_init(&m, DARKEN_ARGS(m_storage));
     for (int i = 0; i < 4; ++i)
     {
-        darken_entity a = darken_spawn(&m);
+        darken_object a = darken_spawn(&m);
         a->tag = i;
-        a->state = darken_state_noop;
+        a->update = darken_callback_noop;
     }
-    darken_entity_pause(m.pool[0]);
-    darken_entity_pause(m.pool[2]);
+    darken_object_pause(m.pool[0]);
+    darken_object_pause(m.pool[2]);
     // Eliminar tag 1 manualmente
     for (uint16_t i = 0; i < m.size; ++i)
     {
         if (m.pool[i]->tag == 1)
         {
-            darken_entity_delete(m.pool[i]);
+            darken_object_delete(m.pool[i]);
             break;
         }
     }
     CHECK("apply active: size 1", m.size == 1);
     bool foundTag1 = FALSE;
-    DARKEN_FOREACH(&m, { if (_entity->tag == 1) foundTag1 = TRUE; });
+    DARKEN_FOREACH(&m, { if (_object->tag == 1) foundTag1 = TRUE; });
     CHECK("apply active: tag 1 borrado", !foundTag1);
 }
 
 
 
 static int g_destructorChangeCalls = 0;
-static void *darken_state_change_via_destructor(void *data)
+static void *darken_callback_change_via_destructor(void *data)
 {
     (void)data;
     ++g_destructorChangeCalls;
-    return darken_state_noop;
+    return darken_callback_noop;
 }
 
 static void darken_test_destructor_state_change(void)
@@ -751,13 +751,13 @@ static void darken_test_destructor_state_change(void)
     darken m;
     DARKEN_STORAGE(m_storage, 1, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity a = darken_spawn(&m);
-    a->destructor = darken_state_change_via_destructor;
-    a->state = DARKEN_DELETE;
+    darken_object a = darken_spawn(&m);
+    a->destroy= darken_callback_change_via_destructor;
+    a->update = DARKEN_DELETE;
     darken_update(&m);
     CHECK("destructor change: size 1", m.size == 0);
     CHECK("destructor change: llamado 1 vez", g_destructorChangeCalls == 1);
-    CHECK("destructor change: estado cambiado a noop", a->state == DARKEN_DELETE);
+    CHECK("destructor change: estado cambiado a noop", a->update == DARKEN_DELETE);
 }
 
 static void darken_test_entity_update_direct(void)
@@ -767,13 +767,13 @@ static void darken_test_entity_update_direct(void)
     darken m;
     DARKEN_STORAGE(m_storage, 1, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity a = darken_spawn(&m);
+    darken_object a = darken_spawn(&m);
     struct MyComponent *c = (struct MyComponent *)a->data;
     c->x = 0;
-    a->state = darken_state_walk;
-    darken_entity_update(a);
+    a->update = darken_callback_walk;
+    darken_object_update(a);
     CHECK("update direct: ejecuta estado", g_walkCalls == 1 && c->x == 1);
-    CHECK("update direct: estado sigue activo", a->state == darken_state_walk);
+    CHECK("update direct: estado sigue activo", a->update == darken_callback_walk);
 }
 
 void darken_run_all_tests(void)

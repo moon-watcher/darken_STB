@@ -44,8 +44,8 @@ static void darken_bench_update(void)
     darken_init(&m, DARKEN_ARGS(m_storage));
     for (u16 i = 0; i < 32; ++i)
     {
-        darken_entity e = darken_spawn(&m);
-        e->state = darken_bench_state_fn;
+        darken_object e = darken_spawn(&m);
+        e->update = darken_bench_state_fn;
     }
     u32 t0 = bench_start();
     for (u32 r = 0; r < BENCH_REPS; ++r)
@@ -64,13 +64,13 @@ static void darken_bench_apply(void)
     {
         for (u16 i = 0; i < 32; ++i)
         {
-            darken_entity e = darken_spawn(&m);
+            darken_object e = darken_spawn(&m);
             e->tag = i;
         }
-        // DARKEN_MANAGER_APPLY(&m, (ENTITY->tag % 2) == 0, darken_entity_delete);
+        // DARKEN_MANAGER_APPLY(&m, (ENTITY->tag % 2) == 0, darken_object_delete);
         DARKEN_FOREACH(&m, {
-            if (_entity->tag % 2 == 0)
-                darken_entity_delete(_entity);
+            if (_object->tag % 2 == 0)
+                darken_object_delete(_object);
         });
         darken_reset(&m);
     }
@@ -117,8 +117,8 @@ static void darken_bench_update_128(void)
     darken_init(&m, DARKEN_ARGS(m_storage));
     for (u16 i = 0; i < 128; ++i)
     {
-        darken_entity e = darken_spawn(&m);
-        e->state = darken_bench_state_fn;
+        darken_object e = darken_spawn(&m);
+        e->update = darken_bench_state_fn;
     }
     u32 t0 = bench_start();
     for (u32 r = 0; r < 500; ++r)
@@ -134,8 +134,8 @@ static void darken_bench_update_256(void)
     darken_init(&m, DARKEN_ARGS(m_storage));
     for (u16 i = 0; i < 256; ++i)
     {
-        darken_entity e = darken_spawn(&m);
-        e->state = darken_bench_state_fn;
+        darken_object e = darken_spawn(&m);
+        e->update = darken_bench_state_fn;
     }
     u32 t0 = bench_start();
     for (u32 r = 0; r < 250; ++r)
@@ -149,23 +149,23 @@ static void darken_bench_swap(void)
     darken m;
     DARKEN_STORAGE(m_storage, 2, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity a = darken_spawn(&m);
-    darken_entity b = darken_spawn(&m);
+    darken_object a = darken_spawn(&m);
+    darken_object b = darken_spawn(&m);
     u32 t0 = bench_start();
     (void)a;
     (void)b;
     u32 frames = bench_frames_elapsed(t0);
-    kprintf("darken_entity_swap x50000: %ld frames (comentado)", frames);
+    kprintf("darken_object_swap x50000: %ld frames (comentado)", frames);
 }
 
 static void darken_bench_memory_overhead(void)
 {
     kprintf("========== MEMORIA ==========");
-    u16 stride16 = DARKEN_ENTITY_STRIDE(16);
-    u16 stride32 = DARKEN_ENTITY_STRIDE(32);
-    u16 stride1 = DARKEN_ENTITY_STRIDE(1);
-    u16 stride9 = DARKEN_ENTITY_STRIDE(9);
-    kprintf("sizeof(darken_entity) base: %d bytes", (int)sizeof(struct darken_entity));
+    u16 stride16 = DARKEN_OBJECT_STRIDE(16);
+    u16 stride32 = DARKEN_OBJECT_STRIDE(32);
+    u16 stride1 = DARKEN_OBJECT_STRIDE(1);
+    u16 stride9 = DARKEN_OBJECT_STRIDE(9);
+    kprintf("sizeof(darken_object) base: %d bytes", (int)sizeof(struct darken_object));
     kprintf("stride payload=1:  %d bytes/entidad", stride1);
     kprintf("stride payload=9:  %d bytes/entidad (impar)", stride9);
     kprintf("stride payload=16: %d bytes/entidad", stride16);
@@ -173,17 +173,17 @@ static void darken_bench_memory_overhead(void)
     darken m32;
     DARKEN_STORAGE(m32_storage, 32, sizeof(struct MyComponent));
     darken_init(&m32, DARKEN_ARGS(m32_storage));
-    u32 bytes32 = 32 * DARKEN_ENTITY_STRIDE(sizeof(struct MyComponent));
+    u32 bytes32 = 32 * DARKEN_OBJECT_STRIDE(sizeof(struct MyComponent));
     kprintf("Manager 32 entidades (payload %d): %ld bytes en storage", (int)sizeof(struct MyComponent), bytes32);
     darken m128;
     DARKEN_STORAGE(m128_storage, 128, sizeof(struct MyComponent));
     darken_init(&m128, DARKEN_ARGS(m128_storage));
-    u32 bytes128 = 128 * DARKEN_ENTITY_STRIDE(sizeof(struct MyComponent));
+    u32 bytes128 = 128 * DARKEN_OBJECT_STRIDE(sizeof(struct MyComponent));
     kprintf("Manager 128 entidades (payload %d): %ld bytes en storage", (int)sizeof(struct MyComponent), bytes128);
-    u16 overhead = DARKEN_ENTITY_STRIDE(sizeof(struct MyComponent)) - sizeof(struct MyComponent);
+    u16 overhead = DARKEN_OBJECT_STRIDE(sizeof(struct MyComponent)) - sizeof(struct MyComponent);
     kprintf("Overhead por entidad: %d bytes (header + padding)", overhead);
     u32 ramAvailable = 64 * 1024;
-    u32 entidadesEn64k = ramAvailable / DARKEN_ENTITY_STRIDE(sizeof(struct MyComponent));
+    u32 entidadesEn64k = ramAvailable / DARKEN_OBJECT_STRIDE(sizeof(struct MyComponent));
     kprintf("Entidades de MyComponent que caben en 64 KB: ~%ld", entidadesEn64k);
     kprintf("==============================");
 }
