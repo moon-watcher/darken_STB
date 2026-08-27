@@ -89,9 +89,9 @@ static void test_entity_system_basic(void)
 {
     // kprintf("-- test_entity_system_basic --");
     darken entities, systems;
-    DARKEN_STORAGE(entities_storage, 3, sizeof(TestSystemEntity));
+    DARKEN_DECLARE_STORAGE(entities_storage, 3, sizeof(TestSystemEntity));
     darken_init(&entities, DARKEN_ARGS(entities_storage));
-    DARKEN_STORAGE(systems_storage, 3, sizeof(TestBatchSystem));
+    DARKEN_DECLARE_STORAGE(systems_storage, 3, sizeof(TestBatchSystem));
     darken_init(&systems, DARKEN_ARGS(systems_storage));
     void *physics_items[3], *movement_items[12], *frame_items[3];
     darken_entity frames_entity = darken_spawn(&systems);
@@ -149,9 +149,9 @@ static void test_entity_system_shared_data(void)
 {
     // kprintf("-- test_entity_system_shared_data --");
     darken entities, systems;
-    DARKEN_STORAGE(entities_storage, 2, sizeof(TestSystemEntity));
+    DARKEN_DECLARE_STORAGE(entities_storage, 2, sizeof(TestSystemEntity));
     darken_init(&entities, DARKEN_ARGS(entities_storage));
-    DARKEN_STORAGE(systems_storage, 2, sizeof(TestBatchSystem));
+    DARKEN_DECLARE_STORAGE(systems_storage, 2, sizeof(TestBatchSystem));
     darken_init(&systems, DARKEN_ARGS(systems_storage));
     void *movement_items[8], *frame_items[2];
     darken_entity movement = darken_spawn(&systems);
@@ -186,9 +186,9 @@ static void test_entity_system_paused_entity(void)
 {
     // kprintf("-- test_entity_system_paused_entity --");
     darken entities, systems;
-    DARKEN_STORAGE(entities_storage, 2, sizeof(TestSystemEntity));
+    DARKEN_DECLARE_STORAGE(entities_storage, 2, sizeof(TestSystemEntity));
     darken_init(&entities, DARKEN_ARGS(entities_storage));
-    DARKEN_STORAGE(systems_storage, 1, sizeof(TestBatchSystem));
+    DARKEN_DECLARE_STORAGE(systems_storage, 1, sizeof(TestBatchSystem));
     darken_init(&systems, DARKEN_ARGS(systems_storage));
     void *movement_items[8];
     darken_entity system_entity = darken_spawn(&systems);
@@ -324,9 +324,9 @@ static void test_darksys_as_entities(void)
     // kprintf("-- test_darksys_as_entities --");
 
     darken entities, systems;
-    DARKEN_STORAGE(entities_storage, 2, sizeof(TestDeSystemEntity));
+    DARKEN_DECLARE_STORAGE(entities_storage, 2, sizeof(TestDeSystemEntity));
     darken_init(&entities, DARKEN_ARGS(entities_storage));
-    DARKEN_STORAGE(systems_storage, 3, sizeof(darksys));
+    DARKEN_DECLARE_STORAGE(systems_storage, 3, sizeof(darksys));
     darken_init(&systems, DARKEN_ARGS(systems_storage));
 
     darken_entity frames_entity = darken_spawn(&systems);
@@ -389,9 +389,9 @@ static void test_darksys_shared_payload(void)
 {
     // kprintf("-- test_darksys_shared_payload --");
     darken entities, systems;
-    DARKEN_STORAGE(entities_storage, 1, sizeof(TestDeSystemEntity));
+    DARKEN_DECLARE_STORAGE(entities_storage, 1, sizeof(TestDeSystemEntity));
     darken_init(&entities, DARKEN_ARGS(entities_storage));
-    DARKEN_STORAGE(systems_storage, 2, sizeof(darksys*));
+    DARKEN_DECLARE_STORAGE(systems_storage, 2, sizeof(darksys*));
     darken_init(&systems, DARKEN_ARGS(systems_storage));
     void *movement_pool[4], *frames_pool[1];
     darken_entity movement_entity = darken_spawn(&systems), frames_entity = darken_spawn(&systems);

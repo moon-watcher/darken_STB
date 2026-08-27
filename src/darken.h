@@ -130,16 +130,19 @@ uint16_t darken_entity_delete(darken_entity);
 // Ensures proper alignment between consecutive entitys
 #define DARKEN_ENTITY_STRIDE(PAYLOAD) DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD))
 
-#define DARKEN_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)                                                 \
-    struct                                                                                           \
-    {                                                                                                \
-        uint16_t capacity;                                                                           \
-        uint16_t payload_size;                                                                       \
-        darken_entity pool[(CAPACITY)];                                                              \
-        uint8_t data[(CAPACITY) * DARKEN_ENTITY_STRIDE((PAYLOAD_SIZE))] __attribute__((aligned(4))); \
-    } NAME = {                                                                                       \
-        .capacity = (CAPACITY),                                                                      \
-        .payload_size = (PAYLOAD_SIZE),                                                              \
+#define DARKEN_POOL_MEMORY(CAPACITY) ((CAPACITY) * sizeof(darken_entity))
+#define DARKEN_STORAGE_MEMORY(CAPACITY, PAYLOAD) ((CAPACITY) * DARKEN_ENTITY_STRIDE(PAYLOAD))
+
+#define DARKEN_DECLARE_STORAGE(NAME, CAPACITY, PAYLOAD)                                         \
+    struct                                                                                      \
+    {                                                                                           \
+        uint16_t capacity;                                                                      \
+        uint16_t payload_size;                                                                  \
+        darken_entity pool[(CAPACITY)];                                                         \
+        uint8_t data[(CAPACITY) * DARKEN_ENTITY_STRIDE((PAYLOAD))] __attribute__((aligned(4))); \
+    } NAME = {                                                                                  \
+        .capacity = (CAPACITY),                                                                 \
+        .payload_size = (PAYLOAD),                                                              \
     }
 
 #define DARKEN_ARGS(NAME) \
@@ -163,7 +166,6 @@ uint16_t darken_entity_delete(darken_entity);
     } while (0)
 
 void darken_init(darken *, darken_entity[], void *, uint16_t, uint16_t);
-void darken_init_ex(darken *, darken_entity[], void *, uint16_t, uint16_t);
 darken_entity darken_spawn(darken *);
 void darken_update(darken *);
 void darken_reset(darken *);
@@ -230,42 +232,42 @@ static inline uint16_t _darken_swap(darken_entity pool[], uint16_t i, uint16_t j
 
 //
 
-void darken_init(darken *ctx, darken_entity pool[], void *storage, uint16_t capacity, uint16_t payload_size)
-{
-    darken_init_ex(ctx, pool, storage, capacity, DARKEN_ENTITY_STRIDE(payload_size));
-}
-
 /*
-#define MAX_ENTITIES 100
-#define PAYLOAD_SIZE  sizeof(MyData)
+#define MAX_ENEMIES 50
+#define ENEMY_PAYLOAD sizeof(EnemyData)
+darken manager;
 
-darken enemies_manager;
-darken_entity *pool = malloc(MAX_ENTITIES * sizeof(darken_entity));
-uint16_t stride = DARKEN_ENTITY_STRIDE(PAYLOAD_SIZE);
-uint8_t *storage = malloc(MAX_ENTITIES * stride);
+//
 
-darken_init_ex(&enemies_manager, pool, storage, MAX_ENTITIES, stride);
+DARKEN_DECLARE_STORAGE(enemy_storage, MAX_ENEMIES, ENEMY_PAYLOAD);
+darken_init(&manager, DARKEN_ARGS(enemy_storage));
 
-// ... & free's
+or
+
+darken_entity *pool = malloc(DARKEN_POOL_MEMORY(MAX_ENEMIES));
+uint8_t *storage = malloc(DARKEN_STORAGE_MEMORY(MAX_ENEMIES, ENEMY_PAYLOAD));
+darken_init(&manager, pool, storage, MAX_ENEMIES, ENEMY_PAYLOAD);
+free...
 */
-void darken_init_ex(darken *ctx, darken_entity pool[], void *storage, uint16_t capacity, uint16_t stride)
+void darken_init(darken *ctx, darken_entity pool[], void *param_storage, uint16_t capacity, uint16_t payload_size)
 {
     ctx->pool = pool;
     ctx->capacity = capacity;
     ctx->size = 0;
     ctx->paused = capacity;
 
-    uint8_t *entity_storage = (uint8_t *)storage;
+    uint16_t stride = DARKEN_ENTITY_STRIDE(payload_size);
+    uint8_t *storage = param_storage;
 
     for (uint16_t i = 0; i < capacity; ++i)
     {
-        darken_entity entity = (darken_entity)entity_storage;
+        darken_entity entity = (darken_entity)storage;
 
         pool[i] = entity;
         entity->owner = ctx;
         entity->slot = i;
 
-        entity_storage += stride;
+        storage += stride;
     }
 }
 

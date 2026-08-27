@@ -33,9 +33,9 @@ void darken_run_usage_example(void)
 {
     kprintf("========== EJEMPLO DE USO ==========");
     darken g_manager, g_manager2;
-    DARKEN_STORAGE(g_manager_storage, 10, sizeof(struct MyComponent));
+    DARKEN_DECLARE_STORAGE(g_manager_storage, 10, sizeof(struct MyComponent));
     darken_init(&g_manager, DARKEN_ARGS(g_manager_storage));
-    DARKEN_STORAGE(g_manager2_storage, 20, sizeof(struct MyComponent) + 73);
+    DARKEN_DECLARE_STORAGE(g_manager2_storage, 20, sizeof(struct MyComponent) + 73);
     darken_init(&g_manager2, DARKEN_ARGS(g_manager2_storage));
     darken_entity e1 = darken_spawn(&g_manager);
     struct MyComponent *data1 = (struct MyComponent *)e1->data;
