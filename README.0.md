@@ -52,7 +52,7 @@ Una entidad, en todo momento, está en uno de tres estados desde tu punto de vis
   guardarte un puntero a ella y usarlo cuando la reanudes.
 - **Libre**: slot disponible, sin asignar todavía a ninguna entidad tuya.
 
-Campos que puedes leer/escribir libremente en un `darken_entity`:
+Campos que puedes leer/escribir libremente en un `darken_object`:
 
 | Campo              | Para qué lo usas                                                                  |
 | ------------------ | --------------------------------------------------------------------------------- |
@@ -67,7 +67,7 @@ El manager (`darken`) también expone campos que puedes **leer** directamente si
 ejemplo completo de §6 para saber cuándo parar el bucle). No hace falta llamar a ninguna
 función para consultarlo.
 
-Los campos `owner` y `slot` de `darken_entity` son contabilidad interna del motor — no forman
+Los campos `owner` y `slot` de `darken_object` son contabilidad interna del motor — no forman
 parte del contrato público; no los leas ni los modifiques.
 
 ---
@@ -91,11 +91,11 @@ parte del contrato público; no los leas ni los modifiques.
 | `darken_spawn(darken*)`                                | Activa una entidad libre y te la entrega. Devuelve `NULL` si no queda espacio.                     |
 | `darken_update(darken*)`                               | El "tick": ejecuta el estado de cada entidad activa y aplica pausas/borrados pendientes.           |
 | `darken_reset(darken*)`                                | Borra todas las entidades **activas** (con destructor) y deja el manager como recién iniciado.     |
-| `darken_entity_run(darken_entity)`                     | Ejecuta el estado actual una vez, sin aplicar transición.                                          |
-| `darken_entity_update(darken_entity)`                  | Ejecuta el estado actual y sí aplica la transición, bajo demanda.                                  |
-| `darken_entity_pause(darken_entity)`                   | Pausa la entidad de inmediato.                                                                     |
-| `darken_entity_resume(darken_entity)`                  | Reanuda una entidad pausada.                                                                       |
-| `darken_entity_delete(darken_entity)`                  | Borra la entidad, esté activa o pausada.                                                           |
+| `darken_object_run(darken_object)`                     | Ejecuta el estado actual una vez, sin aplicar transición.                                          |
+| `darken_object_update(darken_object)`                  | Ejecuta el estado actual y sí aplica la transición, bajo demanda.                                  |
+| `darken_object_pause(darken_object)`                   | Pausa la entidad de inmediato.                                                                     |
+| `darken_object_resume(darken_object)`                  | Reanuda una entidad pausada.                                                                       |
+| `darken_object_delete(darken_object)`                  | Borra la entidad, esté activa o pausada.                                                           |
 
 ### Macros
 
@@ -142,27 +142,27 @@ pones tú, más los 4 de la macro).
 ### 4.2 Crear entidades y acceder a su payload
 
 ```c
-darken_entity spawn_particle(float x, float y, float vy, int life)
+darken_object spawn_particle(float x, float y, float vy, int life)
 {
-    darken_entity e = darken_spawn(&manager);
+    darken_object e = darken_spawn(&manager);
     if (!e)
         return NULL; // pool lleno — comprueba esto siempre, ver §8
 
     DARKEN_DATA(Particle, p, e);
     p->x = x; p->y = y; p->vy = vy; p->life = life;
 
-    e->destructor = NULL; // sin limpieza especial (ver por qué esto es obligatorio en §8)
+    e->destroy= NULL; // sin limpieza especial (ver por qué esto es obligatorio en §8)
     return e;
 }
 ```
 
-`e` (el `darken_entity`) y `p` (el puntero a `Particle`) son direcciones distintas: `p` apunta
+`e` (el `darken_object`) y `p` (el puntero a `Particle`) son direcciones distintas: `p` apunta
 dentro de `e->data`. `p` sigue siendo válido aunque la entidad se pause o el motor reordene
 internamente el pool, porque la dirección física de `e` nunca cambia.
 
 ### 4.3 Escribir el comportamiento
 
-`e->state` es la función que se ejecuta cada `darken_update`. Recibe el payload y su valor de
+`e->update` es la función que se ejecuta cada `darken_update`. Recibe el payload y su valor de
 retorno decide qué pasa después (tabla en §3):
 
 ```c
@@ -176,12 +176,12 @@ void *particle_falling(Particle *p)
 ```
 
 ```c
-darken_entity e = spawn_particle(0.0f, 0.0f, 2.0f, 4);
-if (e) e->state = particle_falling;
+darken_object e = spawn_particle(0.0f, 0.0f, 2.0f, 4);
+if (e) e->update = particle_falling;
 ```
 
 Nota: no hizo falta ningún *cast* al asignar `particle_falling` (que recibe `Particle *`) a
-`e->state` (declarado como `darken_state`, que recibe "algo"): lo comprobé compilando con
+`e->update` (declarado como `darken_callback`, que recibe "algo"): lo comprobé compilando con
 `-Wall -Wextra` y no aparece ningún aviso. Es cómodo — cada tipo de entidad puede escribir sus
 funciones con su propio tipo de puntero — pero también significa que el compilador no te avisará
 si mezclas el tipo equivocado entre `state`/`destructor` de dos tipos de entidad distintos.
@@ -207,7 +207,7 @@ void *particle_destructor(Particle *p)
     return NULL; // el valor de retorno del destructor se ignora
 }
 
-e->destructor = particle_destructor;
+e->destroy= particle_destructor;
 ```
 
 ### 4.6 Recorrer las entidades activas
@@ -222,7 +222,7 @@ DARKEN_FOREACH(&manager, {
 });
 ```
 
-`ENTITY` (tipo `darken_entity`) lo define la propia macro dentro del bloque. Solo visita la zona
+`ENTITY` (tipo `darken_object`) lo define la propia macro dentro del bloque. Solo visita la zona
 activa — nunca libres ni pausadas.
 
 ### 4.7 Pausar y reanudar
@@ -230,19 +230,19 @@ activa — nunca libres ni pausadas.
 Pausar saca a la entidad del bucle de `darken_update` sin borrarla — su memoria sigue intacta:
 
 ```c
-darken_entity_pause(e);   // e sale de la zona activa, deja de actualizarse
+darken_object_pause(e);   // e sale de la zona activa, deja de actualizarse
 // ...
-darken_entity_resume(e);  // e vuelve a la zona activa
+darken_object_resume(e);  // e vuelve a la zona activa
 ```
 
-(Probé explícitamente `darken_entity_resume()` con varias entidades pausadas a la vez,
+(Probé explícitamente `darken_object_resume()` con varias entidades pausadas a la vez,
 reanudando una que no era ni la primera ni la última en pausarse, y se comportó correctamente
 en todos los casos — sin corromper ni perder ninguna entidad.)
 
 ### 4.8 Borrar una entidad concreta
 
 ```c
-darken_entity_delete(e); // funciona tanto si "e" está activa como pausada
+darken_object_delete(e); // funciona tanto si "e" está activa como pausada
 ```
 
 Ver §8 sobre el destructor si `e` estaba pausada.
@@ -288,14 +288,14 @@ int main(void)
     darken_init(&manager, DARKEN_ARGS(storage));
 
     for (int i = 0; i < 5; i++) {
-        darken_entity e = darken_spawn(&manager);
+        darken_object e = darken_spawn(&manager);
         if (!e) break;
 
         DARKEN_DATA(Particle, p, e);
         p->x = (float)i; p->y = 0; p->vy = 1.0f; p->life = 3 + i;
 
-        e->state = particle_falling;
-        e->destructor = particle_destructor;
+        e->update = particle_falling;
+        e->destroy= particle_destructor;
     }
 
     while (manager.size > 0)
@@ -347,7 +347,7 @@ sentado.** Comprobé que un slot reciclado conserva los valores de su ocupante a
 ```
 tras borrar A: destructor de A se ejecuta (correcto)
 darken_spawn() reutiliza el mismo slot para B
-si NO fijas b->destructor explícitamente, sigue apuntando al destructor de A
+si NO fijas b->destroyexplícitamente, sigue apuntando al destructor de A
 al borrar B: se ejecuta el destructor de A sobre los datos de B
 ```
 
@@ -357,16 +357,16 @@ código de B lo pidiera en ningún momento.
 **3. `DARKEN_DELETE`/`DARKEN_PAUSE` devuelto desde el estado tarda un frame en aplicarse.**
 Comprobé que tras el `darken_update()` en el que una entidad devuelve `DARKEN_DELETE`, sigue
 contando como activa (`manager.size` sin cambiar, destructor sin ejecutar) hasta la llamada
-*siguiente*. Si necesitas el efecto inmediato, llama tú mismo a `darken_entity_delete()` /
-`darken_entity_pause()` en vez de depender del retorno del estado.
+*siguiente*. Si necesitas el efecto inmediato, llama tú mismo a `darken_object_delete()` /
+`darken_object_pause()` en vez de depender del retorno del estado.
 
-**4. `darken_entity_delete()` sobre una entidad pausada NO llama a su destructor.** Confirmado:
+**4. `darken_object_delete()` sobre una entidad pausada NO llama a su destructor.** Confirmado:
 solo se garantiza la llamada al destructor cuando se borra algo que estaba activo. Si necesitas
 limpieza garantizada, reanuda antes de borrar:
 
 ```c
-darken_entity_resume(e);
-darken_entity_delete(e); // ahora sí se ejecuta el destructor
+darken_object_resume(e);
+darken_object_delete(e); // ahora sí se ejecuta el destructor
 ```
 
 **5. `darken_reset()` tampoco llama al destructor de las entidades pausadas — y aun así libera
@@ -379,7 +379,7 @@ reanuda todo lo pausado antes de resetear.
 declares variables con esos nombres dentro del bloque, y evita anidar un `DARKEN_FOREACH`
 dentro de otro (el interno tapa silenciosamente las variables del externo).
 
-**7. Sobre `darken_entity_resume()` con varias entidades pausadas**: lo probé específicamente —
+**7. Sobre `darken_object_resume()` con varias entidades pausadas**: lo probé específicamente —
 pausar tres entidades y reanudar la del medio (ninguna de las que se pausó primero ni la
 última) — y el resultado fue siempre correcto: la reanudada queda activa, y las otras dos
 siguen pausadas sin mezclarse ni corromperse. Si en algún otro sitio ves advertencias sobre un
@@ -392,10 +392,10 @@ supuesto bug ahí, no lo pude reproducir contra este header.
 - [ ] `DARKEN_IMPLEMENTATION` definido en un solo `.c`.
 - [ ] Comprobar siempre que `darken_spawn()` no devuelva `NULL`.
 - [ ] Fijar `state`, `destructor`, `tag`, `usr` y el payload en cada spawn, sin excepción.
-- [ ] Si dependes de destructores garantizados, reanudar antes de `darken_entity_delete()` /
+- [ ] Si dependes de destructores garantizados, reanudar antes de `darken_object_delete()` /
       `darken_reset()` sobre cualquier cosa pausada.
 - [ ] Si necesitas el efecto inmediato de un borrado/pausa, llamar a
-      `darken_entity_delete()`/`darken_entity_pause()` en vez de devolver el valor de control
+      `darken_object_delete()`/`darken_object_pause()` en vez de devolver el valor de control
       desde el estado.
 - [ ] No declarar variables `ENTITY`/`INDEX` propias, no anidar `DARKEN_FOREACH`.
 - [ ] Un manager = un tamaño de payload; un `darken` distinto por cada tipo de entidad.
@@ -409,24 +409,24 @@ supuesto bug ahí, no lo pude reproducir contra este header.
 | Tipo            | Descripción                                                                                                                |
 | --------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `darken`        | Puntero opaco al manager (`darken *`).                                                                                     |
-| `darken_entity` | Puntero opaco a una entidad (`struct darken_entity *`).                                                                    |
-| `darken_state`  | `void *(*)()` — callback de estado/destructor. Recibe `entity->data` y devuelve el siguiente estado o un valor de control. |
+| `darken_object` | Puntero opaco a una entidad (`struct darken_object *`).                                                                    |
+| `darken_callback`  | `void *(*)()` — callback de estado/destructor. Recibe `entity->data` y devuelve el siguiente estado o un valor de control. |
 
-### Valores de control (lo que puede devolver un `darken_state`)
+### Valores de control (lo que puede devolver un `darken_callback`)
 
 | Valor                    | Efecto                                                        |
 | ------------------------ | ------------------------------------------------------------- |
 | `DARKEN_DELETE`          | Elimina la entidad (invoca su destructor si tiene).           |
 | `DARKEN_LOOP`            | Mantiene el estado actual sin cambios.                        |
 | `DARKEN_PAUSE`           | Pausa la entidad (sale del bucle de update).                  |
-| *cualquier otro puntero* | Se interpreta como el **nuevo** `darken_state` de la entidad. |
+| *cualquier otro puntero* | Se interpreta como el **nuevo** `darken_callback` de la entidad. |
 
 ### Funciones a nivel *manager*
 
 | Función                                                                                           | Qué hace                                                                      |
 | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `void darken_init(darken, darken_entity *pool, void *storage, uint16_t capacity, uint16_t bytes)` | Inicializa el manager sobre memoria ya reservada por el llamador.             |
-| `darken_entity darken_spawn(darken)`                                                              | Toma un slot libre y lo activa. Devuelve `NULL` si no queda espacio.          |
+| `void darken_init(darken, darken_object *pool, void *storage, uint16_t capacity, uint16_t bytes)` | Inicializa el manager sobre memoria ya reservada por el llamador.             |
+| `darken_object darken_spawn(darken)`                                                              | Toma un slot libre y lo activa. Devuelve `NULL` si no queda espacio.          |
 | `void darken_update(darken)`                                                                      | Recorre la zona activa: ejecuta estado, procesa pausas y borrados pendientes. |
 | `void darken_reset(darken)`                                                                       | Vacía el manager (ver ⚠️ en «Puntos flacos»).                                  |
 
@@ -434,11 +434,11 @@ supuesto bug ahí, no lo pude reproducir contra este header.
 
 | Función                                    | Qué hace                                                                            |
 | ------------------------------------------ | ----------------------------------------------------------------------------------- |
-| `void darken_entity_run(darken_entity)`    | Ejecuta el callback de estado **sin** aplicar su valor de retorno (no transiciona). |
-| `void darken_entity_update(darken_entity)` | Ejecuta el callback y sí aplica el resultado (transiciona de estado).               |
-| `void darken_entity_pause(darken_entity)`  | Mueve la entidad a la zona de pausadas.                                             |
-| `void darken_entity_resume(darken_entity)` | Devuelve la entidad a la zona activa (ver ⚠️ en «Puntos flacos»).                    |
-| `void darken_entity_delete(darken_entity)` | Borra la entidad esté activa o pausada, invocando su destructor.                    |
+| `void darken_object_run(darken_object)`    | Ejecuta el callback de estado **sin** aplicar su valor de retorno (no transiciona). |
+| `void darken_object_update(darken_object)` | Ejecuta el callback y sí aplica el resultado (transiciona de estado).               |
+| `void darken_object_pause(darken_object)`  | Mueve la entidad a la zona de pausadas.                                             |
+| `void darken_object_resume(darken_object)` | Devuelve la entidad a la zona activa (ver ⚠️ en «Puntos flacos»).                    |
+| `void darken_object_delete(darken_object)` | Borra la entidad esté activa o pausada, invocando su destructor.                    |
 
 ### Macros de conveniencia
 
@@ -447,15 +447,15 @@ supuesto bug ahí, no lo pude reproducir contra este header.
 | `DARKEN(nombre, CAPACIDAD, TAMAÑO_PAYLOAD)` / `DARKEN_STORAGE(...)` | Declara el `pool[]` + bloque de datos alineado a 4 bytes. **No** declara el `darken` en sí — eso lo declaras tú aparte. |
 | `DARKEN_ARGS(nombre)`                                               | Expande a `pool, data, capacity, payload_size` para pasar a `darken_init`.                                              |
 | `DARKEN_DATA(TIPO, var, entidad)`                                   | `TIPO *var = (TIPO *)entidad->data;` — acceso tipado al payload.                                                        |
-| `DARKEN_FOREACH(manager, CODIGO)`                                   | Itera la zona activa; expone `ENTITY` (tipo `darken_entity`) dentro de `CODIGO`.                                        |
-| `DARKEN_STATE_IS_DELETED/LOOP/PAUSED/ACTIVE(estado)`                | Clasifica un valor `darken_state`.                                                                                      |
+| `DARKEN_FOREACH(manager, CODIGO)`                                   | Itera la zona activa; expone `ENTITY` (tipo `darken_object`) dentro de `CODIGO`.                                        |
+| `DARKEN_STATE_IS_DELETED/LOOP/PAUSED/ACTIVE(estado)`                | Clasifica un valor `darken_callback`.                                                                                      |
 | `DARKEN_ASSERT(condicion, valor_de_retorno)`                        | `if (!condicion) return valor_de_retorno;` — guard rápido.                                                              |
 
-### Campos públicos de `darken_entity`
+### Campos públicos de `darken_object`
 
 ```c
-darken_state state;       // callback ejecutado cada update
-darken_state destructor;  // opcional; se llama al borrar la entidad
+darken_callback state;       // callback ejecutado cada update
+darken_callback destructor;  // opcional; se llama al borrar la entidad
 uint32_t     tag;          // libre para el usuario
 uint16_t     usr;           // libre para el usuario
 uint8_t      data[];        // payload de tamaño variable
@@ -474,14 +474,14 @@ uint8_t      data[];        // payload de tamaño variable
 - **Buena localidad de caché**: `darken_update` solo recorre `[0, size)`, nunca
   toca slots libres ni pausados.
 - **Diseño consciente de la plataforma**: alineación a 4 bytes calculada en
-  `_DARKEN_ENTITY_STRIDE`, preferencia por miembros de 16 bits — pensado en serio
+  `_DARKEN_OBJECT_STRIDE`, preferencia por miembros de 16 bits — pensado en serio
   para 68K, no solo de nombre.
 - **FSM compacta**: los valores de control (`DELETE`/`LOOP`/`PAUSE`) viajan en el
   valor de retorno del propio callback, sin necesitar un campo de estado aparte.
 
 ## Puntos flacos
 
-- **⚠️ Bug confirmado en `darken_entity_resume()`**: si en la zona de pausadas hay
+- **⚠️ Bug confirmado en `darken_object_resume()`**: si en la zona de pausadas hay
   más de una entidad y reanudas una que **no** está justo en el borde de esa zona,
   el algoritmo mueve a la entidad equivocada. Lo verifiqué compilando y ejecutando
   código real: al pausar 3 entidades y reanudar la del medio, esta se queda donde
@@ -490,7 +490,7 @@ uint8_t      data[];        // payload de tamaño variable
   variable local con la posición *antigua* de la entidad en el segundo `swap`, en
   vez de releer su posición actual (que sí cambió tras el primer `swap`). Si en tu
   proyecto pausas más de una entidad a la vez, evita `resume()` hasta corregirlo,
-  o corrígelo tú mismo siguiendo el mismo patrón que usa `_DARKEN_ENTITY_PAUSE`
+  o corrígelo tú mismo siguiendo el mismo patrón que usa `_DARKEN_OBJECT_PAUSE`
   (releer `entidad->slot` en cada paso en vez de cachearlo).
 - **⚠️ Bug confirmado en `darken_reset()`**: reutiliza `DARKEN_FOREACH`, que solo
   recorre la zona activa por diseño (así debe ser para el update por frame). Pero
@@ -499,7 +499,7 @@ uint8_t      data[];        // payload de tamaño variable
   entidades pausadas presentes, el mensaje no aparece para ellas. Si el
   destructor libera recursos (memoria externa, handles, etc.), esto es una fuga
   silenciosa cada vez que reseteas el manager con algo pausado.
-- **`darken_state` sin prototipo** (`void *(*)()` en vez de `void *(*)(void *)`):
+- **`darken_callback` sin prototipo** (`void *(*)()` en vez de `void *(*)(void *)`):
   es sintaxis C válida pero de estilo K&R, y el compilador no puede verificar que
   tus callbacks reciban el argumento correcto.
 - **Comparación de punteros con `>` para `DARKEN_STATE_IS_ACTIVE`**: formalmente
@@ -507,7 +507,7 @@ uint8_t      data[];        // payload de tamaño variable
   al mismo array. Funciona en la práctica en cualquier plataforma real (los
   punteros se tratan como enteros), pero conviene saber que la librería depende
   de eso.
-- **`darken_entity_run()` y `darken_entity_update()`** se parecen mucho pero
+- **`darken_object_run()` y `darken_object_update()`** se parecen mucho pero
   tienen semántica distinta (una ignora el valor de retorno del callback, la otra
   lo aplica), y esa diferencia no está explicada dentro del propio header.
 - **`DARKEN` y `DARKEN_STORAGE` son alias idénticos** — no hay razón aparente
@@ -553,7 +553,7 @@ mismo trato que cualquier librería de un solo header.
 
 ```c
 typedef struct darken {
-    darken_entity *pool;   // array de punteros a entidades
+    darken_object *pool;   // array de punteros a entidades
     uint16_t capacity;     // nº total de slots
     uint16_t size;         // nº de entidades activas
     uint16_t paused;       // índice donde empieza la zona de pausadas
@@ -563,7 +563,7 @@ typedef struct darken {
 `pool` **no contiene las entidades**, contiene punteros a ellas. Las entidades viven en un
 bloque de memoria fijo (el que le pasas a `darken_init`) y **nunca se mueven de dirección**;
 lo único que se reordena es el array de punteros. Esto es la garantía central de la librería:
-puedes guardar un `darken_entity` (o un puntero a `entity->data`) en otra estructura y sigue
+puedes guardar un `darken_object` (o un puntero a `entity->data`) en otra estructura y sigue
 siendo válido aunque la entidad se pause, reanude o se reordene el pool internamente — mientras
 no se borre.
 
@@ -580,17 +580,17 @@ El array `pool[]` se mantiene siempre particionado en tres zonas contiguas:
   jamás se reciclan por `darken_spawn()`, así que un puntero a los datos de una entidad pausada
   permanece válido hasta que se reanude o se borre explícitamente.
 
-### `darken_entity` (la entidad)
+### `darken_object` (la entidad)
 
 ```c
-struct darken_entity {
+struct darken_object {
     // "privados" (solo por convención — nada lo impone en C)
     darken *owner;
     uint16_t slot;
 
     // públicos
-    darken_state state;
-    darken_state destructor;
+    darken_callback state;
+    darken_callback destructor;
     uint32_t tag;   // libre para el usuario
     uint16_t usr;   // libre para el usuario
     uint8_t data[]; // payload de tamaño variable (flexible array member)
@@ -616,15 +616,15 @@ invariantes del manager. Trátalos como de solo lectura interna del motor.
 
 | Función                                                | Qué hace                                                                                                                                                                                                                                                                                    | Precondición (verificada con `_DARKEN_ASSERT`, que solo retorna en silencio si falla)                                                                     |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `darken_init(darken*, pool, storage, capacity, bytes)` | Inicializa el manager: reparte `storage` en slots de `capacity` entidades, cada uno de tamaño `align4(sizeof(darken_entity)+bytes)`, y fija `owner`/`slot` de cada una. `size=0`, `paused=capacity` (todo libre).                                                                           | —                                                                                                                                                         |
-| `darken_spawn(darken*)`                                | Toma el siguiente slot libre, lo pasa a la zona activa (`size++`) y devuelve el `darken_entity`.                                                                                                                                                                                            | Debe haber al menos un slot libre (`size < paused`); si no, **devuelve `NULL`**.                                                                          |
+| `darken_init(darken*, pool, storage, capacity, bytes)` | Inicializa el manager: reparte `storage` en slots de `capacity` entidades, cada uno de tamaño `align4(sizeof(darken_object)+bytes)`, y fija `owner`/`slot` de cada una. `size=0`, `paused=capacity` (todo libre).                                                                           | —                                                                                                                                                         |
+| `darken_spawn(darken*)`                                | Toma el siguiente slot libre, lo pasa a la zona activa (`size++`) y devuelve el `darken_object`.                                                                                                                                                                                            | Debe haber al menos un slot libre (`size < paused`); si no, **devuelve `NULL`**.                                                                          |
 | `darken_update(darken*)`                               | El "tick" principal. Recorre la zona activa de atrás hacia delante; por cada entidad: si su estado es una función activa, la llama y aplica la transición; si su estado es `DARKEN_PAUSE`, la mueve a pausadas; si es `DARKEN_DELETE`, llama al destructor (si lo hay) y la mueve a libres. | —                                                                                                                                                         |
 | `darken_reset(darken*)`                                | Borra **todas las entidades activas** (llamando a sus destructores) y resetea `size=0`, `paused=capacity`.                                                                                                                                                                                  | Ver ⚠️ pitfall §6.3 — las pausadas **no** pasan por aquí.                                                                                                  |
-| `darken_entity_run(darken_entity)`                     | Llama a `state(data)` una vez, **sin** aplicar ninguna transición (ignora el valor de retorno). Útil para ejecutar la lógica actual bajo demanda (p. ej. una fase de render separada del update) sin mutar la máquina de estados.                                                           | La entidad debe estar activa.                                                                                                                             |
-| `darken_entity_update(darken_entity)`                  | Igual que lo que hace `darken_update` por dentro para una sola entidad: llama a `state(data)` y, si el resultado no es `DARKEN_LOOP`, reemplaza `state`. Permite avanzar una entidad concreta bajo demanda en vez de esperar al frame.                                                      | La entidad debe estar activa.                                                                                                                             |
-| `darken_entity_pause(darken_entity)`                   | Pausa manual e inmediata (sin esperar a que la propia entidad devuelva `DARKEN_PAUSE`).                                                                                                                                                                                                     | La entidad debe estar en la zona activa.                                                                                                                  |
-| `darken_entity_resume(darken_entity)`                  | Reanuda una entidad pausada, devolviéndola a la zona activa.                                                                                                                                                                                                                                | La entidad debe estar en la zona de pausadas.                                                                                                             |
-| `darken_entity_delete(darken_entity)`                  | Borra manualmente una entidad, esté activa o pausada.                                                                                                                                                                                                                                       | Ninguna explícita — si la entidad ya está libre, no hace nada (idempotente). Ver ⚠️ pitfall §6.2: **no llama al destructor si la entidad estaba pausada.** |
+| `darken_object_run(darken_object)`                     | Llama a `state(data)` una vez, **sin** aplicar ninguna transición (ignora el valor de retorno). Útil para ejecutar la lógica actual bajo demanda (p. ej. una fase de render separada del update) sin mutar la máquina de estados.                                                           | La entidad debe estar activa.                                                                                                                             |
+| `darken_object_update(darken_object)`                  | Igual que lo que hace `darken_update` por dentro para una sola entidad: llama a `state(data)` y, si el resultado no es `DARKEN_LOOP`, reemplaza `state`. Permite avanzar una entidad concreta bajo demanda en vez de esperar al frame.                                                      | La entidad debe estar activa.                                                                                                                             |
+| `darken_object_pause(darken_object)`                   | Pausa manual e inmediata (sin esperar a que la propia entidad devuelva `DARKEN_PAUSE`).                                                                                                                                                                                                     | La entidad debe estar en la zona activa.                                                                                                                  |
+| `darken_object_resume(darken_object)`                  | Reanuda una entidad pausada, devolviéndola a la zona activa.                                                                                                                                                                                                                                | La entidad debe estar en la zona de pausadas.                                                                                                             |
+| `darken_object_delete(darken_object)`                  | Borra manualmente una entidad, esté activa o pausada.                                                                                                                                                                                                                                       | Ninguna explícita — si la entidad ya está libre, no hace nada (idempotente). Ver ⚠️ pitfall §6.2: **no llama al destructor si la entidad estaba pausada.** |
 
 ---
 
@@ -650,7 +650,7 @@ darken_init(&manager, DARKEN_ARGS(storage));
 
 ## 5. El ciclo de vida basado en estados
 
-Cada entidad ejecuta, frame a frame, una función `darken_state` que recibe `entity->data` y
+Cada entidad ejecuta, frame a frame, una función `darken_callback` que recibe `entity->data` y
 devuelve:
 
 - **`DARKEN_LOOP`** → seguir en el mismo estado el próximo frame.
@@ -691,12 +691,12 @@ static void *enemigo_destructor(void *data)
 }
 
 // Al crear el enemigo:
-darken_entity ent = darken_spawn(&manager);
+darken_object ent = darken_spawn(&manager);
 if (ent) { // ¡comprobar NULL! puede que no haya slots libres
     DARKEN_DATA(Enemy, e, ent);
     e->x = 100; e->salud = 10;
-    ent->state = (darken_state)enemigo_patrulla;
-    ent->destructor = (darken_state)enemigo_destructor;
+    ent->update = (darken_callback)enemigo_patrulla;
+    ent->destroy= (darken_callback)enemigo_destructor;
     ent->tag = 0; ent->usr = 0;
 }
 
@@ -729,7 +729,7 @@ DARKEN_FOREACH(&manager, {
   estado" como para "comando de control" (delete/loop/pause) evita tener flags de vida
   separados; el propio código de la entidad decide su destino.
 - **API pequeña y de bajo overhead**: mucho de lo crítico en rendimiento vive en macros
-  (`_DARKEN_ENTITY_PAUSE`, `_DARKEN_ENTITY_DELETE`) que se inlinean en el sitio de la llamada.
+  (`_DARKEN_OBJECT_PAUSE`, `_DARKEN_OBJECT_DELETE`) que se inlinean en el sitio de la llamada.
 
 ---
 
@@ -744,7 +744,7 @@ DARKEN_FOREACH(&manager, {
   precondición falla, la función simplemente retorna sin hacer nada — no hay log, ni abort, ni
   código de error. Un uso incorrecto (p. ej. pausar dos veces la misma entidad) no se detecta en
   ningún sitio; se enmascara como un no-op.
-- **`darken_state` es un puntero a función sin prototipo** (`void *(*)()`), lo que desactiva la
+- **`darken_callback` es un puntero a función sin prototipo** (`void *(*)()`), lo que desactiva la
   comprobación de tipos de argumentos en la llamada. Da flexibilidad (cada función de estado
   puede tomar el tipo de puntero que quiera), pero también elimina una red de seguridad del
   compilador; un desajuste de tipos entre lo que el motor pasa (`entity->data`, un
@@ -769,7 +769,7 @@ DARKEN_FOREACH(&manager, {
 ### 6.1 Retraso de un frame entre "señal de borrado/pausa" y el efecto real
 
 Cuando una función de estado devuelve `DARKEN_DELETE` o `DARKEN_PAUSE`, `darken_update` **solo
-guarda ese valor en `entity->state`**; la entidad sigue contando como "activa"
+guarda ese valor en `entity->update`**; la entidad sigue contando como "activa"
 (`slot < size`, visible para `DARKEN_FOREACH`) hasta la *siguiente* llamada a `darken_update`,
 momento en el que el motor relee el estado, lo reconoce como centinela, y recién ahí llama al
 destructor / mueve la entidad de zona.
@@ -777,7 +777,7 @@ destructor / mueve la entidad de zona.
 ```c
 // Frame N: la función de estado decide borrarse
 return DARKEN_DELETE;
-// -> entity->state queda en 0, pero la entidad SIGUE en la zona activa
+// -> entity->update queda en 0, pero la entidad SIGUE en la zona activa
 
 // Entre frame N y N+1: cualquier DARKEN_FOREACH (p. ej. tu fase de render)
 // todavía la visita, y su destructor AÚN no se ha ejecutado.
@@ -789,20 +789,20 @@ return DARKEN_DELETE;
 Si tu bucle de juego hace `darken_update()` y luego, en el mismo frame, un `DARKEN_FOREACH`
 para renderizar, **vas a dibujar durante un frame extra una entidad que ya "se marcó" como
 borrada**, y que ni siquiera ha recibido su destructor. Si necesitas reaccionar
-inmediatamente al borrado, usa `darken_entity_delete()` directamente en lugar de devolver
+inmediatamente al borrado, usa `darken_object_delete()` directamente en lugar de devolver
 `DARKEN_DELETE` desde el estado.
 
-### 6.2 `darken_entity_delete` no llama al destructor si la entidad estaba pausada
+### 6.2 `darken_object_delete` no llama al destructor si la entidad estaba pausada
 
 Comparando la función pública con la macro que usa `darken_update` internamente:
 
 ```c
-void darken_entity_delete(darken_entity $)
+void darken_object_delete(darken_object $)
 {
-    if (_DARKEN_ENTITY_IN_ACTIVE($))
-        _DARKEN_ENTITY_DELETE($);          // <- esta rama SÍ llama al destructor
-    else if (_DARKEN_ENTITY_IN_PAUSED($))
-        _darken_entity_swap($->owner->pool, $->slot, $->owner->paused++); // <- esta NO
+    if (_DARKEN_OBJECT_IN_ACTIVE($))
+        _DARKEN_OBJECT_DELETE($);          // <- esta rama SÍ llama al destructor
+    else if (_DARKEN_OBJECT_IN_PAUSED($))
+        _darken_object_swap($->owner->pool, $->slot, $->owner->paused++); // <- esta NO
 }
 ```
 
@@ -812,7 +812,7 @@ código, no una decisión documentada. Si tus destructores liberan recursos (tem
 sonidos, contadores externos, lo que sea en tu plataforma), una entidad pausada que borras
 directamente se va a "fugar" ese recurso.
 
-**Mitigación**: si necesitas destructor garantizado, reanuda (`darken_entity_resume`) antes de
+**Mitigación**: si necesitas destructor garantizado, reanuda (`darken_object_resume`) antes de
 borrar, o revisa/parchea esta rama si te afecta.
 
 ### 6.3 `darken_reset` tampoco llama al destructor de las entidades pausadas
@@ -820,7 +820,7 @@ borrar, o revisa/parchea esta rama si te afecta.
 ```c
 void darken_reset(darken *$)
 {
-    DARKEN_FOREACH($, _DARKEN_ENTITY_DELETE(ENTITY)); // solo recorre [0, size)
+    DARKEN_FOREACH($, _DARKEN_OBJECT_DELETE(ENTITY)); // solo recorre [0, size)
     $->size = 0;
     $->paused = $->capacity; // ¡las pausadas "vuelven a ser libres" sin pasar por aquí!
 }
@@ -847,13 +847,13 @@ ciclo de uso/borrado, el slot conserva lo que dejó su ocupante anterior:
 
 ```c
 // Ciclo 1: entidad A ocupa el slot 5
-entA->destructor = destructor_de_A;
+entA->destroy= destructor_de_A;
 // ... más tarde A se borra, el slot 5 vuelve a la zona libre
 // (destructor_de_A ya se ejecutó una vez, correctamente)
 
 // Ciclo 2: entidad B recicla el slot 5
-darken_entity entB = darken_spawn(&manager); // puede ser el mismo puntero que entA
-entB->state = (darken_state)estado_de_B;
+darken_object entB = darken_spawn(&manager); // puede ser el mismo puntero que entA
+entB->update = (darken_callback)estado_de_B;
 // *** si olvidas poner entB->destructor, sigue apuntando a destructor_de_A ***
 
 // Cuando B se borra, el motor llama a destructor_de_A(entB->data),
@@ -869,9 +869,9 @@ es, salvo la primerísima vez) y fija explícitamente **todos** los campos (`sta
 ```c
 #define _DARKEN_FOREACH(MANAGER, CODE) _DARKEN_BLOCK( \
     uint16_t INDEX = (MANAGER)->size; \
-    darken_entity *POOL = (MANAGER)->pool; \
+    darken_object *POOL = (MANAGER)->pool; \
     while (INDEX--) { \
-        darken_entity ENTITY __attribute__((unused)) = POOL[INDEX]; \
+        darken_object ENTITY __attribute__((unused)) = POOL[INDEX]; \
         CODE; \
     })
 ```
@@ -886,13 +886,13 @@ código:
   no tienes acceso al `ENTITY`/`INDEX` del externo salvo que lo copies a otra variable antes.
 
 **Mitigación**: evita anidar `DARKEN_FOREACH`; si necesitas comparar pares de entidades, guarda
-una copia externa (`darken_entity actual = ENTITY;`) antes de abrir el bucle interno, y nunca
+una copia externa (`darken_object actual = ENTITY;`) antes de abrir el bucle interno, y nunca
 nombres tus propias variables `ENTITY`/`INDEX`/`POOL`.
 
 ### 6.6 Comprobar siempre el valor de retorno de `darken_spawn`
 
 ```c
-darken_entity darken_spawn(darken *$)
+darken_object darken_spawn(darken *$)
 {
     _DARKEN_ASSERT($->size < $->paused, 0); // devuelve NULL si no hay slots libres
     return $->pool[$->size++];
@@ -901,7 +901,7 @@ darken_entity darken_spawn(darken *$)
 
 Si el pool está lleno (todo activo + pausado, sin libres), `darken_spawn` devuelve `NULL` sin
 avisar de ninguna otra forma (recordemos: `_DARKEN_ASSERT` es silencioso). Usar el resultado
-sin comprobarlo (`darken_spawn(&mgr)->state = ...`) es un null-pointer-dereference clásico bajo
+sin comprobarlo (`darken_spawn(&mgr)->update = ...`) es un null-pointer-dereference clásico bajo
 carga alta — exactamente cuando más entidades tienes en pantalla.
 
 222222222222222222222222222222222222222222222222222222222222222222
@@ -974,7 +974,7 @@ Una entidad, en todo momento, está en uno de tres estados desde tu punto de vis
 - **Pausada**: nadie la ejecuta ni la visita, pero sigue existiendo — su memoria y sus datos siguen siendo válidos, así que puedes guardarte un puntero a ella y usarlo más tarde, cuando la reanudes.
 - **Libre**: slot disponible, todavía no asignado a ninguna entidad tuya.
 
-Cada entidad (`darken_entity`) te expone estos campos para leer/escribir libremente:
+Cada entidad (`darken_object`) te expone estos campos para leer/escribir libremente:
 
 | Campo              | Uso                                                                                          |
 | ------------------ | -------------------------------------------------------------------------------------------- |
@@ -990,7 +990,7 @@ El resto de campos del struct (`owner`, `slot`) son contabilidad interna del mot
 
 ### `darken_init()`
 
-`void darken_init(darken *mgr, darken_entity *pool, void *storage, uint16_t capacity, uint16_t payload_size)`
+`void darken_init(darken *mgr, darken_object *pool, void *storage, uint16_t capacity, uint16_t payload_size)`
 
 Prepara el manager. Se llama **una vez**, normalmente junto con `DARKEN_STORAGE`/`DARKEN_ARGS`
 (§5):
@@ -1003,15 +1003,15 @@ darken_init(&proyectiles, DARKEN_ARGS(storage));
 
 Tras esto, el manager tiene `capacity` slots, todos libres.
 
-### `darken_entity()`
+### `darken_object()`
 
-`darken_entity darken_spawn(darken *mgr)`
+`darken_object darken_spawn(darken *mgr)`
 
 Reserva una entidad libre y te la entrega ya como **activa**. Puede devolver `NULL` si no
 queda ningún slot libre (pool lleno) — **compruébalo siempre**:
 
 ```c
-darken_entity bala = darken_spawn(&proyectiles);
+darken_object bala = darken_spawn(&proyectiles);
 if (!bala) {
     // no había hueco; decide qué hacer (ignorar el disparo, reciclar la más vieja, etc.)
 } else {
@@ -1019,8 +1019,8 @@ if (!bala) {
     b->x = jugador.x; b->y = jugador.y;
     b->vx = 0; b->vy = -8; b->ttl = 90;
 
-    bala->state = (darken_state)bala_estado_volando;
-    bala->destructor = NULL; // esta entidad no necesita limpieza
+    bala->update = (darken_callback)bala_estado_volando;
+    bala->destroy= NULL; // esta entidad no necesita limpieza
 }
 ```
 
@@ -1040,7 +1040,7 @@ while (jugando) {
 
 Ejecuta la función `state` de cada entidad activa y aplica lo que devuelva (ver §4). También es el momento en el que se hacen efectivas las entidades que se marcaron para pausar o borrar.
 
-⚠️ Si una entidad devolvió `DARKEN_DELETE` o `DARKEN_PAUSE` en un frame, **no desaparece/se pausa en ese mismo `darken_update()`** — sigue contando como activa (visible en `DARKEN_FOREACH`, con su destructor sin ejecutar todavía) hasta la llamada *siguiente*. En la práctica: si dibujas con `DARKEN_FOREACH` justo después de `darken_update()` en el mismo frame, puedes llegar a dibujar durante un frame de más una bala que "ya dijo que se borraba". Si necesitas que el efecto sea inmediato, llama tú mismo a `darken_entity_delete()` / `darken_entity_pause()` en vez de depender del valor de retorno del estado.
+⚠️ Si una entidad devolvió `DARKEN_DELETE` o `DARKEN_PAUSE` en un frame, **no desaparece/se pausa en ese mismo `darken_update()`** — sigue contando como activa (visible en `DARKEN_FOREACH`, con su destructor sin ejecutar todavía) hasta la llamada *siguiente*. En la práctica: si dibujas con `DARKEN_FOREACH` justo después de `darken_update()` en el mismo frame, puedes llegar a dibujar durante un frame de más una bala que "ya dijo que se borraba". Si necesitas que el efecto sea inmediato, llama tú mismo a `darken_object_delete()` / `darken_object_pause()` en vez de depender del valor de retorno del estado.
 
 ### `void darken_reset(darken *mgr)`
 
@@ -1050,52 +1050,52 @@ Borra de golpe **todas las entidades activas** (llamando a su `destructor` si lo
 darken_reset(&proyectiles); // p. ej. al cambiar de nivel
 ```
 
-⚠️ Solo alcanza a las entidades **activas**. Si tenías balas **pausadas** en ese momento (por ejemplo, congeladas por un power-up de "tiempo detenido"), `darken_reset()` no las recorre ni llama a su destructor — y aun así, después del reset, esos slots vuelven a considerarse libres. Si dependes de que la limpieza se ejecute siempre, reanuda (`darken_entity_resume`) todo lo que esté pausado antes de llamar a `darken_reset()`.
+⚠️ Solo alcanza a las entidades **activas**. Si tenías balas **pausadas** en ese momento (por ejemplo, congeladas por un power-up de "tiempo detenido"), `darken_reset()` no las recorre ni llama a su destructor — y aun así, después del reset, esos slots vuelven a considerarse libres. Si dependes de que la limpieza se ejecute siempre, reanuda (`darken_object_resume`) todo lo que esté pausado antes de llamar a `darken_reset()`.
 
-### `void darken_entity_run(darken_entity e)`
+### `void darken_object_run(darken_object e)`
 
 Ejecuta la función `state` actual de una entidad concreta **una sola vez**, ahora mismo, sin aplicar ningún cambio de estado (ignora lo que devuelva). Útil cuando quieres invocar la lógica actual de una entidad puntualmente (por ejemplo, forzar la reacción de una bala a un evento) sin que eso interfiera con su ciclo normal de `darken_update`.
 
 Requiere que la entidad esté activa; si no lo está, no hace nada.
 
-### `void darken_entity_update(darken_entity e)`
+### `void darken_object_update(darken_object e)`
 
-Como `darken_entity_run`, pero además **sí aplica** el cambio de estado que devuelva la función (igual que haría `darken_update` para esa entidad). Úsala cuando quieras avanzar una entidad concreta bajo demanda, fuera del bucle general — por ejemplo, en respuesta directa a un evento de entrada, sin esperar al siguiente frame.
+Como `darken_object_run`, pero además **sí aplica** el cambio de estado que devuelva la función (igual que haría `darken_update` para esa entidad). Úsala cuando quieras avanzar una entidad concreta bajo demanda, fuera del bucle general — por ejemplo, en respuesta directa a un evento de entrada, sin esperar al siguiente frame.
 
 Requiere que la entidad esté activa; si no lo está, no hace nada.
 
-### `void darken_entity_pause(darken_entity e)`
+### `void darken_object_pause(darken_object e)`
 
 Pausa una entidad **de inmediato** (a diferencia de devolver `DARKEN_PAUSE` desde el estado, que tarda un frame en aplicarse, ver arriba). Requiere que la entidad esté activa.
 
 ```c
-darken_entity_pause(bala); // esta bala deja de moverse y de dibujarse ya mismo
+darken_object_pause(bala); // esta bala deja de moverse y de dibujarse ya mismo
 ```
 
-### `void darken_entity_resume(darken_entity e)`
+### `void darken_object_resume(darken_object e)`
 
 Devuelve a la zona activa una entidad pausada. Requiere que la entidad esté pausada.
 
 ```c
-darken_entity_resume(bala); // vuelve a moverse y dibujarse desde el próximo darken_update()
+darken_object_resume(bala); // vuelve a moverse y dibujarse desde el próximo darken_update()
 ```
 
-### `void darken_entity_delete(darken_entity e)`
+### `void darken_object_delete(darken_object e)`
 
 Borra una entidad concreta ahora mismo, esté activa o pausada. Llamarla sobre una entidad que ya está libre no hace nada (es seguro llamarla más de una vez).
 
 ⚠️ **Si la entidad estaba pausada, su `destructor` no se ejecuta.** Solo se garantiza la llamada al destructor cuando borras una entidad que estaba activa. Si necesitas limpieza garantizada sobre algo pausado, reanúdalo primero y luego bórralo:
 
 ```c
-if (esta_pausada(bala)) darken_entity_resume(bala);
-darken_entity_delete(bala); // ahora sí se ejecuta el destructor
+if (esta_pausada(bala)) darken_object_resume(bala);
+darken_object_delete(bala); // ahora sí se ejecuta el destructor
 ```
 
 (No hay una función pública `esta_pausada` — llevar tú mismo ese dato, p. ej. con `tag`/`usr`, o simplemente evitar el escenario reanudando siempre antes de borrar por sistema.)
 
 ## El contrato de una función de estado
 
-`entity->state` es un puntero a una función tuya con esta forma conceptual:
+`entity->update` es un puntero a una función tuya con esta forma conceptual:
 
 ```c
 void *mi_estado(Bullet *b);
@@ -1135,7 +1135,7 @@ static void *bala_estado_explotando(Bullet *b)
 }
 ```
 
-Nota práctica: como `darken_state` se declara sin prototipo de argumentos, puedes escribir tus funciones tomando directamente el tipo de puntero que te convenga (`Bullet *` en vez de `void *`) sin necesidad de castear al asignarlas a `entity->state` — cómodo, pero también significa que el compilador no te avisará si te equivocas de tipo entre lo que declaras y lo que realmente vas a recibir. Sé consistente: un `state`/`destructor` de una entidad de balas siempre debe esperar un `Bullet *`, nunca otra cosa.
+Nota práctica: como `darken_callback` se declara sin prototipo de argumentos, puedes escribir tus funciones tomando directamente el tipo de puntero que te convenga (`Bullet *` en vez de `void *`) sin necesidad de castear al asignarlas a `entity->update` — cómodo, pero también significa que el compilador no te avisará si te equivocas de tipo entre lo que declaras y lo que realmente vas a recibir. Sé consistente: un `state`/`destructor` de una entidad de balas siempre debe esperar un `Bullet *`, nunca otra cosa.
 
 ## Macros públicas
 
@@ -1175,20 +1175,20 @@ DARKEN_FOREACH(&proyectiles, {
 
 - **Comprueba siempre el `NULL` de `darken_spawn()`.**
 - **Rellena tú mismo `state`, `destructor`, `tag`, `usr` y el payload en cada spawn** — un slot reciclado puede traer valores de una entidad anterior, y un `destructor` olvidado puede ejecutarse sobre datos que no le corresponden.
-- **`DARKEN_DELETE`/`DARKEN_PAUSE` devuelto desde el estado tarda un frame en aplicarse.** Si necesitas el efecto ya, llama directamente a `darken_entity_delete()` / `darken_entity_pause()`.
-- **`darken_entity_delete()` sobre una entidad pausada no llama a su destructor.** Reanuda antes de borrar si necesitas limpieza garantizada.
+- **`DARKEN_DELETE`/`DARKEN_PAUSE` devuelto desde el estado tarda un frame en aplicarse.** Si necesitas el efecto ya, llama directamente a `darken_object_delete()` / `darken_object_pause()`.
+- **`darken_object_delete()` sobre una entidad pausada no llama a su destructor.** Reanuda antes de borrar si necesitas limpieza garantizada.
 - **`darken_reset()` no toca las entidades pausadas** (ni las borra con destructor, ni las dejes de contar como recicladas). Reanuda todo antes de resetear si te importa.
 - **No declares variables llamadas `ENTITY`/`INDEX` ni anides `DARKEN_FOREACH`.**
-- **No leas ni escribas los campos internos del `darken_entity` que no aparecen en la tabla del §2** (`owner`, `slot`) — no forman parte del contrato público.
+- **No leas ni escribas los campos internos del `darken_object` que no aparecen en la tabla del §2** (`owner`, `slot`) — no forman parte del contrato público.
 
 ## Checklist práctico
 
 - Define `DARKEN_IMPLEMENTATION` en **un solo** `.c`.
 - Comprueba siempre que `darken_spawn()` no devuelva `NULL`.
 - Tras cada `darken_spawn()`, fija explícitamente `state`, `destructor`, `tag`, `usr` y el payload — nunca asumas que están a cero.
-- Si dependes de que los destructores se ejecuten siempre, evita `darken_entity_delete()` / `darken_reset()` sobre entidades pausadas sin reanudarlas antes.
+- Si dependes de que los destructores se ejecuten siempre, evita `darken_object_delete()` / `darken_reset()` sobre entidades pausadas sin reanudarlas antes.
 - No anides `DARKEN_FOREACH`, y no declares variables llamadas `ENTITY`, `INDEX` o `POOL`.
-- Si necesitas reaccionar al borrado en el mismo frame (no un frame después), llama a `darken_entity_delete()` directamente en vez de devolver `DARKEN_DELETE` desde el estado.
+- Si necesitas reaccionar al borrado en el mismo frame (no un frame después), llama a `darken_object_delete()` directamente en vez de devolver `DARKEN_DELETE` desde el estado.
 - No leas ni escribas `entity->owner` / `entity->slot` desde fuera del motor.
 - Un manager = un tamaño de payload; usa un `darken` distinto por cada tipo de entidad con tamaño distinto.
 - Los "asserts" nunca reportan nada. _DARKEN_ASSERT no devuelve.
@@ -1231,13 +1231,13 @@ storage.payload_size` — por eso `darken_init` recibe 5 argumentos en total (el
 
 ### Crear entidades y acceder a su payload
 
-`darken_spawn` te da un `darken_entity` (el "handle"); `DARKEN_DATA` te da un
+`darken_spawn` te da un `darken_object` (el "handle"); `DARKEN_DATA` te da un
 puntero tipado a su payload:
 
 ```c
-darken_entity spawn_particle(float x, float y, float vy, int life)
+darken_object spawn_particle(float x, float y, float vy, int life)
 {
-    darken_entity e = darken_spawn(&manager);
+    darken_object e = darken_spawn(&manager);
     if (!e)
         return NULL; // pool lleno (size == paused)
 
@@ -1248,20 +1248,20 @@ darken_entity spawn_particle(float x, float y, float vy, int life)
     p->life = life;
 
     e->tag = 42;          // libre para lo que quieras (identificar tipo, etc.)
-    e->destructor = NULL;  // sin destructor por ahora
+    e->destroy= NULL;  // sin destructor por ahora
 
     return e;
 }
 ```
 
-Nota que `e` (el `darken_entity`) y `p` (el puntero a `Particle`) son direcciones
+Nota que `e` (el `darken_object`) y `p` (el puntero a `Particle`) son direcciones
 **diferentes**: `p` apunta justo dentro de `e->data`. `p` sigue siendo válido
 aunque la entidad se pause o el pool se reordene, porque la dirección física de
 `e` (y por tanto de `e->data`) nunca cambia.
 
 ### Definir el comportamiento con una máquina de estados
 
-`e->state` es el callback que se ejecuta cada `darken_update`. Recibe
+`e->update` es el callback que se ejecuta cada `darken_update`. Recibe
 **directamente el payload** (`void *data`, ya apuntando a tu struct, no la
 entidad), y su valor de retorno decide qué pasa después:
 
@@ -1296,8 +1296,8 @@ void *particle_landed(void *data)
 Y al crear la entidad, le asignas el estado inicial:
 
 ```c
-darken_entity e = spawn_particle(0.0f, 0.0f, 2.0f, 4);
-e->state = particle_falling;
+darken_object e = spawn_particle(0.0f, 0.0f, 2.0f, 4);
+e->update = particle_falling;
 ```
 
 ### El bucle principal
@@ -1324,7 +1324,7 @@ de borrado/pausa no salten ninguna entidad), y por cada una:
 ### Destructores
 
 Se ejecutan automáticamente al borrar una entidad (por `DARKEN_DELETE` desde su
-propio estado, o por `darken_entity_delete` desde fuera). Reciben el mismo
+propio estado, o por `darken_object_delete` desde fuera). Reciben el mismo
 payload que el estado:
 
 ```c
@@ -1336,7 +1336,7 @@ void *particle_destructor(void *data)
 }
 
 // al crearla:
-e->destructor = particle_destructor;
+e->destroy= particle_destructor;
 ```
 
 ### Iterar manualmente con `DARKEN_FOREACH`
@@ -1351,7 +1351,7 @@ DARKEN_FOREACH(&manager, {
 });
 ```
 
-Dentro del bloque, `ENTITY` (tipo `darken_entity`) queda disponible automáticamente
+Dentro del bloque, `ENTITY` (tipo `darken_object`) queda disponible automáticamente
 — lo define la propia macro. Solo visita la zona activa, nunca libres ni
 pausadas.
 
@@ -1361,14 +1361,14 @@ Pausar una entidad la saca del bucle de `darken_update` sin borrarla — sus dat
 siguen intactos y su dirección de memoria no cambia:
 
 ```c
-darken_entity_pause(e);   // e sale de la zona activa
+darken_object_pause(e);   // e sale de la zona activa
 
 // ... más adelante ...
 
-darken_entity_resume(e);  // e vuelve a la zona activa
+darken_object_resume(e);  // e vuelve a la zona activa
 ```
 
-> ⚠️ Como se explica en «Puntos flacos», `darken_entity_resume` tiene un bug
+> ⚠️ Como se explica en «Puntos flacos», `darken_object_resume` tiene un bug
 > confirmado cuando hay **más de una** entidad pausada a la vez y reanudas una
 > que no es la última en pausarse. Con una sola entidad pausada en cada momento
 > funciona correctamente (lo verifiqué); con varias, revisa/corrige la función
@@ -1377,7 +1377,7 @@ darken_entity_resume(e);  // e vuelve a la zona activa
 ### Borrar entidades desde fuera del bucle de estado
 
 ```c
-darken_entity_delete(e); // funciona tanto si "e" está activa como pausada
+darken_object_delete(e); // funciona tanto si "e" está activa como pausada
 ```
 
 ### Vaciar el manager entero
@@ -1427,11 +1427,11 @@ int main(void)
 
     for (int i = 0; i < 5; i++)
     {
-        darken_entity e = darken_spawn(&manager);
+        darken_object e = darken_spawn(&manager);
         DARKEN_DATA(Particle, p, e);
         p->x = (float)i; p->y = 0; p->vy = 1.0f; p->life = 3 + i;
-        e->state = particle_falling;
-        e->destructor = particle_destructor;
+        e->update = particle_falling;
+        e->destroy= particle_destructor;
     }
 
     while (manager.size > 0)
@@ -1466,13 +1466,13 @@ void iniciar_juego(void)
 
 void disparar(float x, float y)
 {
-    darken_entity e = darken_spawn(&proyectiles);
+    darken_object e = darken_spawn(&proyectiles);
     if (!e) return; // pool lleno, se ignora el disparo
 
     DARKEN_DATA(Bullet, b, e);
     b->x = x; b->y = y; b->vx = 0; b->vy = -8; b->ttl = 90;
-    e->state = (darken_state)bala_volando;
-    e->destructor = NULL;
+    e->update = (darken_callback)bala_volando;
+    e->destroy= NULL;
 }
 
 void frame(void)
@@ -1487,6 +1487,6 @@ void frame(void)
 
 void congelar_todo(void) // p. ej. power-up de "tiempo detenido"
 {
-    DARKEN_FOREACH(&proyectiles, { darken_entity_pause(ENTITY); });
+    DARKEN_FOREACH(&proyectiles, { darken_object_pause(ENTITY); });
 }
 ```

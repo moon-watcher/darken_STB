@@ -99,7 +99,7 @@ darken_init(&world, DARKEN_ARGS(shmup_world));
 Devuelve una entidad libre del pool. A partir de aquí, tú decides qué es: una nave, una bala, una explosión.
 
 ```c
-darken_entity player = darken_spawn(&world);
+darken_object player = darken_spawn(&world);
 ```
 
 ### `DARKEN_DATA(Tipo, variable, entidad)`
@@ -115,8 +115,8 @@ ship->hp = 3;
 ship->power = 1;
 ship->bombs = 2;
 
-player->state = state_player_alive;
-player->destructor = destructor_player;
+player->update = state_player_alive;
+player->destroy= destructor_player;
 player->tag = TAG_PLAYER;
 player->usr = 0;   // Usaremos esto como temporizador de parpadeo post-golpe
 ```
@@ -153,13 +153,13 @@ DARKEN_STORAGE(shmup_world, 128, 32);
 darken world;
 darken_init(&world, DARKEN_ARGS(shmup_world));
 
-darken_entity player = darken_spawn(&world);
+darken_object player = darken_spawn(&world);
 DARKEN_DATA(struct ship_data, ship, player);
 
 ship->x = 120; ship->y = 200;
 ship->hp = 3; ship->power = 1;
 
-player->state = state_player_alive;
+player->update = state_player_alive;
 player->tag = TAG_PLAYER;
 
 while (game_running) {
@@ -263,8 +263,8 @@ void *state_boss_core(struct boss_data *boss)
 {
     // El núcleo solo ataca si sus escudos (entidades separadas) siguen activos.
     // Si los escudos fueron destruidos, el jefe entra en fase de furia.
-    if (!DARKEN_STATE_IS_ACTIVE(boss->shield_left->state) &&
-        !DARKEN_STATE_IS_ACTIVE(boss->shield_right->state)) {
+    if (!DARKEN_STATE_IS_ACTIVE(boss->shield_left->update) &&
+        !DARKEN_STATE_IS_ACTIVE(boss->shield_right->update)) {
         return state_boss_frenzy;
     }
 
@@ -284,7 +284,7 @@ void *state_homing_missile(struct missile_data *m)
 {
     // Si el objetivo ya fue marcado para borrar este frame (destruido por
     // otra bala justo antes), el misil pierde el lock y vuela recto.
-    if (DARKEN_STATE_IS_DELETED(m->target->state)) {
+    if (DARKEN_STATE_IS_DELETED(m->target->update)) {
         m->target = NULL;
         return state_missile_dumb;   // Vuela en línea recta
     }
@@ -296,7 +296,7 @@ void *state_homing_missile(struct missile_data *m)
 
 ---
 
-### `DARKEN_ENTITY_IN_ACTIVE(entity)` / `DARKEN_ENTITY_IN_PAUSED(entity)` / `DARKEN_ENTITY_IN_USED(entity)` / `DARKEN_ENTITY_IN_FREE(entity)`
+### `DARKEN_OBJECT_IN_ACTIVE(entity)` / `DARKEN_OBJECT_IN_PAUSED(entity)` / `DARKEN_OBJECT_IN_USED(entity)` / `DARKEN_OBJECT_IN_FREE(entity)`
 
 Te dicen en qué zona del pool vive una entidad en este momento.
 
@@ -307,22 +307,22 @@ void *state_formation_leader(struct enemy_data *leader)
     // Soy el líder de una formación de 5 naves. Si algún aliado fue
     // destruido, reajusto la formación para cerrar el hueco.
     for (int i = 0; i < 4; ++i)
-        if (!DARKEN_ENTITY_IN_USED(leader->wingmen[i]))
+        if (!DARKEN_OBJECT_IN_USED(leader->wingmen[i]))
             leader->wingmen[i] = leader->wingmen[--leader->wingmen_count];
 
     return DARKEN_LOOP;
 }
 ```
 
-`DARKEN_ENTITY_IN_USED` combina activas + pausadas: útil para saber si una entidad todavía "existe" aunque esté congelada.
+`DARKEN_OBJECT_IN_USED` combina activas + pausadas: útil para saber si una entidad todavía "existe" aunque esté congelada.
 
-`DARKEN_ENTITY_IN_FREE` te avisa si una entidad ya fue devuelta al pool y su memoria está disponible para respawn.
+`DARKEN_OBJECT_IN_FREE` te avisa si una entidad ya fue devuelta al pool y su memoria está disponible para respawn.
 
 ---
 
 ## 5. Ciclo de vida de una entidad
 
-### `darken_entity_run(entity)`
+### `darken_object_run(entity)`
 
 Ejecuta el callback `state` de la entidad **una sola vez**, de forma inmediata. No espera al `darken_update()` del manager.
 
@@ -331,14 +331,14 @@ Ejecuta el callback `state` de la entidad **una sola vez**, de forma inmediata. 
 // El jugador pulsa el botón de disparo. Queremos que la bala nazca
 // AHORA, no en el próximo frame del manager.
 if (input_pressed(BUTTON_A)) {
-    darken_entity bullet = darken_spawn(&world);
+    darken_object bullet = darken_spawn(&world);
     DARKEN_DATA(struct bullet_data, b, bullet);
     b->x = player_x; b->y = player_y - 8;
     b->vy = -4;
-    bullet->state = state_bullet_fly;
+    bullet->update = state_bullet_fly;
     bullet->tag = TAG_PLAYER_BULLET;
 
-    darken_entity_run(bullet);   // Avanza un frame de inmediato
+    darken_object_run(bullet);   // Avanza un frame de inmediato
 }
 ```
 
@@ -346,7 +346,7 @@ Ideal para eventos síncronos: pulsar un botón, recibir un comando de red, acti
 
 ---
 
-### `darken_entity_update(entity)`
+### `darken_object_update(entity)`
 
 Fuerza la actualización de una entidad concreta, aplicando la misma lógica que `darken_update()` haría si la encontrara en la zona activa.
 
@@ -356,10 +356,10 @@ Fuerza la actualización de una entidad concreta, aplicando la misma lógica que
 // y sus balas se actualizan a velocidad normal. El resto del mundo
 // va a mitad de velocidad.
 if (bullet_time_active) {
-    darken_entity_update(player);
+    darken_object_update(player);
     DARKEN_FOREACH(&world, {
         if (ENTITY->tag == TAG_PLAYER_BULLET)
-            darken_entity_update(ENTITY);
+            darken_object_update(ENTITY);
     });
 }
 ```
@@ -368,7 +368,7 @@ Te permite tener granularidad sobre quién se actualiza sin romper la arquitectu
 
 ---
 
-### `darken_entity_pause(entity)`
+### `darken_object_pause(entity)`
 
 Mueve una entidad activa a la zona de pausada. Deja de ser visitada por `DARKEN_FOREACH` y por `darken_update()`.
 
@@ -377,10 +377,10 @@ Mueve una entidad activa a la zona de pausada. Deja de ser visitada por `DARKEN_
 // El jugador pulsa START. Congelamos todo el mundo.
 void enter_pause(void)
 {
-    darken_entity_pause(player);
+    darken_object_pause(player);
     DARKEN_FOREACH(&world,
     {
-        darken_entity_pause(ENTITY);
+        darken_object_pause(ENTITY);
     });
     spawn_pause_menu();
 }
@@ -388,7 +388,7 @@ void enter_pause(void)
 
 ---
 
-### `darken_entity_resume(entity)`
+### `darken_object_resume(entity)`
 
 Saca una entidad de la zona pausada y la devuelve a la zona activa, justo al final del array de activas.
 
@@ -401,16 +401,16 @@ void exit_pause(void)
     // otro mecanismo para iterar las pausadas. Una opción es
     // mantener un array auxiliar de entidades pausadas.
     for (int i = world.paused; i < world.capacity; ++i) {
-        darken_entity_resume(world.pool[i]);
+        darken_object_resume(world.pool[i]);
     }
 }
 ```
 
-También sirve para **spawnear entidades ya pausadas** y activarlas más tarde: creas una oleada de enemigos pausados fuera de pantalla, y cuando el jugador llega al trigger, haces `darken_entity_resume(enemy)` para cada uno.
+También sirve para **spawnear entidades ya pausadas** y activarlas más tarde: creas una oleada de enemigos pausados fuera de pantalla, y cuando el jugador llega al trigger, haces `darken_object_resume(enemy)` para cada uno.
 
 ---
 
-### `darken_entity_delete(entity)`
+### `darken_object_delete(entity)`
 
 Borra una entidad inmediatamente, ejecutando su destructor si lo tiene.
 
@@ -427,7 +427,7 @@ void use_bomb(void)
     {
         if (ENTITY->tag == TAG_ENEMY_BULLET) {
             spawn_particle_explosion(ENTITY);   // Efecto visual
-            darken_entity_delete(ENTITY);       // Muere ahora, no al final del frame
+            darken_object_delete(ENTITY);       // Muere ahora, no al final del frame
         }
     });
 }
@@ -459,11 +459,11 @@ DARKEN_FOREACH(&world,
         DARKEN_DATA(struct enemy_data, e, INNER_ENTITY);
         if (rects_overlap(bullet_rect, enemy_rect(e))) {
             e->hp -= b->damage;
-            darken_entity_delete(ENTITY);   // Borra la bala
+            darken_object_delete(ENTITY);   // Borra la bala
 
             if (e->hp <= 0) {
                 spawn_explosion(e->x, e->y);
-                darken_entity_delete(INNER_ENTITY);   // Borra el enemigo
+                darken_object_delete(INNER_ENTITY);   // Borra el enemigo
             }
             break;   // Una bala no atraviesa (a menos que sea piercing)
         }
@@ -534,7 +534,7 @@ En un shmup, `tag` es especialmente útil para el sistema de colisiones: puedes 
 
 `entity->destructor` solo se ejecuta si es un puntero a función válido. Si no necesitas limpieza especial, déjalo a `NULL` (o a `0`).
 
-**Consejo:** Si tu entidad reservó recursos externos (un canal de audio, un sprite en VRAM, una entrada en una tabla de colisiones espacial), el destructor es el lugar correcto para liberarlos. No lo hagas dentro del estado de borrado, porque `darken_entity_delete()` también invoca el destructor.
+**Consejo:** Si tu entidad reservó recursos externos (un canal de audio, un sprite en VRAM, una entrada en una tabla de colisiones espacial), el destructor es el lugar correcto para liberarlos. No lo hagas dentro del estado de borrado, porque `darken_object_delete()` también invoca el destructor.
 
 ```c
 void destructor_explosion(struct particle_data *p)
@@ -576,9 +576,9 @@ DARKEN_STORAGE(fx_entities, 256, sizeof(struct particle_data));
 **Consejo:** Siempre inicializa los campos críticos inmediatamente después del spawn. Al menos:
 
 ```c
-darken_entity e = darken_spawn(&world);
-e->state = state_default;
-e->destructor = NULL;
+darken_object e = darken_spawn(&world);
+e->update = state_default;
+e->destroy= NULL;
 e->tag = 0;
 e->usr = 0;
 // Luego inicializa tu payload...
@@ -643,17 +643,17 @@ int main(void)
     DARKEN_STORAGE(shmup, 32, sizeof(actor));
     darken_init(&world, DARKEN_ARGS(shmup));
 
-    darken_entity player = darken_spawn(&world);
+    darken_object player = darken_spawn(&world);
     DARKEN_DATA(actor, p, player);
     p->x = 120; p->y = 200; p->hp = 3;
-    player->state = state_player;
+    player->update = state_player;
     player->tag = 1;  // TAG_PLAYER
 
-    darken_entity enemy = darken_spawn(&world);
+    darken_object enemy = darken_spawn(&world);
     DARKEN_DATA(actor, e, enemy);
     e->x = 120; e->y = -16; e->hp = 5;
-    enemy->state = state_enemy;
-    enemy->destructor = destructor_enemy;
+    enemy->update = state_enemy;
+    enemy->destroy= destructor_enemy;
     enemy->tag = 2;  // TAG_ENEMY
 
     while (1)
