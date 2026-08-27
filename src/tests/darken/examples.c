@@ -37,7 +37,7 @@ void darken_run_usage_example(void)
     darken_init(&g_manager, DARKEN_ARGS(g_manager_storage));
     DARKEN_STORAGE(g_manager2_storage, 20, sizeof(struct MyComponent) + 73);
     darken_init(&g_manager2, DARKEN_ARGS(g_manager2_storage));
-    darken_object e1 = darken_spawn(&g_manager);
+    darken_entity e1 = darken_spawn(&g_manager);
     struct MyComponent *data1 = (struct MyComponent *)e1->data;
     data1->x = 0;
     data1->y = 0;
@@ -45,7 +45,7 @@ void darken_run_usage_example(void)
     e1->update = darken_update_walk;
     e1->destroy= darken_destructor;
     e1->tag = 1;
-    darken_object e2 = darken_spawn(&g_manager);
+    darken_entity e2 = darken_spawn(&g_manager);
     struct MyComponent *data2 = (struct MyComponent *)e2->data;
     data2->x = 10;
     data2->y = 20;
@@ -53,7 +53,7 @@ void darken_run_usage_example(void)
     e2->update = darken_update_idle;
     e2->destroy= darken_destructor;
     e2->tag = 2;
-    darken_object e3 = darken_spawn(&g_manager);
+    darken_entity e3 = darken_spawn(&g_manager);
     struct MyComponent *data3 = (struct MyComponent *)e3->data;
     data3->x = 5;
     data3->y = 5;
@@ -63,15 +63,15 @@ void darken_run_usage_example(void)
     e3->tag = 3;
     kprintf("--- Frame 1 ---");
     darken_update(&g_manager);
-    DARKEN_FOREACH(&g_manager, if (_object->tag == 2) darken_object_pause(_object));
-    // DARKEN_MANAGER_APPLY(&g_manager, ENTITY->tag == 2, darken_object_pause);
-    // DARKEN_MANAGER_APPLY_PAUSED(&g_manager, ENTITY->tag == 2, darken_object_pause);
+    DARKEN_FOREACH(&g_manager, if (_entity->tag == 2) darken_entity_pause(_entity));
+    // DARKEN_MANAGER_APPLY(&g_manager, ENTITY->tag == 2, darken_entity_pause);
+    // DARKEN_MANAGER_APPLY_PAUSED(&g_manager, ENTITY->tag == 2, darken_entity_pause);
     kprintf("Pausada entidad tag 2");
     kprintf("--- Frame 2 ---");
     darken_update(&g_manager);
-    DARKEN_FOREACH(&g_manager, if (_object->tag == 1) darken_object_pause(_object));
-    // DARKEN_MANAGER_APPLY(&g_manager, ENTITY->tag == 1, darken_object_delete);
-    // DARKEN_MANAGER_APPLY_PAUSED(&g_manager, ENTITY->tag == 1, darken_object_delete);
+    DARKEN_FOREACH(&g_manager, if (_entity->tag == 1) darken_entity_pause(_entity));
+    // DARKEN_MANAGER_APPLY(&g_manager, ENTITY->tag == 1, darken_entity_delete);
+    // DARKEN_MANAGER_APPLY_PAUSED(&g_manager, ENTITY->tag == 1, darken_entity_delete);
     kprintf("--- Frame 3 ---");
     darken_update(&g_manager);
     kprintf("--- Reset ---");

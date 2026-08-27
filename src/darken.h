@@ -1,5 +1,5 @@
 /**
- * darken.h — Darken (DARKula ENgine) 2.0 Object System
+ * darken.h — Darken (DARKula ENgine) 2.0 Entity System
  *
  * darken-2.0.0-dev
  *
@@ -12,48 +12,48 @@
  *
  *
  *
- * Object: Base object managed by the object ctx
+ * Entity: Base entity managed by the entity ctx
  *
- * The object structure serves as a container for user data with lifecycle  management. The flexible array member
- * 'data[]' allows objects to have variable-sized payloads while maintaining contiguous memory layout.
+ * The entity structure serves as a container for user data with lifecycle  management. The flexible array member
+ * 'data[]' allows entitys to have variable-sized payloads while maintaining contiguous memory layout.
  *
- * The stride between objects is pre-calculated during ctx initialization to enable O(1) access to any object
+ * The stride between entitys is pre-calculated during ctx initialization to enable O(1) access to any entity
  * by index.
  *
- * An object's own memory address (this struct) never moves once allocated by darken_init(). What moves between
+ * An entity's own memory address (this struct) never moves once allocated by darken_init(). What moves between
  * the ctx's zones is only the *pointer* to it inside darken.pool[]. This is what makes it safe to keep a
- * raw pointer into object->data even while the object gets paused/resumed/reordered.
+ * raw pointer into entity->data even while the entity gets paused/resumed/reordered.
  *
  *
  *
- * Ctx: Object container and lifecycle ctx. Maintains the pointer array in three logical zones:
+ * Ctx: Entity container and lifecycle ctx. Maintains the pointer array in three logical zones:
  *
  * Array Layout:
- *    [ active objects ][   free slots    ][ paused objects ]
+ *    [ active entitys ][   free slots    ][ paused entitys ]
  *    0                 size               paused             capacity
  *
- * The object objects themselves live in the caller-provided storage block; * ctx->pool contains pointers to
+ * The entity entitys themselves live in the caller-provided storage block; * ctx->pool contains pointers to
  * those fixed addresses.
  *
  * - Active zone [0, size):
- *     Object pointers updated every frame by darken_update(). Iterable with DARKEN_FOREACH. Freely created
+ *     Entity pointers updated every frame by darken_update(). Iterable with DARKEN_FOREACH. Freely created
  *     (darken_spawn) and deleted.
  *
  * - Free zone [size, paused):
- *     Pointer slots not currently assigned to an object. This is where darken_spawn() takes its next object from,
- *     and where an active object's slot goes right after it's deleted.
+ *     Pointer slots not currently assigned to an entity. This is where darken_spawn() takes its next entity from,
+ *     and where an active entity's slot goes right after it's deleted.
  *
  * - Paused zone [paused, capacity):
- *     Object pointers parked out of the update loop. darken_update() never touches them and DARKEN_FOREACH
- *     never visits them. Crucially, darken_spawn() never hands out a slot from this zone, so a paused object's
- *     slot (and therefore its object->data pointer) stays valid and untouched until it's explicitly resumed or
- *     deleted. This is what lets keep safely pointing at a paused object's data.
+ *     Entity pointers parked out of the update loop. darken_update() never touches them and DARKEN_FOREACH
+ *     never visits them. Crucially, darken_spawn() never hands out a slot from this zone, so a paused entity's
+ *     slot (and therefore its entity->data pointer) stays valid and untouched until it's explicitly resumed or
+ *     deleted. This is what lets keep safely pointing at a paused entity's data.
  *
  *
  *
- * Object state/destroy callback type.
+ * Entity state/destroy callback type.
  *
- * Receives object->data and returns either another state callback or one of the Darken control values.
+ * Receives entity->data and returns either another state callback or one of the Darken control values.
  */
 
 #ifndef DARKEN_H
@@ -63,18 +63,18 @@
 
 typedef void *(*darken_callback)();
 
-typedef struct darken_object *darken_object;
+typedef struct darken_entity *darken_entity;
 
 typedef struct darken
 {
-    darken_object *pool;
+    darken_entity *pool;
 
     uint16_t capacity;
     uint16_t size;
     uint16_t paused;
 } darken;
 
-struct darken_object
+struct darken_entity
 {
     // Private
     uint16_t slot;
@@ -96,8 +96,8 @@ struct darken_object
  * PUBLIC API
  * ============================================================================ */
 
-#define DARKEN_DATA(TYPE, VAR, OBJECT) TYPE *VAR = (TYPE *)(OBJECT)->data;
-#define DARKEN_DATA_GET_OBJECT(DATA) ((darken_object)((uint8_t *)(DATA) - (uint32_t)&((darken_object)0)->data))
+#define DARKEN_DATA(TYPE, VAR, ENTITY) TYPE *VAR = (TYPE *)(ENTITY)->data;
+#define DARKEN_DATA_GET_ENTITY(DATA) ((darken_entity)((uint8_t *)(DATA) - (uint32_t)&((darken_entity)0)->data))
 
 // Darken control values
 #define DARKEN_DELETE ((void *)0)
@@ -109,34 +109,34 @@ struct darken_object
 #define DARKEN_STATE_IS_PAUSED(STATE) ((STATE) == (darken_callback)2)
 #define DARKEN_STATE_IS_ACTIVE(STATE) ((STATE) > (darken_callback)2)
 
-#define DARKEN_OBJECT_IN_ACTIVE(OBJECT) ((OBJECT)->slot < (OBJECT)->owner->size)
-#define DARKEN_OBJECT_IN_PAUSED(OBJECT) ((OBJECT)->slot >= (OBJECT)->owner->paused)
-#define DARKEN_OBJECT_IN_FREE(OBJECT) (!(DARKEN_OBJECT_IN_ACTIVE(OBJECT) || DARKEN_OBJECT_IN_PAUSED(OBJECT)))
+#define DARKEN_ENTITY_IN_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->owner->size)
+#define DARKEN_ENTITY_IN_PAUSED(ENTITY) ((ENTITY)->slot >= (ENTITY)->owner->paused)
+#define DARKEN_ENTITY_IN_FREE(ENTITY) (!(DARKEN_ENTITY_IN_ACTIVE(ENTITY) || DARKEN_ENTITY_IN_PAUSED(ENTITY)))
 
-uint16_t darken_object_run(darken_object);
-uint16_t darken_object_update(darken_object);
-uint16_t darken_object_pause(darken_object);
-uint16_t darken_object_resume(darken_object);
-uint16_t darken_object_delete(darken_object);
+uint16_t darken_entity_run(darken_entity);
+uint16_t darken_entity_update(darken_entity);
+uint16_t darken_entity_pause(darken_entity);
+uint16_t darken_entity_resume(darken_entity);
+uint16_t darken_entity_delete(darken_entity);
 
 /**
  * Align a byte count to a 4-byte boundary.
  *
  * The Motorola 68000 requires word alignment for word/long accesses.
- * Longword alignment keeps object strides predictable and efficient.
+ * Longword alignment keeps entity strides predictable and efficient.
  */
 #define DARKEN_ALIGN4(X) (((X) + 3U) & ~3U)
 
-// Ensures proper alignment between consecutive objects
-#define DARKEN_OBJECT_STRIDE(PAYLOAD) DARKEN_ALIGN4(sizeof(struct darken_object) + (PAYLOAD))
+// Ensures proper alignment between consecutive entitys
+#define DARKEN_ENTITY_STRIDE(PAYLOAD) DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD))
 
 #define DARKEN_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)                                                 \
     struct                                                                                           \
     {                                                                                                \
         uint16_t capacity;                                                                           \
         uint16_t payload_size;                                                                       \
-        darken_object pool[(CAPACITY)];                                                              \
-        uint8_t data[(CAPACITY) * DARKEN_OBJECT_STRIDE((PAYLOAD_SIZE))] __attribute__((aligned(4))); \
+        darken_entity pool[(CAPACITY)];                                                              \
+        uint8_t data[(CAPACITY) * DARKEN_ENTITY_STRIDE((PAYLOAD_SIZE))] __attribute__((aligned(4))); \
     } NAME = {                                                                                       \
         .capacity = (CAPACITY),                                                                      \
         .payload_size = (PAYLOAD_SIZE),                                                              \
@@ -151,20 +151,20 @@ uint16_t darken_object_delete(darken_object);
         uint16_t _index = (CTX)->size;                 \
         if (_index)                                    \
         {                                              \
-            darken_object *_pool = (CTX)->pool;        \
+            darken_entity *_pool = (CTX)->pool;        \
                                                        \
             while (_index--)                           \
             {                                          \
-                darken_object _object = _pool[_index]; \
-                (void)_object;                         \
+                darken_entity _entity = _pool[_index]; \
+                (void)_entity;                         \
                 CODE;                                  \
             }                                          \
         }                                              \
     } while (0)
 
-void darken_init(darken *, darken_object[], void *, uint16_t, uint16_t);
-void darken_init_ex(darken *, darken_object[], void *, uint16_t, uint16_t);
-darken_object darken_spawn(darken *);
+void darken_init(darken *, darken_entity[], void *, uint16_t, uint16_t);
+void darken_init_ex(darken *, darken_entity[], void *, uint16_t, uint16_t);
+darken_entity darken_spawn(darken *);
 void darken_update(darken *);
 void darken_reset(darken *);
 
@@ -188,40 +188,40 @@ void darken_reset(darken *);
         CODE                \
     } while (0)
 
-#define _DARKEN_RUN(OBJECT) \
-    OBJECT->update(OBJECT->data);
+#define _DARKEN_RUN(ENTITY) \
+    ENTITY->update(ENTITY->data);
 
-#define _DARKEN_UPDATE(OBJECT) _DARKEN_BLOCK(       \
-    darken_callback callback = _DARKEN_RUN(OBJECT); \
+#define _DARKEN_UPDATE(ENTITY) _DARKEN_BLOCK(       \
+    darken_callback callback = _DARKEN_RUN(ENTITY); \
                                                     \
     if (!DARKEN_STATE_IS_LOOP(callback))            \
-        OBJECT->update = callback;)
+        ENTITY->update = callback;)
 
-#define _DARKEN_PAUSE(OBJECT) _DARKEN_BLOCK(                                \
-    _darken_swap(OBJECT->owner->pool, OBJECT->slot, --OBJECT->owner->size); \
-    _darken_swap(OBJECT->owner->pool, OBJECT->slot, --OBJECT->owner->paused);)
+#define _DARKEN_PAUSE(ENTITY) _DARKEN_BLOCK(                                \
+    _darken_swap(ENTITY->owner->pool, ENTITY->slot, --ENTITY->owner->size); \
+    _darken_swap(ENTITY->owner->pool, ENTITY->slot, --ENTITY->owner->paused);)
 
-#define _DARKEN_RESUME(OBJECT) _DARKEN_BLOCK(           \
-    darken *ctx = OBJECT->owner;                        \
+#define _DARKEN_RESUME(ENTITY) _DARKEN_BLOCK(           \
+    darken *ctx = ENTITY->owner;                        \
                                                         \
-    _darken_swap(ctx->pool, OBJECT->slot, ctx->paused); \
-    _darken_swap(ctx->pool, OBJECT->slot, ctx->size);   \
+    _darken_swap(ctx->pool, ENTITY->slot, ctx->paused); \
+    _darken_swap(ctx->pool, ENTITY->slot, ctx->size);   \
                                                         \
     ++ctx->paused;                                      \
     ++ctx->size;)
 
-#define _DARKEN_DELETE(OBJECT) _DARKEN_BLOCK(    \
-    darken *ctx = OBJECT->owner;                 \
+#define _DARKEN_DELETE(ENTITY) _DARKEN_BLOCK(    \
+    darken *ctx = ENTITY->owner;                 \
                                                  \
-    if (DARKEN_STATE_IS_ACTIVE(OBJECT->destroy)) \
-        OBJECT->destroy(OBJECT->data);           \
+    if (DARKEN_STATE_IS_ACTIVE(ENTITY->destroy)) \
+        ENTITY->destroy(ENTITY->data);           \
                                                  \
-    _darken_swap(ctx->pool, OBJECT->slot, --ctx->size);)
+    _darken_swap(ctx->pool, ENTITY->slot, --ctx->size);)
 
-static inline uint16_t _darken_swap(darken_object pool[], uint16_t i, uint16_t j)
+static inline uint16_t _darken_swap(darken_entity pool[], uint16_t i, uint16_t j)
 {
     _DARKEN_ASSERT(i != j, {
-            darken_object tmp = pool[i];
+            darken_entity tmp = pool[i];
             pool[i] = pool[j];
             pool[j] = tmp;
             pool[i]->slot = i;
@@ -230,9 +230,9 @@ static inline uint16_t _darken_swap(darken_object pool[], uint16_t i, uint16_t j
 
 //
 
-void darken_init(darken *$, darken_object pool[], void *param_storage, uint16_t capacity, uint16_t payload_size)
+void darken_init(darken *$, darken_entity pool[], void *param_storage, uint16_t capacity, uint16_t payload_size)
 {
-    darken_init_ex($, pool, param_storage, capacity, DARKEN_OBJECT_STRIDE(payload_size));
+    darken_init_ex($, pool, param_storage, capacity, DARKEN_ENTITY_STRIDE(payload_size));
 }
 
 /*
@@ -242,8 +242,8 @@ void darken_init(darken *$, darken_object pool[], void *param_storage, uint16_t 
 #define PAYLOAD_SIZE  sizeof(MyData)
 
 darken enemies_manager;
-darken_object *pool = malloc(MAX_ENTITIES * sizeof(darken_object));
-uint16_t stride = DARKEN_OBJECT_STRIDE(PAYLOAD_SIZE);
+darken_entity *pool = malloc(MAX_ENTITIES * sizeof(darken_entity));
+uint16_t stride = DARKEN_ENTITY_STRIDE(PAYLOAD_SIZE);
 uint8_t *storage = malloc(MAX_ENTITIES * stride);
 
 // Inicialización con stride calculado
@@ -254,28 +254,28 @@ darken_init_ex(&enemies_manager, pool, storage, MAX_ENTITIES, stride);
 free(pool);
 free(storage);
 */
-void darken_init_ex(darken *$, darken_object pool[], void *storage, uint16_t capacity, uint16_t stride)
+void darken_init_ex(darken *$, darken_entity pool[], void *storage, uint16_t capacity, uint16_t stride)
 {
     $->pool = pool;
     $->capacity = capacity;
     $->size = 0;
     $->paused = capacity;
 
-    uint8_t *object_storage = (uint8_t *)storage;
+    uint8_t *entity_storage = (uint8_t *)storage;
 
     for (uint16_t i = 0; i < capacity; ++i)
     {
-        darken_object object = (darken_object)object_storage;
+        darken_entity entity = (darken_entity)entity_storage;
 
-        pool[i] = object;
-        object->owner = $;
-        object->slot = i;
+        pool[i] = entity;
+        entity->owner = $;
+        entity->slot = i;
 
-        object_storage += stride;
+        entity_storage += stride;
     }
 }
 
-darken_object darken_spawn(darken *$)
+darken_entity darken_spawn(darken *$)
 {
     _DARKEN_ASSERT($->size < $->paused, , $->pool[$->size++];);
 }
@@ -283,49 +283,49 @@ darken_object darken_spawn(darken *$)
 void darken_update(darken *$)
 {
     DARKEN_FOREACH($, {
-        if (DARKEN_STATE_IS_ACTIVE(_object->update))
-            _DARKEN_UPDATE(_object);
+        if (DARKEN_STATE_IS_ACTIVE(_entity->update))
+            _DARKEN_UPDATE(_entity);
 
-        else if (DARKEN_STATE_IS_PAUSED(_object->update))
-            _DARKEN_PAUSE(_object);
+        else if (DARKEN_STATE_IS_PAUSED(_entity->update))
+            _DARKEN_PAUSE(_entity);
 
-        else if (BARKEN_STATE_IS_DELETED(_object->update))
-            _DARKEN_DELETE(_object);
+        else if (BARKEN_STATE_IS_DELETED(_entity->update))
+            _DARKEN_DELETE(_entity);
     });
 }
 
 void darken_reset(darken *$)
 {
-    DARKEN_FOREACH($, _DARKEN_DELETE(_object));
+    DARKEN_FOREACH($, _DARKEN_DELETE(_entity));
 
     $->size = 0;
     $->paused = $->capacity;
 }
 
-uint16_t darken_object_run(darken_object $)
+uint16_t darken_entity_run(darken_entity $)
 {
     _DARKEN_ASSERT(DARKEN_STATE_IS_ACTIVE($->update), _DARKEN_RUN($), 1);
 }
 
-uint16_t darken_object_update(darken_object $)
+uint16_t darken_entity_update(darken_entity $)
 {
     _DARKEN_ASSERT(DARKEN_STATE_IS_ACTIVE($->update), _DARKEN_UPDATE($), 1);
 }
 
-uint16_t darken_object_pause(darken_object $)
+uint16_t darken_entity_pause(darken_entity $)
 {
-    _DARKEN_ASSERT(DARKEN_OBJECT_IN_ACTIVE($), _DARKEN_PAUSE($), 1);
+    _DARKEN_ASSERT(DARKEN_ENTITY_IN_ACTIVE($), _DARKEN_PAUSE($), 1);
 }
 
-uint16_t darken_object_resume(darken_object $)
+uint16_t darken_entity_resume(darken_entity $)
 {
-    _DARKEN_ASSERT(DARKEN_OBJECT_IN_PAUSED($), _DARKEN_RESUME($), 1);
+    _DARKEN_ASSERT(DARKEN_ENTITY_IN_PAUSED($), _DARKEN_RESUME($), 1);
 }
 
-uint16_t darken_object_delete(darken_object $)
+uint16_t darken_entity_delete(darken_entity $)
 {
-    _DARKEN_ASSERT(!DARKEN_OBJECT_IN_FREE($), {
-            if (DARKEN_OBJECT_IN_ACTIVE($))
+    _DARKEN_ASSERT(!DARKEN_ENTITY_IN_FREE($), {
+            if (DARKEN_ENTITY_IN_ACTIVE($))
                 _DARKEN_DELETE($);
             else
                 _darken_swap($->owner->pool, $->slot, $->owner->paused++); }, 1);
