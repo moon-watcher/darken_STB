@@ -230,9 +230,9 @@ static inline uint16_t _darken_swap(darken_entity pool[], uint16_t i, uint16_t j
 
 //
 
-void darken_init(darken *$, darken_entity pool[], void *storage, uint16_t capacity, uint16_t payload_size)
+void darken_init(darken *ctx, darken_entity pool[], void *storage, uint16_t capacity, uint16_t payload_size)
 {
-    darken_init_ex($, pool, storage, capacity, DARKEN_ENTITY_STRIDE(payload_size));
+    darken_init_ex(ctx, pool, storage, capacity, DARKEN_ENTITY_STRIDE(payload_size));
 }
 
 /*
@@ -248,12 +248,12 @@ darken_init_ex(&enemies_manager, pool, storage, MAX_ENTITIES, stride);
 
 // ... & free's
 */
-void darken_init_ex(darken *$, darken_entity pool[], void *storage, uint16_t capacity, uint16_t stride)
+void darken_init_ex(darken *ctx, darken_entity pool[], void *storage, uint16_t capacity, uint16_t stride)
 {
-    $->pool = pool;
-    $->capacity = capacity;
-    $->size = 0;
-    $->paused = capacity;
+    ctx->pool = pool;
+    ctx->capacity = capacity;
+    ctx->size = 0;
+    ctx->paused = capacity;
 
     uint8_t *entity_storage = (uint8_t *)storage;
 
@@ -262,21 +262,21 @@ void darken_init_ex(darken *$, darken_entity pool[], void *storage, uint16_t cap
         darken_entity entity = (darken_entity)entity_storage;
 
         pool[i] = entity;
-        entity->owner = $;
+        entity->owner = ctx;
         entity->slot = i;
 
         entity_storage += stride;
     }
 }
 
-darken_entity darken_spawn(darken *$)
+darken_entity darken_spawn(darken *ctx)
 {
-    _DARKEN_ASSERT($->size < $->paused, , $->pool[$->size++];);
+    _DARKEN_ASSERT(ctx->size < ctx->paused, , ctx->pool[ctx->size++];);
 }
 
-void darken_update(darken *$)
+void darken_update(darken *ctx)
 {
-    DARKEN_FOREACH($, {
+    DARKEN_FOREACH(ctx, {
         if (DARKEN_STATE_IS_ACTIVE(_entity->update))
             _DARKEN_UPDATE(_entity);
 
@@ -288,41 +288,41 @@ void darken_update(darken *$)
     });
 }
 
-void darken_reset(darken *$)
+void darken_reset(darken *ctx)
 {
-    DARKEN_FOREACH($, _DARKEN_DELETE(_entity));
+    DARKEN_FOREACH(ctx, _DARKEN_DELETE(_entity));
 
-    $->size = 0;
-    $->paused = $->capacity;
+    ctx->size = 0;
+    ctx->paused = ctx->capacity;
 }
 
-uint16_t darken_entity_run(darken_entity $)
+uint16_t darken_entity_run(darken_entity entity)
 {
-    _DARKEN_ASSERT(DARKEN_STATE_IS_ACTIVE($->update), _DARKEN_RUN($), 1);
+    _DARKEN_ASSERT(DARKEN_STATE_IS_ACTIVE(entity->update), _DARKEN_RUN(entity), 1);
 }
 
-uint16_t darken_entity_update(darken_entity $)
+uint16_t darken_entity_update(darken_entity entity)
 {
-    _DARKEN_ASSERT(DARKEN_STATE_IS_ACTIVE($->update), _DARKEN_UPDATE($), 1);
+    _DARKEN_ASSERT(DARKEN_STATE_IS_ACTIVE(entity->update), _DARKEN_UPDATE(entity), 1);
 }
 
-uint16_t darken_entity_pause(darken_entity $)
+uint16_t darken_entity_pause(darken_entity entity)
 {
-    _DARKEN_ASSERT(DARKEN_ENTITY_IN_ACTIVE($), _DARKEN_PAUSE($), 1);
+    _DARKEN_ASSERT(DARKEN_ENTITY_IN_ACTIVE(entity), _DARKEN_PAUSE(entity), 1);
 }
 
-uint16_t darken_entity_resume(darken_entity $)
+uint16_t darken_entity_resume(darken_entity entity)
 {
-    _DARKEN_ASSERT(DARKEN_ENTITY_IN_PAUSED($), _DARKEN_RESUME($), 1);
+    _DARKEN_ASSERT(DARKEN_ENTITY_IN_PAUSED(entity), _DARKEN_RESUME(entity), 1);
 }
 
-uint16_t darken_entity_delete(darken_entity $)
+uint16_t darken_entity_delete(darken_entity entity)
 {
-    _DARKEN_ASSERT(!DARKEN_ENTITY_IN_FREE($), {
-            if (DARKEN_ENTITY_IN_ACTIVE($))
-                _DARKEN_DELETE($);
+    _DARKEN_ASSERT(!DARKEN_ENTITY_IN_FREE(entity), {
+            if (DARKEN_ENTITY_IN_ACTIVE(entity))
+                _DARKEN_DELETE(entity);
             else
-                _darken_swap($->owner->pool, $->slot, $->owner->paused++); }, 1);
+                _darken_swap(entity->owner->pool, entity->slot, entity->owner->paused++); }, 1);
 }
 
 #endif // DARKEN_IMPLEMENTATION
