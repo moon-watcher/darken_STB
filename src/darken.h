@@ -230,9 +230,9 @@ static inline uint16_t _darken_swap(darken_entity pool[], uint16_t i, uint16_t j
 
 //
 
-void darken_init(darken *$, darken_entity pool[], void *param_storage, uint16_t capacity, uint16_t payload_size)
+void darken_init(darken *$, darken_entity pool[], void *storage, uint16_t capacity, uint16_t payload_size)
 {
-    darken_init_ex($, pool, param_storage, capacity, DARKEN_ENTITY_STRIDE(payload_size));
+    darken_init_ex($, pool, storage, capacity, DARKEN_ENTITY_STRIDE(payload_size));
 }
 
 /*
