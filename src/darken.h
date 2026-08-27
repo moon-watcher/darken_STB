@@ -131,32 +131,33 @@ uint16_t darken_entity_delete(darken_entity);
 #define DARKEN_STORAGE(NAME, CAPACITY, PAYLOAD_SIZE)                                                 \
     struct                                                                                           \
     {                                                                                                \
-        darken_entity pool[(CAPACITY)];                                                              \
-        uint8_t data[(CAPACITY) * DARKEN_ENTITY_STRIDE((PAYLOAD_SIZE))] __attribute__((aligned(4))); \
         uint16_t capacity;                                                                           \
         uint16_t payload_size;                                                                       \
+        darken_entity pool[(CAPACITY)];                                                              \
+        uint8_t data[(CAPACITY) * DARKEN_ENTITY_STRIDE((PAYLOAD_SIZE))] __attribute__((aligned(4))); \
     } NAME = {                                                                                       \
-        .capacity = (CAPACITY),                                                                      \
-        .payload_size = (PAYLOAD_SIZE),                                                              \
+        (CAPACITY),                                                                                  \
+        (PAYLOAD_SIZE),                                                                              \
     }
 
 #define DARKEN_ARGS(NAME) \
     (NAME).pool, (NAME).data, (NAME).capacity, (NAME).payload_size
 
-#define DARKEN_FOREACH(MANAGER, CODE)                                          \
-    do                                                                         \
-    {                                                                          \
-        uint16_t _index = (MANAGER)->size;                                     \
-        if (_index)                                                            \
-        {                                                                      \
-            darken_entity *_pool = (MANAGER)->pool;                            \
-                                                                               \
-            while (_index--)                                                   \
-            {                                                                  \
-                darken_entity _entity __attribute__((unused)) = _pool[_index]; \
-                CODE;                                                          \
-            }                                                                  \
-        }                                                                      \
+#define DARKEN_FOREACH(MANAGER, CODE)                  \
+    do                                                 \
+    {                                                  \
+        uint16_t _index = (MANAGER)->size;             \
+        if (_index)                                    \
+        {                                              \
+            darken_entity *_pool = (MANAGER)->pool;    \
+                                                       \
+            while (_index--)                           \
+            {                                          \
+                darken_entity _entity = _pool[_index]; \
+                (void)_entity;                         \
+                CODE;                                  \
+            }                                          \
+        }                                              \
     } while (0)
 
 void darken_init(darken *, darken_entity[], void *, uint16_t, uint16_t);
