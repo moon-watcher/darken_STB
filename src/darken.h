@@ -236,8 +236,6 @@ void darken_init(darken *$, darken_entity pool[], void *storage, uint16_t capaci
 }
 
 /*
-// Uso de almacenamiento dinámico
-
 #define MAX_ENTITIES 100
 #define PAYLOAD_SIZE  sizeof(MyData)
 
@@ -246,13 +244,9 @@ darken_entity *pool = malloc(MAX_ENTITIES * sizeof(darken_entity));
 uint16_t stride = DARKEN_ENTITY_STRIDE(PAYLOAD_SIZE);
 uint8_t *storage = malloc(MAX_ENTITIES * stride);
 
-// Inicialización con stride calculado
 darken_init_ex(&enemies_manager, pool, storage, MAX_ENTITIES, stride);
 
-// ...
-
-free(pool);
-free(storage);
+// ... & free's
 */
 void darken_init_ex(darken *$, darken_entity pool[], void *storage, uint16_t capacity, uint16_t stride)
 {
