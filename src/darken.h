@@ -233,21 +233,15 @@ static inline uint16_t _darken_swap(darken_entity pool[], uint16_t i, uint16_t j
 //
 
 /*
-#define MAX_ENEMIES 50
-#define ENEMY_PAYLOAD sizeof(EnemyData)
-darken manager;
-
-//
-
-DARKEN_DECLARE_STORAGE(enemy_storage, MAX_ENEMIES, ENEMY_PAYLOAD);
+DARKEN_DECLARE_STORAGE(enemy_storage, MAX_ENEMIES, sizeof(EnemyData));
 darken_init(&manager, DARKEN_ARGS(enemy_storage));
 
 or
 
 darken_entity *pool = malloc(DARKEN_POOL_MEMORY(MAX_ENEMIES));
-uint8_t *storage = malloc(DARKEN_STORAGE_MEMORY(MAX_ENEMIES, ENEMY_PAYLOAD));
-darken_init(&manager, pool, storage, MAX_ENEMIES, ENEMY_PAYLOAD);
-free...
+uint8_t *storage = malloc(DARKEN_STORAGE_MEMORY(MAX_ENEMIES, sizeof(EnemyData)));
+darken_init(&manager, pool, storage, MAX_ENEMIES, sizeof(EnemyData));
+free pool & storage
 */
 void darken_init(darken *ctx, darken_entity pool[], void *param_storage, uint16_t capacity, uint16_t payload_size)
 {
