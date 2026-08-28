@@ -156,7 +156,6 @@ uint16_t darken_entity_delete(darken_entity);
         if (_index)                                    \
         {                                              \
             darken_entity *_pool = (CTX)->pool;        \
-                                                       \
             while (_index--)                           \
             {                                          \
                 darken_entity _entity = _pool[_index]; \
@@ -180,9 +179,7 @@ void darken_reset(darken *);
 #define _DARKEN_ASSERT(COND, CODE, RET) \
     if (!(COND))                        \
         return 0;                       \
-                                        \
     CODE;                               \
-                                        \
     return RET;
 
 #define _DARKEN_BLOCK(CODE) \
