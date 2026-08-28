@@ -140,7 +140,7 @@ uint16_t darken_entity_delete(darken_entity);
         uint16_t capacity;                                                                      \
         uint16_t payload_size;                                                                  \
         darken_entity pool[(CAPACITY)];                                                         \
-        uint8_t data[(CAPACITY) * DARKEN_ENTITY_STRIDE((PAYLOAD))] __attribute__((aligned(4))); \
+        uint8_t data[DARKEN_STORAGE_MEMORY((CAPACITY), (PAYLOAD))] __attribute__((aligned(4))); \
     } NAME = {                                                                                  \
         .capacity = (CAPACITY),                                                                 \
         .payload_size = (PAYLOAD),                                                              \
