@@ -213,7 +213,7 @@ void darken_reset(darken *);
     ++ctx->paused;                                      \
     ++ctx->size;)
 
-#define _DARKEN_DELETE(ENTITY) _DARKEN_BLOCK(    \
+#define _DARKEN_DESTROY(ENTITY) _DARKEN_BLOCK(   \
     darken *ctx = ENTITY->owner;                 \
                                                  \
     if (DARKEN_STATE_IS_ACTIVE(ENTITY->destroy)) \
@@ -221,9 +221,9 @@ void darken_reset(darken *);
                                                  \
     _darken_swap(ctx->pool, ENTITY->slot, --ctx->size);)
 
-#define _DARKEN_DELETE_EX(ENTITY) _DARKEN_BLOCK( \
-    if (DARKEN_ENTITY_IN_ACTIVE(ENTITY))         \
-        _DARKEN_DELETE(ENTITY);                  \
+#define _DARKEN_DELETE(ENTITY) _DARKEN_BLOCK( \
+    if (DARKEN_ENTITY_IN_ACTIVE(ENTITY))      \
+        _DARKEN_DESTROY(ENTITY);              \
     else _darken_swap(ENTITY->owner->pool, ENTITY->slot, ENTITY->owner->paused++););
 
 static inline uint16_t _darken_swap(darken_entity pool[], uint16_t i, uint16_t j)
@@ -286,13 +286,13 @@ void darken_update(darken *ctx)
             _DARKEN_PAUSE(_entity);
 
         else if (BARKEN_STATE_IS_DELETED(_entity->update))
-            _DARKEN_DELETE(_entity);
+            _DARKEN_DESTROY(_entity);
     });
 }
 
 void darken_reset(darken *ctx)
 {
-    DARKEN_FOREACH(ctx, _DARKEN_DELETE(_entity));
+    DARKEN_FOREACH(ctx, _DARKEN_DESTROY(_entity));
 
     ctx->size = 0;
     ctx->paused = ctx->capacity;
@@ -302,7 +302,7 @@ uint16_t darken_entity_run(darken_entity entity) { _DARKEN_ASSERT(DARKEN_STATE_I
 uint16_t darken_entity_update(darken_entity entity) { _DARKEN_ASSERT(DARKEN_STATE_IS_ACTIVE(entity->update), _DARKEN_UPDATE(entity), 1); }
 uint16_t darken_entity_pause(darken_entity entity) { _DARKEN_ASSERT(DARKEN_ENTITY_IN_ACTIVE(entity), _DARKEN_PAUSE(entity), 1); }
 uint16_t darken_entity_resume(darken_entity entity) { _DARKEN_ASSERT(DARKEN_ENTITY_IN_PAUSED(entity), _DARKEN_RESUME(entity), 1); }
-uint16_t darken_entity_delete(darken_entity entity) { _DARKEN_ASSERT(DARKEN_ENTITY_IN_USE(entity), _DARKEN_DELETE_EX(entity), 1); }
+uint16_t darken_entity_delete(darken_entity entity) { _DARKEN_ASSERT(DARKEN_ENTITY_IN_USE(entity), _DARKEN_DELETE(entity), 1); }
 
 #endif // DARKEN_IMPLEMENTATION
 
