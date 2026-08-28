@@ -111,7 +111,8 @@ struct darken_entity
 
 #define DARKEN_ENTITY_IN_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->owner->size)
 #define DARKEN_ENTITY_IN_PAUSED(ENTITY) ((ENTITY)->slot >= (ENTITY)->owner->paused)
-#define DARKEN_ENTITY_IN_FREE(ENTITY) (!(DARKEN_ENTITY_IN_ACTIVE(ENTITY) || DARKEN_ENTITY_IN_PAUSED(ENTITY)))
+#define DARKEN_ENTITY_IN_USE(ENTITY) (DARKEN_ENTITY_IN_ACTIVE(ENTITY) || DARKEN_ENTITY_IN_PAUSED(ENTITY))
+#define DARKEN_ENTITY_IN_FREE(ENTITY) (!DARKEN_ENTITY_IN_USE(ENTITY))
 
 uint16_t darken_entity_run(darken_entity);
 uint16_t darken_entity_update(darken_entity);
@@ -220,6 +221,11 @@ void darken_reset(darken *);
                                                  \
     _darken_swap(ctx->pool, ENTITY->slot, --ctx->size);)
 
+#define _DARKEN_DELETE_EX(ENTITY) _DARKEN_BLOCK( \
+    if (DARKEN_ENTITY_IN_ACTIVE(ENTITY))         \
+        _DARKEN_DELETE(ENTITY);                  \
+    else _darken_swap(ENTITY->owner->pool, ENTITY->slot, ENTITY->owner->paused++););
+
 static inline uint16_t _darken_swap(darken_entity pool[], uint16_t i, uint16_t j)
 {
     _DARKEN_ASSERT(i != j, {
@@ -292,34 +298,11 @@ void darken_reset(darken *ctx)
     ctx->paused = ctx->capacity;
 }
 
-uint16_t darken_entity_run(darken_entity entity)
-{
-    _DARKEN_ASSERT(DARKEN_STATE_IS_ACTIVE(entity->update), _DARKEN_RUN(entity), 1);
-}
-
-uint16_t darken_entity_update(darken_entity entity)
-{
-    _DARKEN_ASSERT(DARKEN_STATE_IS_ACTIVE(entity->update), _DARKEN_UPDATE(entity), 1);
-}
-
-uint16_t darken_entity_pause(darken_entity entity)
-{
-    _DARKEN_ASSERT(DARKEN_ENTITY_IN_ACTIVE(entity), _DARKEN_PAUSE(entity), 1);
-}
-
-uint16_t darken_entity_resume(darken_entity entity)
-{
-    _DARKEN_ASSERT(DARKEN_ENTITY_IN_PAUSED(entity), _DARKEN_RESUME(entity), 1);
-}
-
-uint16_t darken_entity_delete(darken_entity entity)
-{
-    _DARKEN_ASSERT(!DARKEN_ENTITY_IN_FREE(entity), {
-            if (DARKEN_ENTITY_IN_ACTIVE(entity))
-                _DARKEN_DELETE(entity);
-            else
-                _darken_swap(entity->owner->pool, entity->slot, entity->owner->paused++); }, 1);
-}
+uint16_t darken_entity_run(darken_entity entity) { _DARKEN_ASSERT(DARKEN_STATE_IS_ACTIVE(entity->update), _DARKEN_RUN(entity), 1); }
+uint16_t darken_entity_update(darken_entity entity) { _DARKEN_ASSERT(DARKEN_STATE_IS_ACTIVE(entity->update), _DARKEN_UPDATE(entity), 1); }
+uint16_t darken_entity_pause(darken_entity entity) { _DARKEN_ASSERT(DARKEN_ENTITY_IN_ACTIVE(entity), _DARKEN_PAUSE(entity), 1); }
+uint16_t darken_entity_resume(darken_entity entity) { _DARKEN_ASSERT(DARKEN_ENTITY_IN_PAUSED(entity), _DARKEN_RESUME(entity), 1); }
+uint16_t darken_entity_delete(darken_entity entity) { _DARKEN_ASSERT(DARKEN_ENTITY_IN_USE(entity), _DARKEN_DELETE_EX(entity), 1); }
 
 #endif // DARKEN_IMPLEMENTATION
 
