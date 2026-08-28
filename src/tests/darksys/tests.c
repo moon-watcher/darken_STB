@@ -94,9 +94,9 @@ static void test_entity_system_basic(void)
     DARKEN_DECLARE_STORAGE(systems_storage, 3, sizeof(TestBatchSystem));
     darken_init(&systems, DARKEN_ARGS(systems_storage));
     void *physics_items[3], *movement_items[12], *frame_items[3];
-    darken_entity frames_entity = darken_spawn(&systems);
-    darken_entity movement_entity = darken_spawn(&systems);
-    darken_entity physics_entity = darken_spawn(&systems);
+    darken_entity frames_entity = DARKEN_SPAWN(&systems);
+    darken_entity movement_entity = DARKEN_SPAWN(&systems);
+    darken_entity physics_entity = DARKEN_SPAWN(&systems);
     TestBatchSystem *physics_pool = (TestBatchSystem *)physics_entity->data;
     TestBatchSystem *movement_pool = (TestBatchSystem *)movement_entity->data;
     TestBatchSystem *frame_pool = (TestBatchSystem *)frames_entity->data;
@@ -109,8 +109,8 @@ static void test_entity_system_basic(void)
     physics_entity->update = test_system_physics;
     movement_entity->update = test_system_movement;
     frames_entity->update = test_system_frames;
-    darken_entity p1_entity = darken_spawn(&entities);
-    darken_entity p2_entity = darken_spawn(&entities);
+    darken_entity p1_entity = DARKEN_SPAWN(&entities);
+    darken_entity p2_entity = DARKEN_SPAWN(&entities);
     TestSystemEntity *p1 = (TestSystemEntity *)p1_entity->data;
     TestSystemEntity *p2 = (TestSystemEntity *)p2_entity->data;
     p1->x = 10;
@@ -154,8 +154,8 @@ static void test_entity_system_shared_data(void)
     DARKEN_DECLARE_STORAGE(systems_storage, 2, sizeof(TestBatchSystem));
     darken_init(&systems, DARKEN_ARGS(systems_storage));
     void *movement_items[8], *frame_items[2];
-    darken_entity movement = darken_spawn(&systems);
-    darken_entity frames = darken_spawn(&systems);
+    darken_entity movement = DARKEN_SPAWN(&systems);
+    darken_entity frames = DARKEN_SPAWN(&systems);
     TestBatchSystem *movement_system = (TestBatchSystem *)movement->data;
     TestBatchSystem *frame_system = (TestBatchSystem *)frames->data;
     movement_system->items = movement_items;
@@ -164,7 +164,7 @@ static void test_entity_system_shared_data(void)
     frame_system->size = 0;
     movement->update = test_system_movement;
     frames->update = test_system_frames;
-    darken_entity e = darken_spawn(&entities);
+    darken_entity e = DARKEN_SPAWN(&entities);
     TestSystemEntity *data = (TestSystemEntity *)e->data;
     data->x = 50;
     data->y = 60;
@@ -191,13 +191,13 @@ static void test_entity_system_paused_entity(void)
     DARKEN_DECLARE_STORAGE(systems_storage, 1, sizeof(TestBatchSystem));
     darken_init(&systems, DARKEN_ARGS(systems_storage));
     void *movement_items[8];
-    darken_entity system_entity = darken_spawn(&systems);
+    darken_entity system_entity = DARKEN_SPAWN(&systems);
     TestBatchSystem *system = (TestBatchSystem *)system_entity->data;
     system->items = movement_items;
     system->size = 0;
     system_entity->update = test_system_movement;
-    darken_entity active_entity = darken_spawn(&entities);
-    darken_entity paused_entity = darken_spawn(&entities);
+    darken_entity active_entity = DARKEN_SPAWN(&entities);
+    darken_entity paused_entity = DARKEN_SPAWN(&entities);
     TestSystemEntity *active = (TestSystemEntity *)active_entity->data;
     TestSystemEntity *paused = (TestSystemEntity *)paused_entity->data;
     active->x = 10;
@@ -329,9 +329,9 @@ static void test_darksys_as_entities(void)
     DARKEN_DECLARE_STORAGE(systems_storage, 3, sizeof(darksys));
     darken_init(&systems, DARKEN_ARGS(systems_storage));
 
-    darken_entity frames_entity = darken_spawn(&systems);
-    darken_entity movement_entity = darken_spawn(&systems);
-    darken_entity physics_entity = darken_spawn(&systems);
+    darken_entity frames_entity = DARKEN_SPAWN(&systems);
+    darken_entity movement_entity = DARKEN_SPAWN(&systems);
+    darken_entity physics_entity = DARKEN_SPAWN(&systems);
 
     darksys *frames = (darksys *)frames_entity->data;
     darksys *movement = (darksys *)movement_entity->data;
@@ -350,8 +350,8 @@ static void test_darksys_as_entities(void)
     movement_entity->update = test_darksys_movement;
     physics_entity->update = test_darksys_physics;
 
-    darken_entity e1 = darken_spawn(&entities);
-    darken_entity e2 = darken_spawn(&entities);
+    darken_entity e1 = DARKEN_SPAWN(&entities);
+    darken_entity e2 = DARKEN_SPAWN(&entities);
     DARKEN_DATA(TestDeSystemEntity, p1, e1);
     TestDeSystemEntity *p2 = (TestDeSystemEntity *)e2->data;
 
@@ -394,14 +394,14 @@ static void test_darksys_shared_payload(void)
     DARKEN_DECLARE_STORAGE(systems_storage, 2, sizeof(darksys*));
     darken_init(&systems, DARKEN_ARGS(systems_storage));
     void *movement_pool[4], *frames_pool[1];
-    darken_entity movement_entity = darken_spawn(&systems), frames_entity = darken_spawn(&systems);
+    darken_entity movement_entity = DARKEN_SPAWN(&systems), frames_entity = DARKEN_SPAWN(&systems);
     darksys *movement = (darksys *)movement_entity->data;
     darksys *frames = (darksys *)frames_entity->data;
     darksys_init(movement, movement_pool, 1, 4);
     darksys_init(frames, frames_pool, 1, 1);
     movement_entity->update = test_darksys_movement;
     frames_entity->update = test_darksys_frames;
-    darken_entity entity = darken_spawn(&entities);
+    darken_entity entity = DARKEN_SPAWN(&entities);
     TestDeSystemEntity *data = (TestDeSystemEntity *)entity->data;
     data->x = 50;
     data->y = 60;

@@ -137,7 +137,7 @@ TEST(test_manager_init)
 TEST(test_entity_new)
 {
     init_test_manager();
-    darken_entity e = darken_spawn(&test_mgr);
+    darken_entity e = DARKEN_SPAWN(&test_mgr);
     CHECK(e != 0);
     CHECK(e->slot == 0);
     CHECK(e->update == DARKEN_DELETE);
@@ -151,17 +151,17 @@ TEST(test_entity_new_full)
     init_test_manager();
     for (uint16_t i = 0; i < TEST_MGR_CAPACITY; i++)
     {
-        darken_entity e = darken_spawn(&test_mgr);
+        darken_entity e = DARKEN_SPAWN(&test_mgr);
         CHECK(e != 0);
     }
-    darken_entity e = darken_spawn(&test_mgr);
+    darken_entity e = DARKEN_SPAWN(&test_mgr);
     CHECK(e == 0);
 }
 
 TEST(test_entity_exec)
 {
     init_test_manager();
-    darken_entity e = darken_spawn(&test_mgr);
+    darken_entity e = DARKEN_SPAWN(&test_mgr);
     TestData *d = (TestData *)e->data;
     d->value = 0;
     d->updates = 0;
@@ -176,7 +176,7 @@ TEST(test_entity_exec)
 TEST(test_entity_update_loop)
 {
     init_test_manager();
-    darken_entity e = darken_spawn(&test_mgr);
+    darken_entity e = DARKEN_SPAWN(&test_mgr);
     // TestData *d = (TestData *)e->data;
     DARKEN_DATA(TestData, d, e);
     d->value = 0;
@@ -193,7 +193,7 @@ TEST(test_entity_update_loop)
 TEST(test_entity_update_pause_transition)
 {
     init_test_manager();
-    darken_entity e = darken_spawn(&test_mgr);
+    darken_entity e = DARKEN_SPAWN(&test_mgr);
     TestData *d = (TestData *)e->data;
     d->value = 0;
     e->update = state_pause_after_1;
@@ -208,7 +208,7 @@ TEST(test_entity_update_pause_transition)
 TEST(test_entity_pause_resume)
 {
     init_test_manager();
-    darken_entity e = darken_spawn(&test_mgr);
+    darken_entity e = DARKEN_SPAWN(&test_mgr);
     e->update = state_inc;
 
     uint16_t active_before = test_mgr.size;
@@ -228,7 +228,7 @@ TEST(test_entity_pause_resume)
 TEST(test_entity_delete_active)
 {
     init_test_manager();
-    darken_entity e = darken_spawn(&test_mgr);
+    darken_entity e = DARKEN_SPAWN(&test_mgr);
     e->update = state_inc;
     e->destroy= test_destructor;
 
@@ -243,7 +243,7 @@ TEST(test_entity_delete_active)
 TEST(test_entity_delete_paused)
 {
     init_test_manager();
-    darken_entity e = darken_spawn(&test_mgr);
+    darken_entity e = DARKEN_SPAWN(&test_mgr);
     e->update = state_inc;
     darken_entity_pause(e);
     e->destroy= test_destructor;
@@ -259,9 +259,9 @@ TEST(test_entity_delete_paused)
 TEST(test_entity_move_front_back)
 {
     // init_test_manager();
-    // darken_entity e0 = darken_spawn(&test_mgr);
-    // darken_entity e1 = darken_spawn(&test_mgr);
-    // darken_entity e2 = darken_spawn(&test_mgr);
+    // darken_entity e0 = DARKEN_SPAWN(&test_mgr);
+    // darken_entity e1 = DARKEN_SPAWN(&test_mgr);
+    // darken_entity e2 = DARKEN_SPAWN(&test_mgr);
     // e0->update = state_inc;
     // e1->update = state_inc;
     // e2->update = state_inc;
@@ -278,8 +278,8 @@ TEST(test_entity_move_front_back)
 TEST(test_manager_update_basic)
 {
     init_test_manager();
-    darken_entity e0 = darken_spawn(&test_mgr);
-    darken_entity e1 = darken_spawn(&test_mgr);
+    darken_entity e0 = DARKEN_SPAWN(&test_mgr);
+    darken_entity e1 = DARKEN_SPAWN(&test_mgr);
     e0->update = state_inc;
     e1->update = state_inc;
     TestData *d0 = (TestData *)e0->data;
@@ -300,8 +300,8 @@ TEST(test_manager_update_basic)
 TEST(test_manager_update_pause_and_delete)
 {
     init_test_manager();
-    darken_entity e0 = darken_spawn(&test_mgr);
-    darken_entity e1 = darken_spawn(&test_mgr);
+    darken_entity e0 = DARKEN_SPAWN(&test_mgr);
+    darken_entity e1 = DARKEN_SPAWN(&test_mgr);
     e0->update = state_pause_after_1;
     e1->update = state_delete_after_1;
     TestData *d0 = (TestData *)e0->data;
@@ -327,8 +327,8 @@ TEST(test_manager_update_pause_and_delete)
 TEST(test_manager_reset)
 {
     init_test_manager();
-    darken_entity e0 = darken_spawn(&test_mgr);
-    darken_entity e1 = darken_spawn(&test_mgr);
+    darken_entity e0 = DARKEN_SPAWN(&test_mgr);
+    darken_entity e1 = DARKEN_SPAWN(&test_mgr);
     e0->update = state_inc;
     e1->update = state_inc;
     e0->destroy= test_destructor;
@@ -404,8 +404,8 @@ TEST(test_system_iterator_macro)
 TEST(test_manager_iterate_macro)
 {
     init_test_manager();
-    darken_entity e0 = darken_spawn(&test_mgr);
-    darken_entity e1 = darken_spawn(&test_mgr);
+    darken_entity e0 = DARKEN_SPAWN(&test_mgr);
+    darken_entity e1 = DARKEN_SPAWN(&test_mgr);
     e0->update = state_inc;
     e1->update = state_inc;
     darken_entity_pause(e1);
@@ -443,7 +443,7 @@ static void bench_entity_new_delete(void)
     {
         for (int j = 0; j < BENCH_MGR_CAPACITY; j++)
         {
-            darken_entity e = darken_spawn(&bench_mgr);
+            darken_entity e = DARKEN_SPAWN(&bench_mgr);
             if (e)
                 e->update = state_inc;
         }
@@ -464,7 +464,7 @@ static void bench_manager_update(void)
     darken_init(&bench_mgr, DARKEN_ARGS(bench_mgr_storage));
     for (int i = 0; i < BENCH_MGR_CAPACITY; i++)
     {
-        darken_entity e = darken_spawn(&bench_mgr);
+        darken_entity e = DARKEN_SPAWN(&bench_mgr);
         e->update = state_inc;
         ((TestData *)e->data)->value = 0;
     }
@@ -483,7 +483,7 @@ static void bench_entity_pause_resume(void)
 {
     const int ITER = 100;
     darken_init(&bench_mgr, DARKEN_ARGS(bench_mgr_storage));
-    darken_entity e = darken_spawn(&bench_mgr);
+    darken_entity e = DARKEN_SPAWN(&bench_mgr);
     e->update = state_inc;
     uint32_t t0 = get_time_us();
 
@@ -545,7 +545,7 @@ static void bench_manager_iterate(void)
     darken_init(&bench_mgr, DARKEN_ARGS(bench_mgr_storage));
     for (int i = 0; i < BENCH_MGR_CAPACITY; i++)
     {
-        darken_entity e = darken_spawn(&bench_mgr);
+        darken_entity e = DARKEN_SPAWN(&bench_mgr);
         e->update = state_inc;
     }
     volatile int count = 0;

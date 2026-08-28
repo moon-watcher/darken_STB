@@ -37,15 +37,15 @@
  *
  * - Active zone [0, size):
  *     Entity pointers updated every frame by darken_update(). Iterable with DARKEN_FOREACH. Freely created
- *     (darken_spawn) and deleted.
+ *     (DARKEN_SPAWN) and deleted.
  *
  * - Free zone [size, paused):
- *     Pointer slots not currently assigned to an entity. This is where darken_spawn() takes its next entity from,
+ *     Pointer slots not currently assigned to an entity. This is where DARKEN_SPAWN() takes its next entity from,
  *     and where an active entity's slot goes right after it's deleted.
  *
  * - Paused zone [paused, capacity):
  *     Entity pointers parked out of the update loop. darken_update() never touches them and DARKEN_FOREACH
- *     never visits them. Crucially, darken_spawn() never hands out a slot from this zone, so a paused entity's
+ *     never visits them. Crucially, DARKEN_SPAWN() never hands out a slot from this zone, so a paused entity's
  *     slot (and therefore its entity->data pointer) stays valid and untouched until it's explicitly resumed or
  *     deleted. This is what lets keep safely pointing at a paused entity's data.
  *
@@ -165,8 +165,10 @@ uint16_t darken_entity_delete(darken_entity);
         }                                              \
     } while (0)
 
+#define DARKEN_SPAWN(ctx) \
+    ((ctx)->size < (ctx)->paused ? (ctx)->pool[(ctx)->size++] : 0)
+
 void darken_init(darken *, darken_entity[], void *, uint16_t, uint16_t);
-darken_entity darken_spawn(darken *);
 void darken_update(darken *);
 void darken_reset(darken *);
 
@@ -266,11 +268,6 @@ void darken_init(darken *ctx, darken_entity pool[], void *param_storage, uint16_
 
         storage += stride;
     }
-}
-
-darken_entity darken_spawn(darken *ctx)
-{
-    _DARKEN_ASSERT(ctx->size < ctx->paused, , ctx->pool[ctx->size++];);
 }
 
 void darken_update(darken *ctx)

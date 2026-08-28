@@ -24,7 +24,7 @@ static void darken_bench_create_destroy(void)
     for (u32 r = 0; r < BENCH_REPS; ++r)
     {
         for (u16 i = 0; i < 32; ++i)
-            darken_spawn(&m);
+            DARKEN_SPAWN(&m);
         darken_reset(&m);
     }
     u32 frames = bench_frames_elapsed(t0);
@@ -44,7 +44,7 @@ static void darken_bench_update(void)
     darken_init(&m, DARKEN_ARGS(m_storage));
     for (u16 i = 0; i < 32; ++i)
     {
-        darken_entity e = darken_spawn(&m);
+        darken_entity e = DARKEN_SPAWN(&m);
         e->update = darken_bench_state_fn;
     }
     u32 t0 = bench_start();
@@ -64,7 +64,7 @@ static void darken_bench_apply(void)
     {
         for (u16 i = 0; i < 32; ++i)
         {
-            darken_entity e = darken_spawn(&m);
+            darken_entity e = DARKEN_SPAWN(&m);
             e->tag = i;
         }
         // DARKEN_MANAGER_APPLY(&m, (ENTITY->tag % 2) == 0, darken_entity_delete);
@@ -87,7 +87,7 @@ static void darken_bench_create_destroy_128(void)
     for (u32 r = 0; r < 500; ++r)
     {
         for (u16 i = 0; i < 128; ++i)
-            darken_spawn(&m);
+            DARKEN_SPAWN(&m);
         darken_reset(&m);
     }
     u32 frames = bench_frames_elapsed(t0);
@@ -103,7 +103,7 @@ static void darken_bench_create_destroy_256(void)
     for (u32 r = 0; r < 250; ++r)
     {
         for (u16 i = 0; i < 256; ++i)
-            darken_spawn(&m);
+            DARKEN_SPAWN(&m);
         darken_reset(&m);
     }
     u32 frames = bench_frames_elapsed(t0);
@@ -117,7 +117,7 @@ static void darken_bench_update_128(void)
     darken_init(&m, DARKEN_ARGS(m_storage));
     for (u16 i = 0; i < 128; ++i)
     {
-        darken_entity e = darken_spawn(&m);
+        darken_entity e = DARKEN_SPAWN(&m);
         e->update = darken_bench_state_fn;
     }
     u32 t0 = bench_start();
@@ -134,7 +134,7 @@ static void darken_bench_update_256(void)
     darken_init(&m, DARKEN_ARGS(m_storage));
     for (u16 i = 0; i < 256; ++i)
     {
-        darken_entity e = darken_spawn(&m);
+        darken_entity e = DARKEN_SPAWN(&m);
         e->update = darken_bench_state_fn;
     }
     u32 t0 = bench_start();
@@ -149,8 +149,8 @@ static void darken_bench_swap(void)
     darken m;
     DARKEN_DECLARE_STORAGE(m_storage, 2, sizeof(struct MyComponent));
     darken_init(&m, DARKEN_ARGS(m_storage));
-    darken_entity a = darken_spawn(&m);
-    darken_entity b = darken_spawn(&m);
+    darken_entity a = DARKEN_SPAWN(&m);
+    darken_entity b = DARKEN_SPAWN(&m);
     u32 t0 = bench_start();
     (void)a;
     (void)b;
