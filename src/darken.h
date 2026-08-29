@@ -120,12 +120,6 @@ uint16_t darken_entity_pause(darken_entity);
 uint16_t darken_entity_resume(darken_entity);
 uint16_t darken_entity_delete(darken_entity);
 
-#define _DARKEN_BLOCK(CODE) \
-    do                      \
-    {                       \
-        CODE                \
-    } while (0)
-
 /**
  * Align a byte count to a 4-byte boundary.
  *
@@ -175,10 +169,14 @@ void darken_update(darken *);
 void darken_reset(darken *);
 
 /* ============================================================================
- * IMPLEMENTATION
+ * PRIVATE MACROS
  * ============================================================================ */
 
-#ifdef DARKEN_IMPLEMENTATION
+#define _DARKEN_BLOCK(CODE) \
+    do                      \
+    {                       \
+        CODE                \
+    } while (0)
 
 #define _DARKEN_ASSERT(COND, CODE, RET) \
     if (!(COND))                        \
@@ -220,6 +218,12 @@ void darken_reset(darken *);
     if (DARKEN_ENTITY_IN_ACTIVE(ENTITY))      \
         _DARKEN_DESTROY(ENTITY);              \
     else _darken_swap(ENTITY->owner->pool, ENTITY->slot, ENTITY->owner->paused++););
+
+/* ============================================================================
+ * IMPLEMENTATION
+ * ============================================================================ */
+
+#ifdef DARKEN_IMPLEMENTATION
 
 static inline uint16_t _darken_swap(darken_entity pool[], uint16_t i, uint16_t j)
 {
