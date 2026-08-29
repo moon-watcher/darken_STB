@@ -120,6 +120,12 @@ uint16_t darken_entity_pause(darken_entity);
 uint16_t darken_entity_resume(darken_entity);
 uint16_t darken_entity_delete(darken_entity);
 
+#define _DARKEN_BLOCK(CODE) \
+    do                      \
+    {                       \
+        CODE                \
+    } while (0)
+
 /**
  * Align a byte count to a 4-byte boundary.
  *
@@ -149,21 +155,17 @@ uint16_t darken_entity_delete(darken_entity);
 #define DARKEN_ARGS(NAME) \
     (NAME).pool, (NAME).data, (NAME).capacity, (NAME).payload_size
 
-#define DARKEN_FOREACH(CTX, CODE)                      \
-    do                                                 \
-    {                                                  \
-        uint16_t _index = (CTX)->size;                 \
-        if (_index)                                    \
-        {                                              \
-            darken_entity *_pool = (CTX)->pool;        \
-            while (_index--)                           \
-            {                                          \
-                darken_entity _entity = _pool[_index]; \
-                (void)_entity;                         \
-                CODE;                                  \
-            }                                          \
-        }                                              \
-    } while (0)
+#define DARKEN_FOREACH(CTX, CODE) _DARKEN_BLOCK(   \
+    uint16_t _index = (CTX)->size;                 \
+    if (_index) {                                  \
+        darken_entity *_pool = (CTX)->pool;        \
+        while (_index--)                           \
+        {                                          \
+            darken_entity _entity = _pool[_index]; \
+            (void)_entity;                         \
+            CODE;                                  \
+        }                                          \
+    })
 
 #define DARKEN_SPAWN(ctx) \
     ((ctx)->size < (ctx)->paused ? (ctx)->pool[(ctx)->size++] : 0)
@@ -183,12 +185,6 @@ void darken_reset(darken *);
         return 0;                       \
     CODE;                               \
     return RET;
-
-#define _DARKEN_BLOCK(CODE) \
-    do                      \
-    {                       \
-        CODE                \
-    } while (0)
 
 #define _DARKEN_RUN(ENTITY) \
     ENTITY->update(ENTITY->data);
