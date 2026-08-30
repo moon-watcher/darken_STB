@@ -132,9 +132,9 @@ uint16_t darken_entity_delete(darken_entity);
 #define DARKEN_STORAGE_DYNAMIC(ALLOC, CAPACITY, PAYLOAD)                                                     \
     {                                                                                                        \
         .pool = (darken_entity *)(ALLOC)((CAPACITY) * sizeof(darken_entity)),                                \
-        .stride = DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD)),                                   \
         .storage = (uint8_t *)(ALLOC)((CAPACITY) * DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD))), \
         .capacity = (CAPACITY),                                                                              \
+        .stride = DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD)),                                   \
     }
 
 #define DARKEN_STORAGE_STATIC(NAME, CAPACITY, PAYLOAD)                                                                  \
