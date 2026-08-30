@@ -129,27 +129,29 @@ uint16_t darken_entity_delete(darken_entity);
  */
 #define DARKEN_ALIGN4(X) (((X) + 3U) & ~3U)
 
-#define DARKEN_STORAGE_DYNAMIC(ALLOC, CAPACITY, PAYLOAD)                                                     \
-    {                                                                                                        \
-        .pool = (darken_entity *)(ALLOC)((CAPACITY) * sizeof(darken_entity)),                                \
-        .storage = (uint8_t *)(ALLOC)((CAPACITY) * DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD))), \
-        .capacity = (CAPACITY),                                                                              \
-        .stride = DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD)),                                   \
+#define DARKEN_ENTITY_STRIDE(PAYLOAD) DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD))
+
+#define DARKEN_STORAGE_DYNAMIC(ALLOC, CAPACITY, PAYLOAD)                           \
+    {                                                                              \
+        .pool = (darken_entity *)(ALLOC)((CAPACITY) * sizeof(darken_entity)),      \
+        .storage = (uint8_t *)(ALLOC)((CAPACITY) * DARKEN_ENTITY_STRIDE(PAYLOAD)), \
+        .capacity = (CAPACITY),                                                    \
+        .stride = DARKEN_ENTITY_STRIDE(PAYLOAD),                                   \
     }
 
-#define DARKEN_STORAGE_STATIC(NAME, CAPACITY, PAYLOAD)                                                                  \
-    struct                                                                                                              \
-    {                                                                                                                   \
-        uint16_t capacity;                                                                                              \
-        uint16_t stride;                                                                                                \
-        darken_entity pool[(CAPACITY)];                                                                                 \
-        uint8_t data[(CAPACITY) * DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD))] __attribute__((aligned(4))); \
-    } NAME = {                                                                                                          \
-        .capacity = (CAPACITY),                                                                                         \
-        .stride = DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD)),                                              \
+#define DARKEN_STORAGE_STATIC(NAME, CAPACITY, PAYLOAD)                                        \
+    struct                                                                                    \
+    {                                                                                         \
+        uint16_t capacity;                                                                    \
+        uint16_t stride;                                                                      \
+        darken_entity pool[(CAPACITY)];                                                       \
+        uint8_t data[(CAPACITY) * DARKEN_ENTITY_STRIDE(PAYLOAD)] __attribute__((aligned(4))); \
+    } NAME = {                                                                                \
+        .capacity = (CAPACITY),                                                               \
+        .stride = DARKEN_ENTITY_STRIDE(PAYLOAD),                                              \
     }
 
-// Static/global initialization: constantes de compilación
+// Static/global initialization: compile-time constants
 #define DARKEN_BIND_STORAGE_INIT(STORAGE)                                                    \
     {                                                                                        \
         .pool = (STORAGE).pool,                                                              \
@@ -158,7 +160,7 @@ uint16_t darken_entity_delete(darken_entity);
         .stride = sizeof((STORAGE).data) / (sizeof((STORAGE).pool) / sizeof(darken_entity)), \
     }
 
-// Runtime: locals, reasignación, cualquier contexto
+// Runtime: locals, reassignment, any context
 #define DARKEN_BIND_STORAGE(NAME)    \
     {                                \
         .pool = (NAME).pool,         \
