@@ -104,8 +104,8 @@ static void *state_delete_after_1(TestData *d)
  * ============================================================================ */
 
 #define TEST_MGR_CAPACITY 32
-DARKEN_STORAGE_STATIC(test_mgr_storage, TEST_MGR_CAPACITY, sizeof(TestData));
-static darken test_mgr = DARKEN_BIND_STORAGE_INIT(test_mgr_storage);
+DARKEN_STORAGE_DECLARE(test_mgr_storage, TEST_MGR_CAPACITY, sizeof(TestData));
+static darken test_mgr = DARKEN_STORAGE_VALUE(test_mgr_storage);
 
 #define TEST_SYS_CAPACITY 32
 #define TEST_SYS_PARAMS 2
@@ -425,8 +425,8 @@ TEST(test_manager_iterate_macro)
 #ifndef DISABLE_BENCHMARKS
 
 #define BENCH_MGR_CAPACITY 128
-DARKEN_STORAGE_STATIC(bench_mgr_storage, BENCH_MGR_CAPACITY, sizeof(TestData));
-static darken bench_mgr = DARKEN_BIND_STORAGE_INIT(bench_mgr_storage);
+DARKEN_STORAGE_DECLARE(bench_mgr_storage, BENCH_MGR_CAPACITY, sizeof(TestData));
+static darken bench_mgr = DARKEN_STORAGE_VALUE(bench_mgr_storage);
 
 #define BENCH_SYS_CAPACITY 128
 #define BENCH_SYS_PARAMS 2

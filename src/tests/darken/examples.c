@@ -32,9 +32,9 @@ static void *darken_destructor(struct MyComponent *data)
 void darken_run_usage_example(void)
 {
     kprintf("========== EJEMPLO DE USO ==========");
-    DARKEN_STORAGE_STATIC(g_manager_storage, 10, sizeof(struct MyComponent));
-    DARKEN_STORAGE_STATIC(g_manager2_storage, 20, sizeof(struct MyComponent) + 73);
-    darken g_manager = DARKEN_BIND_STORAGE(g_manager_storage), g_manager2 = DARKEN_BIND_STORAGE(g_manager2_storage);
+    DARKEN_STORAGE_DECLARE(g_manager_storage, 10, sizeof(struct MyComponent));
+    DARKEN_STORAGE_DECLARE(g_manager2_storage, 20, sizeof(struct MyComponent) + 73);
+    darken g_manager = DARKEN_STORAGE_BIND(g_manager_storage), g_manager2 = DARKEN_STORAGE_BIND(g_manager2_storage);
 
     darken_init(&g_manager);
     darken_init(&g_manager2);
