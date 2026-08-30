@@ -15,11 +15,13 @@ static u32 bench_start(void) { return g_frameCounter; }
 static u32 bench_frames_elapsed(u32 start) { return g_frameCounter - start; }
 #define BENCH_REPS 2000
 
+
+DARKEN_DECLARE_STORAGE(m_storage222, 32, sizeof(struct MyComponent));
+
 static void darken_bench_create_destroy(void)
 {
     darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 32, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    darken_init(&m, DARKEN_ARGS(m_storage222));
     u32 t0 = bench_start();
     for (u32 r = 0; r < BENCH_REPS; ++r)
     {
@@ -37,11 +39,12 @@ static void *darken_bench_state_fn(void *data)
     return DARKEN_LOOP;
 }
 
+DARKEN_DECLARE_STORAGE(m_storage3, 32, sizeof(struct MyComponent));
+
 static void darken_bench_update(void)
 {
     darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 32, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    darken_init(&m, DARKEN_ARGS(m_storage3));
     for (u16 i = 0; i < 32; ++i)
     {
         darken_entity e = DARKEN_SPAWN(&m);
