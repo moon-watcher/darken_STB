@@ -68,6 +68,30 @@ static void darken_test_creation(void)
     CHECK("arranca con tag 0", e0->tag == 0);
 }
 
+
+#include <genesis.h>
+static void darken_test_creation_DYNAMIC(void)
+{
+    // kprintf("-- test_creation --");
+    darken m = DARKEN_STORAGE_DYNAMIC(MEM_alloc, 3, sizeof(struct MyComponent));
+    darken_init(&m);
+    CHECK("manager empieza con size 0", m.size == 0);
+    darken_entity e0 = DARKEN_SPAWN(&m);
+    darken_entity e1 = DARKEN_SPAWN(&m);
+    darken_entity e2 = DARKEN_SPAWN(&m);
+    darken_entity e3 = DARKEN_SPAWN(&m);
+    CHECK("new valida (1)", e0 != 0);
+    CHECK("new valida (2)", e1 != 0);
+    CHECK("new valida (3)", e2 != 0);
+    CHECK("new devuelve 0 al llenarse", e3 == 0);
+    CHECK("size == capacity", m.size == 3);
+    CHECK("arranca en state delete", e0->update == DARKEN_DELETE);
+    CHECK("arranca con tag 0", e0->tag == 0);
+
+    free(m.pool);
+    free(m.storage);
+}
+
 static int g_walkCalls = 0;
 static void *darken_callback_walk(void *data)
 {
@@ -783,6 +807,8 @@ void darken_run_all_tests(void)
     kprintf("========== TESTS ==========");
     darken_test_alignment();
     darken_test_creation();
+    darken_test_creation_DYNAMIC();
+
     darken_test_update();
     darken_test_pause_resume();
     darken_test_delete();

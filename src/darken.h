@@ -129,29 +129,24 @@ uint16_t darken_entity_delete(darken_entity);
  */
 #define DARKEN_ALIGN4(X) (((X) + 3U) & ~3U)
 
-// Ensures proper alignment between consecutive entitys
-#define DARKEN_ENTITY_STRIDE(PAYLOAD) DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD))
-#define DARKEN_POOL_MEMORY(CAPACITY) ((CAPACITY) * sizeof(darken_entity))
-#define DARKEN_STORAGE_MEMORY(CAPACITY, PAYLOAD) ((CAPACITY) * DARKEN_ENTITY_STRIDE(PAYLOAD))
-
-#define DARKEN_STORAGE_DYNAMIC(ALLOC, CAPACITY, PAYLOAD)                             \
-    {                                                                                \
-        .pool = (darken_entity *)(ALLOC)(DARKEN_POOL_MEMORY(CAPACITY)),              \
-        .storage = (uint8_t *)(ALLOC)(DARKEN_STORAGE_MEMORY((CAPACITY), (PAYLOAD))), \
-        .capacity = (CAPACITY),                                                      \
-        .stride = DARKEN_ENTITY_STRIDE(PAYLOAD),                                     \
+#define DARKEN_STORAGE_DYNAMIC(ALLOC, CAPACITY, PAYLOAD)                                                     \
+    {                                                                                                        \
+        .pool = (darken_entity *)(ALLOC)((CAPACITY) * sizeof(darken_entity)),                                \
+        .stride = DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD)),                                   \
+        .storage = (uint8_t *)(ALLOC)((CAPACITY) * DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD))), \
+        .capacity = (CAPACITY),                                                                              \
     }
 
-#define DARKEN_STORAGE_STATIC(NAME, CAPACITY, PAYLOAD)                                          \
-    struct                                                                                      \
-    {                                                                                           \
-        uint16_t capacity;                                                                      \
-        uint16_t stride;                                                                        \
-        darken_entity pool[(CAPACITY)];                                                         \
-        uint8_t data[DARKEN_STORAGE_MEMORY((CAPACITY), (PAYLOAD))] __attribute__((aligned(4))); \
-    } NAME = {                                                                                  \
-        .capacity = (CAPACITY),                                                                 \
-        .stride = DARKEN_ENTITY_STRIDE(PAYLOAD),                                                \
+#define DARKEN_STORAGE_STATIC(NAME, CAPACITY, PAYLOAD)                                                                  \
+    struct                                                                                                              \
+    {                                                                                                                   \
+        uint16_t capacity;                                                                                              \
+        uint16_t stride;                                                                                                \
+        darken_entity pool[(CAPACITY)];                                                                                 \
+        uint8_t data[(CAPACITY) * DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD))] __attribute__((aligned(4))); \
+    } NAME = {                                                                                                          \
+        .capacity = (CAPACITY),                                                                                         \
+        .stride = DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD)),                                              \
     }
 
 // Static/global initialization: constantes de compilación
