@@ -87,10 +87,10 @@ static void *test_system_frames(void *data)
 static void test_entity_system_basic(void)
 {
     // kprintf("-- test_entity_system_basic --");
-    DARKEN_STORAGE_DECLARE(entities_storage, 3, sizeof(TestSystemEntity));
-    DARKEN_STORAGE_DECLARE(systems_storage, 3, sizeof(TestBatchSystem));
-    darken entities = DARKEN_STORAGE_BIND(entities_storage);
-    darken systems = DARKEN_STORAGE_BIND(systems_storage);
+    DARKEN_POOL_DECLARE(entities_storage, 3, sizeof(TestSystemEntity));
+    DARKEN_POOL_DECLARE(systems_storage, 3, sizeof(TestBatchSystem));
+    darken entities = DARKEN_POOL_BIND(entities_storage);
+    darken systems = DARKEN_POOL_BIND(systems_storage);
     darken_init(&entities);
     darken_init(&systems);
     void *physics_items[3], *movement_items[12], *frame_items[3];
@@ -148,10 +148,10 @@ static void test_entity_system_basic(void)
 static void test_entity_system_shared_data(void)
 {
     // kprintf("-- test_entity_system_shared_data --");
-    DARKEN_STORAGE_DECLARE(entities_storage, 2, sizeof(TestSystemEntity));
-    DARKEN_STORAGE_DECLARE(systems_storage, 2, sizeof(TestBatchSystem));
-    darken entities = DARKEN_STORAGE_BIND(entities_storage);
-    darken systems = DARKEN_STORAGE_BIND(systems_storage);
+    DARKEN_POOL_DECLARE(entities_storage, 2, sizeof(TestSystemEntity));
+    DARKEN_POOL_DECLARE(systems_storage, 2, sizeof(TestBatchSystem));
+    darken entities = DARKEN_POOL_BIND(entities_storage);
+    darken systems = DARKEN_POOL_BIND(systems_storage);
     darken_init(&entities);
     darken_init(&systems);
     void *movement_items[8], *frame_items[2];
@@ -186,10 +186,10 @@ static void test_entity_system_shared_data(void)
 static void test_entity_system_paused_entity(void)
 {
     // kprintf("-- test_entity_system_paused_entity --");
-    DARKEN_STORAGE_DECLARE(entities_storage, 2, sizeof(TestSystemEntity));
-    DARKEN_STORAGE_DECLARE(systems_storage, 1, sizeof(TestBatchSystem));
-    darken entities = DARKEN_STORAGE_BIND(entities_storage);
-    darken systems = DARKEN_STORAGE_BIND(systems_storage);
+    DARKEN_POOL_DECLARE(entities_storage, 2, sizeof(TestSystemEntity));
+    DARKEN_POOL_DECLARE(systems_storage, 1, sizeof(TestBatchSystem));
+    darken entities = DARKEN_POOL_BIND(entities_storage);
+    darken systems = DARKEN_POOL_BIND(systems_storage);
     darken_init(&entities);
     darken_init(&systems);
     void *movement_items[8];
@@ -325,10 +325,10 @@ static void test_darksys_as_entities(void)
 {
     // kprintf("-- test_darksys_as_entities --");
 
-    DARKEN_STORAGE_DECLARE(entities_storage, 2, sizeof(TestDeSystemEntity));
-    DARKEN_STORAGE_DECLARE(systems_storage, 3, sizeof(darksys));
-    darken entities = DARKEN_STORAGE_BIND(entities_storage);
-    darken systems = DARKEN_STORAGE_BIND(systems_storage);
+    DARKEN_POOL_DECLARE(entities_storage, 2, sizeof(TestDeSystemEntity));
+    DARKEN_POOL_DECLARE(systems_storage, 3, sizeof(darksys));
+    darken entities = DARKEN_POOL_BIND(entities_storage);
+    darken systems = DARKEN_POOL_BIND(systems_storage);
     darken_init(&entities);
     darken_init(&systems);
 
@@ -390,10 +390,10 @@ static void test_darksys_as_entities(void)
 static void test_darksys_shared_payload(void)
 {
     // kprintf("-- test_darksys_shared_payload --");
-    DARKEN_STORAGE_DECLARE(entities_storage, 1, sizeof(TestDeSystemEntity));
-    DARKEN_STORAGE_DECLARE(systems_storage, 2, sizeof(darksys *));
-    darken entities = DARKEN_STORAGE_BIND(entities_storage);
-    darken systems = DARKEN_STORAGE_BIND(systems_storage);
+    DARKEN_POOL_DECLARE(entities_storage, 1, sizeof(TestDeSystemEntity));
+    DARKEN_POOL_DECLARE(systems_storage, 2, sizeof(darksys *));
+    darken entities = DARKEN_POOL_BIND(entities_storage);
+    darken systems = DARKEN_POOL_BIND(systems_storage);
     darken_init(&entities);
     darken_init(&systems);
     void *movement_pool[4], *frames_pool[1];
