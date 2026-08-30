@@ -32,18 +32,19 @@ static void *darken_destructor(struct MyComponent *data)
 void darken_run_usage_example(void)
 {
     kprintf("========== EJEMPLO DE USO ==========");
-    darken g_manager, g_manager2;
-    DARKEN_DECLARE_STORAGE(g_manager_storage, 10, sizeof(struct MyComponent));
-    darken_init(&g_manager, DARKEN_ARGS(g_manager_storage));
-    DARKEN_DECLARE_STORAGE(g_manager2_storage, 20, sizeof(struct MyComponent) + 73);
-    darken_init(&g_manager2, DARKEN_ARGS(g_manager2_storage));
+    DARKEN_STORAGE_STATIC(g_manager_storage, 10, sizeof(struct MyComponent));
+    DARKEN_STORAGE_STATIC(g_manager2_storage, 20, sizeof(struct MyComponent) + 73);
+    darken g_manager = DARKEN_BIND_STORAGE(g_manager_storage), g_manager2 = DARKEN_BIND_STORAGE(g_manager2_storage);
+
+    darken_init(&g_manager);
+    darken_init(&g_manager2);
     darken_entity e1 = DARKEN_SPAWN(&g_manager);
     struct MyComponent *data1 = (struct MyComponent *)e1->data;
     data1->x = 0;
     data1->y = 0;
     data1->health = 100;
     e1->update = darken_update_walk;
-    e1->destroy= darken_destructor;
+    e1->destroy = darken_destructor;
     e1->tag = 1;
     darken_entity e2 = DARKEN_SPAWN(&g_manager);
     struct MyComponent *data2 = (struct MyComponent *)e2->data;
@@ -51,7 +52,7 @@ void darken_run_usage_example(void)
     data2->y = 20;
     data2->health = 80;
     e2->update = darken_update_idle;
-    e2->destroy= darken_destructor;
+    e2->destroy = darken_destructor;
     e2->tag = 2;
     darken_entity e3 = DARKEN_SPAWN(&g_manager);
     struct MyComponent *data3 = (struct MyComponent *)e3->data;
@@ -59,7 +60,7 @@ void darken_run_usage_example(void)
     data3->y = 5;
     data3->health = 50;
     e3->update = darken_update_walk;
-    e3->destroy= darken_destructor;
+    e3->destroy = darken_destructor;
     e3->tag = 3;
     kprintf("--- Frame 1 ---");
     darken_update(&g_manager);

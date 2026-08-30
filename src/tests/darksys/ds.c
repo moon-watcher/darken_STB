@@ -30,23 +30,23 @@ static inline uint32_t get_time_us(void)
 static int g_tests_run = 0;
 static int g_tests_failed = 0;
 
-#define CHECK(cond)                                               \
-    do                                                            \
-    {                                                             \
-        g_tests_run++;                                            \
-        if (!(cond))                                              \
-        {                                                         \
-            g_tests_failed++;                                     \
+#define CHECK(cond)                                                   \
+    do                                                                \
+    {                                                                 \
+        g_tests_run++;                                                \
+        if (!(cond))                                                  \
+        {                                                             \
+            g_tests_failed++;                                         \
             kprintf("  [FAIL] %s:%d: %s", __FILE__, __LINE__, #cond); \
-        }                                                         \
+        }                                                             \
     } while (0)
 
 #define TEST(name) static void name(void)
-#define RUN_TEST(name)                \
-    do                                \
-    {                                 \
+#define RUN_TEST(name)                      \
+    do                                      \
+    {                                       \
         /* kprintf("Running %s", #name); */ \
-        name();                       \
+        name();                             \
     } while (0)
 
 /* ============================================================================
@@ -104,8 +104,8 @@ static void *state_delete_after_1(TestData *d)
  * ============================================================================ */
 
 #define TEST_MGR_CAPACITY 32
-DARKEN_DECLARE_STORAGE(test_mgr_storage, TEST_MGR_CAPACITY, sizeof(TestData));
-static darken test_mgr;
+DARKEN_STORAGE_STATIC(test_mgr_storage, TEST_MGR_CAPACITY, sizeof(TestData));
+static darken test_mgr = DARKEN_BIND_STORAGE_INIT(test_mgr_storage);
 
 #define TEST_SYS_CAPACITY 32
 #define TEST_SYS_PARAMS 2
@@ -114,7 +114,7 @@ static darksys test_sys;
 
 static void init_test_manager(void)
 {
-    darken_init(&test_mgr, DARKEN_ARGS(test_mgr_storage));
+    darken_init(&test_mgr);
     g_destructor_calls = 0;
 }
 
@@ -230,7 +230,7 @@ TEST(test_entity_delete_active)
     init_test_manager();
     darken_entity e = DARKEN_SPAWN(&test_mgr);
     e->update = state_inc;
-    e->destroy= test_destructor;
+    e->destroy = test_destructor;
 
     uint16_t active_before = test_mgr.size;
     g_destructor_calls = 0;
@@ -246,7 +246,7 @@ TEST(test_entity_delete_paused)
     darken_entity e = DARKEN_SPAWN(&test_mgr);
     e->update = state_inc;
     darken_entity_pause(e);
-    e->destroy= test_destructor;
+    e->destroy = test_destructor;
 
     uint16_t paused_before = test_mgr.paused;
     g_destructor_calls = 0;
@@ -331,8 +331,8 @@ TEST(test_manager_reset)
     darken_entity e1 = DARKEN_SPAWN(&test_mgr);
     e0->update = state_inc;
     e1->update = state_inc;
-    e0->destroy= test_destructor;
-    e1->destroy= test_destructor;
+    e0->destroy = test_destructor;
+    e1->destroy = test_destructor;
     darken_entity_pause(e1); /* one active, one paused */
 
     g_destructor_calls = 0;
@@ -395,8 +395,8 @@ TEST(test_system_iterator_macro)
     //     (*y) += 2;
     // });
 
-    void *result = (void *) test_sys_iterator(&test_sys);
-    CHECK(result == (void *) 1234);
+    void *result = (void *)test_sys_iterator(&test_sys);
+    CHECK(result == (void *)1234);
     CHECK(a == 11);
     CHECK(b == 22);
 }
@@ -425,8 +425,8 @@ TEST(test_manager_iterate_macro)
 #ifndef DISABLE_BENCHMARKS
 
 #define BENCH_MGR_CAPACITY 128
-DARKEN_DECLARE_STORAGE(bench_mgr_storage, BENCH_MGR_CAPACITY, sizeof(TestData));
-static darken bench_mgr;
+DARKEN_STORAGE_STATIC(bench_mgr_storage, BENCH_MGR_CAPACITY, sizeof(TestData));
+static darken bench_mgr = DARKEN_BIND_STORAGE_INIT(bench_mgr_storage);
 
 #define BENCH_SYS_CAPACITY 128
 #define BENCH_SYS_PARAMS 2
@@ -436,7 +436,7 @@ static darksys bench_sys;
 static void bench_entity_new_delete(void)
 {
     const int ITER = 100;
-    darken_init(&bench_mgr, DARKEN_ARGS(bench_mgr_storage));
+    darken_init(&bench_mgr);
     uint32_t t0 = get_time_us();
 
     for (int i = 0; i < ITER; i++)
@@ -461,7 +461,7 @@ static void bench_entity_new_delete(void)
 static void bench_manager_update(void)
 {
     const int ITER = 100;
-    darken_init(&bench_mgr, DARKEN_ARGS(bench_mgr_storage));
+    darken_init(&bench_mgr);
     for (int i = 0; i < BENCH_MGR_CAPACITY; i++)
     {
         darken_entity e = DARKEN_SPAWN(&bench_mgr);
@@ -482,7 +482,7 @@ static void bench_manager_update(void)
 static void bench_entity_pause_resume(void)
 {
     const int ITER = 100;
-    darken_init(&bench_mgr, DARKEN_ARGS(bench_mgr_storage));
+    darken_init(&bench_mgr);
     darken_entity e = DARKEN_SPAWN(&bench_mgr);
     e->update = state_inc;
     uint32_t t0 = get_time_us();
@@ -542,7 +542,7 @@ static void bench_system_foreach(void)
 static void bench_manager_iterate(void)
 {
     const int ITER = 100;
-    darken_init(&bench_mgr, DARKEN_ARGS(bench_mgr_storage));
+    darken_init(&bench_mgr);
     for (int i = 0; i < BENCH_MGR_CAPACITY; i++)
     {
         darken_entity e = DARKEN_SPAWN(&bench_mgr);

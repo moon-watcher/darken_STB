@@ -68,10 +68,11 @@ typedef struct darken_entity *darken_entity;
 typedef struct darken
 {
     darken_entity *pool;
-
+    uint8_t *storage;
     uint16_t capacity;
     uint16_t size;
     uint16_t paused;
+    uint16_t stride;
 } darken;
 
 struct darken_entity
@@ -130,24 +131,46 @@ uint16_t darken_entity_delete(darken_entity);
 
 // Ensures proper alignment between consecutive entitys
 #define DARKEN_ENTITY_STRIDE(PAYLOAD) DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD))
-
 #define DARKEN_POOL_MEMORY(CAPACITY) ((CAPACITY) * sizeof(darken_entity))
 #define DARKEN_STORAGE_MEMORY(CAPACITY, PAYLOAD) ((CAPACITY) * DARKEN_ENTITY_STRIDE(PAYLOAD))
 
-#define DARKEN_DECLARE_STORAGE(NAME, CAPACITY, PAYLOAD)                                         \
+#define DARKEN_STORAGE_DYNAMIC(ALLOC, CAPACITY, PAYLOAD)                             \
+    {                                                                                \
+        .pool = (darken_entity *)(ALLOC)(DARKEN_POOL_MEMORY(CAPACITY)),              \
+        .storage = (uint8_t *)(ALLOC)(DARKEN_STORAGE_MEMORY((CAPACITY), (PAYLOAD))), \
+        .capacity = (CAPACITY),                                                      \
+        .stride = DARKEN_ENTITY_STRIDE(PAYLOAD),                                     \
+    }
+
+#define DARKEN_STORAGE_STATIC(NAME, CAPACITY, PAYLOAD)                                          \
     struct                                                                                      \
     {                                                                                           \
         uint16_t capacity;                                                                      \
-        uint16_t payload_size;                                                                  \
+        uint16_t stride;                                                                        \
         darken_entity pool[(CAPACITY)];                                                         \
         uint8_t data[DARKEN_STORAGE_MEMORY((CAPACITY), (PAYLOAD))] __attribute__((aligned(4))); \
     } NAME = {                                                                                  \
         .capacity = (CAPACITY),                                                                 \
-        .payload_size = (PAYLOAD),                                                              \
+        .stride = DARKEN_ENTITY_STRIDE(PAYLOAD),                                                \
     }
 
-#define DARKEN_ARGS(NAME) \
-    (NAME).pool, (NAME).data, (NAME).capacity, (NAME).payload_size
+// Static/global initialization: constantes de compilación
+#define DARKEN_BIND_STORAGE_INIT(STORAGE)                                                    \
+    {                                                                                        \
+        .pool = (STORAGE).pool,                                                              \
+        .storage = (STORAGE).data,                                                           \
+        .capacity = sizeof((STORAGE).pool) / sizeof(darken_entity),                          \
+        .stride = sizeof((STORAGE).data) / (sizeof((STORAGE).pool) / sizeof(darken_entity)), \
+    }
+
+// Runtime: locals, reasignación, cualquier contexto
+#define DARKEN_BIND_STORAGE(NAME)    \
+    {                                \
+        .pool = (NAME).pool,         \
+        .storage = (NAME).data,      \
+        .capacity = (NAME).capacity, \
+        .stride = (NAME).stride,     \
+    }
 
 #define DARKEN_FOREACH(CTX, CODE) _DARKEN_BLOCK(   \
     uint16_t _index = (CTX)->size;                 \
@@ -164,7 +187,7 @@ uint16_t darken_entity_delete(darken_entity);
 #define DARKEN_SPAWN(ctx) \
     ((ctx)->size < (ctx)->paused ? (ctx)->pool[(ctx)->size++] : 0)
 
-void darken_init(darken *, darken_entity[], void *, uint16_t, uint16_t);
+void darken_init(darken *);
 void darken_update(darken *);
 void darken_reset(darken *);
 
@@ -236,37 +259,37 @@ static inline uint16_t _darken_swap(darken_entity pool[], uint16_t i, uint16_t j
 }
 
 //
+// DYNAMIC
+// darken my_manager = DARKEN_STORAGE_DYNAMIC(malloc, MAX_ENEMIES, sizeof(struct enemies));
+// darken_init(&my_manager);
+// ...
+// free(my_manager.pool);
+// free(my_manager.storage);
 
-/*
-DARKEN_DECLARE_STORAGE(enemy_storage, MAX_ENEMIES, sizeof(EnemyData));
-darken_init(&manager, DARKEN_ARGS(enemy_storage));
+// STATIC
+// DARKEN_STORAGE_STATIC(bullets, MAX_BULLETS, sizeof(struct bullet));
+// darken bullet_manager = DARKEN_BIND_STORAGE(bullets);
+// darken_init(&bullet_manager);
 
-or
-
-darken_entity *pool = malloc(DARKEN_POOL_MEMORY(MAX_ENEMIES));
-uint8_t *storage = malloc(DARKEN_STORAGE_MEMORY(MAX_ENEMIES, sizeof(EnemyData)));
-darken_init(&manager, pool, storage, MAX_ENEMIES, sizeof(EnemyData));
-free pool & storage
-*/
-void darken_init(darken *ctx, darken_entity pool[], void *param_storage, uint16_t capacity, uint16_t payload_size)
+void darken_init(darken *ctx)
 {
-    ctx->pool = pool;
-    ctx->capacity = capacity;
     ctx->size = 0;
-    ctx->paused = capacity;
+    ctx->paused = ctx->capacity;
 
-    uint16_t stride = DARKEN_ENTITY_STRIDE(payload_size);
-    uint8_t *storage = param_storage;
+    uint8_t *p = ctx->storage;
+    uint16_t step = ctx->stride;
+    darken_entity *pool = ctx->pool;
+    uint16_t n = ctx->capacity;
 
-    for (uint16_t i = 0; i < capacity; ++i)
+    while (n--)
     {
-        darken_entity entity = (darken_entity)storage;
+        darken_entity e = (darken_entity)p;
 
-        pool[i] = entity;
-        entity->owner = ctx;
-        entity->slot = i;
+        pool[n] = e;
+        e->owner = ctx;
+        e->slot = n;
 
-        storage += stride;
+        p += step;
     }
 }
 

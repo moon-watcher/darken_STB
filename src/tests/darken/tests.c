@@ -36,13 +36,13 @@ static bool all_slots_aligned(darken *mgr)
 static void darken_test_alignment(void)
 {
     // kprintf("-- test_alignment --");
-    darken m1, m2, m3;
-    DARKEN_DECLARE_STORAGE(m1_storage, 8, sizeof(struct MyComponent));
-    darken_init(&m1, DARKEN_ARGS(m1_storage));
-    DARKEN_DECLARE_STORAGE(m2_storage, 8, sizeof(struct MyComponent) + 73);
-    darken_init(&m2, DARKEN_ARGS(m2_storage));
-    DARKEN_DECLARE_STORAGE(m3_storage, 8, 1);
-    darken_init(&m3, DARKEN_ARGS(m3_storage));
+    DARKEN_STORAGE_STATIC(m1_storage, 8, sizeof(struct MyComponent));
+    DARKEN_STORAGE_STATIC(m2_storage, 8, sizeof(struct MyComponent) + 73);
+    DARKEN_STORAGE_STATIC(m3_storage, 8, 1);
+    darken m1  = DARKEN_BIND_STORAGE(m1_storage), m2  = DARKEN_BIND_STORAGE(m2_storage), m3  = DARKEN_BIND_STORAGE(m3_storage);
+    darken_init(&m1);
+    darken_init(&m2);
+    darken_init(&m3);
     CHECK("payload par: todos los slots alineados a 4", all_slots_aligned(&m1));
     CHECK("payload impar (+73): todos los slots alineados a 4", all_slots_aligned(&m2));
     CHECK("payload=1: todos los slots alineados a 4", all_slots_aligned(&m3));
@@ -51,9 +51,9 @@ static void darken_test_alignment(void)
 static void darken_test_creation(void)
 {
     // kprintf("-- test_creation --");
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 3, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 3, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     CHECK("manager empieza con size 0", m.size == 0);
     darken_entity e0 = DARKEN_SPAWN(&m);
     darken_entity e1 = DARKEN_SPAWN(&m);
@@ -86,9 +86,9 @@ static void darken_test_update(void)
 {
     // kprintf("-- test_update --");
     g_walkCalls = 0;
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 2, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 2, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     darken_entity a = DARKEN_SPAWN(&m);
     struct MyComponent *c = (struct MyComponent *)a->data;
     c->x = 0;
@@ -116,9 +116,9 @@ static void darken_test_pause_resume(void)
 {
     // kprintf("-- test_pause_resume --");
     g_idleCalls = 0;
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 4, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 4, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     darken_entity a = DARKEN_SPAWN(&m);
     darken_entity b = DARKEN_SPAWN(&m);
     a->update = darken_callback_idle_counter;
@@ -154,9 +154,9 @@ static void darken_test_delete(void)
 {
     // kprintf("-- test_delete --");
     g_destructorCalls = 0;
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 4, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 4, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     darken_entity a = DARKEN_SPAWN(&m);
     darken_entity b = DARKEN_SPAWN(&m);
     darken_entity c = DARKEN_SPAWN(&m);
@@ -177,9 +177,9 @@ static void darken_test_delete(void)
 static void darken_test_apply(void)
 {
     // kprintf("-- test_apply --");
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 5, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 5, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     for (int i = 0; i < 5; ++i)
     {
         darken_entity a = DARKEN_SPAWN(&m);
@@ -216,9 +216,9 @@ static void darken_test_reset(void)
 {
     // kprintf("-- test_reset --");
     g_destructorCalls = 0;
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 6, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 6, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     for (int i = 0; i < 6; ++i)
     {
         darken_entity a = DARKEN_SPAWN(&m);
@@ -241,9 +241,9 @@ static void darken_test_destructor_abort(void)
 {
     // kprintf("-- test_destructor_abort --");
     g_abortDestructorCalls = 0;
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 2, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 2, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     darken_entity a = DARKEN_SPAWN(&m);
     a->destroy= darken_callback_abort_destructor;
     a->update = DARKEN_DELETE;
@@ -266,9 +266,9 @@ static void darken_test_self_delete(void)
 {
     // kprintf("-- test_self_delete --");
     g_selfKillCalls = 0;
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 3, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 3, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     darken_entity a = DARKEN_SPAWN(&m);
     darken_entity b = DARKEN_SPAWN(&m);
     a->update = darken_callback_self_kill;
@@ -285,9 +285,9 @@ static void darken_test_self_delete(void)
 static void darken_test_slot_stability(void)
 {
     // kprintf("-- test_slot_stability --");
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 4, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 4, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     darken_entity e0 = DARKEN_SPAWN(&m);
     darken_entity e1 = DARKEN_SPAWN(&m);
     darken_entity e2 = DARKEN_SPAWN(&m);
@@ -313,9 +313,9 @@ static void darken_test_slot_stability(void)
 static void darken_test_delete_paused(void)
 {
     // kprintf("-- test_delete_paused --");
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 4, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 4, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     darken_entity a = DARKEN_SPAWN(&m);
     darken_entity b = DARKEN_SPAWN(&m);
     darken_entity c = DARKEN_SPAWN(&m);
@@ -331,9 +331,9 @@ static void darken_test_delete_paused(void)
 static void darken_test_apply_pause(void)
 {
     // kprintf("-- test_apply_pause --");
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 6, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 6, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     darken_entity entities[6];
     for (int i = 0; i < 6; ++i)
     {
@@ -369,9 +369,9 @@ static void darken_test_apply_pause(void)
 static void darken_test_reuse(void)
 {
     // kprintf("-- test_reuse --");
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 3, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 3, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     darken_entity e0 = DARKEN_SPAWN(&m);
     e0->update = darken_callback_noop;
     struct MyComponent *d0 = (struct MyComponent *)e0->data;
@@ -404,9 +404,9 @@ static void darken_test_mixed_stress(void)
     // kprintf("-- test_mixed_stress --");
     g_stressCallsA = 0;
     g_stressCallsB = 0;
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 5, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 5, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     darken_entity a[5];
     for (int i = 0; i < 5; ++i)
     {
@@ -438,9 +438,9 @@ static void darken_test_mixed_stress(void)
 static void darken_test_data_integrity(void)
 {
     // kprintf("-- test_data_integrity --");
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 3, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 3, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     darken_entity a = DARKEN_SPAWN(&m);
     darken_entity b = DARKEN_SPAWN(&m);
     darken_entity c = DARKEN_SPAWN(&m);
@@ -461,9 +461,9 @@ static void darken_test_data_integrity(void)
 static void darken_test_empty_manager(void)
 {
     // kprintf("-- test_empty_manager --");
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 4, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 4, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     CHECK("empty: size 0", m.size == 0);
     darken_update(&m);
     CHECK("empty: size sigue 0", m.size == 0);
@@ -473,9 +473,9 @@ static void darken_test_empty_manager(void)
 static void darken_test_delete_last(void)
 {
     // kprintf("-- test_delete_last --");
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 4, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 4, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     darken_entity a = DARKEN_SPAWN(&m);
     a->update = darken_callback_noop;
     darken_entity_delete(a);
@@ -486,9 +486,9 @@ static void darken_test_delete_last(void)
 static void darken_test_stress_capacity(void)
 {
     // kprintf("-- test_stress_capacity --");
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 50, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 50, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     darken_entity ents[50];
     for (int i = 0; i < 50; ++i)
     {
@@ -519,9 +519,9 @@ static void darken_test_stress_capacity(void)
 static void darken_test_stress_many_entities(void)
 {
     // kprintf("-- test_stress_many_entities --");
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 20, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 20, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     darken_entity a[20];
     for (int i = 0; i < 20; ++i)
     {
@@ -550,9 +550,9 @@ static void darken_test_stress_many_entities(void)
 static void darken_test_stress_fragmentation(void)
 {
     // kprintf("-- test_stress_fragmentation --");
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 20, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 20, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     darken_entity a[20];
     for (int i = 0; i < 20; ++i)
     {
@@ -594,9 +594,9 @@ static void darken_test_entity_exec(void)
 {
     // kprintf("-- test_entity_exec --");
     g_execCalls = 0;
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 2, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 2, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     darken_entity a = DARKEN_SPAWN(&m);
     a->update = darken_callback_exec_counter;
     darken_entity_run(a);
@@ -624,9 +624,9 @@ static void *darken_callback_transition_source(void *data)
 static void darken_test_state_transition(void)
 {
     // kprintf("-- test_state_transition --");
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 1, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 1, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     darken_entity a = DARKEN_SPAWN(&m);
     struct MyComponent *c = (struct MyComponent *)a->data;
     c->x = 0;
@@ -641,9 +641,9 @@ static void darken_test_delete_twice(void)
 {
     // kprintf("-- test_delete_twice --");
     g_destructorCalls = 0;
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 2, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 2, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     darken_entity a = DARKEN_SPAWN(&m);
     a->destroy= darken_my_destructor;
     a->update = darken_callback_noop;
@@ -657,9 +657,9 @@ static void darken_test_delete_twice(void)
 static void darken_test_pause_already_paused(void)
 {
     // kprintf("-- test_pause_already_paused --");
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 2, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 2, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     darken_entity a = DARKEN_SPAWN(&m);
     darken_entity b = DARKEN_SPAWN(&m);
     a->update = b->update = darken_callback_noop;
@@ -674,9 +674,9 @@ static void darken_test_pause_already_paused(void)
 static void darken_test_resume_already_active(void)
 {
     // kprintf("-- test_resume_already_active --");
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 2, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 2, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     darken_entity a = DARKEN_SPAWN(&m);
     darken_entity b = DARKEN_SPAWN(&m);
     a->update = b->update = darken_callback_noop;
@@ -690,9 +690,9 @@ static void darken_test_resume_already_active(void)
 static void darken_test_manager_iterate_active_only(void)
 {
     // kprintf("-- test_manager_iterate_active_only --");
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 4, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 4, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     for (int i = 0; i < 4; ++i)
     {
         darken_entity a = DARKEN_SPAWN(&m);
@@ -708,9 +708,9 @@ static void darken_test_manager_iterate_active_only(void)
 static void darken_test_apply_active_only(void)
 {
     // kprintf("-- test_apply_active_only --");
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 4, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 4, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     for (int i = 0; i < 4; ++i)
     {
         darken_entity a = DARKEN_SPAWN(&m);
@@ -748,9 +748,9 @@ static void darken_test_destructor_state_change(void)
 {
     // kprintf("-- test_destructor_state_change --");
     g_destructorChangeCalls = 0;
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 1, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 1, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     darken_entity a = DARKEN_SPAWN(&m);
     a->destroy= darken_callback_change_via_destructor;
     a->update = DARKEN_DELETE;
@@ -764,9 +764,9 @@ static void darken_test_entity_update_direct(void)
 {
     // kprintf("-- test_entity_update_direct --");
     g_walkCalls = 0;
-    darken m;
-    DARKEN_DECLARE_STORAGE(m_storage, 1, sizeof(struct MyComponent));
-    darken_init(&m, DARKEN_ARGS(m_storage));
+    DARKEN_STORAGE_STATIC(m_storage, 1, sizeof(struct MyComponent));
+    darken m = DARKEN_BIND_STORAGE(m_storage);
+    darken_init(&m);
     darken_entity a = DARKEN_SPAWN(&m);
     struct MyComponent *c = (struct MyComponent *)a->data;
     c->x = 0;
