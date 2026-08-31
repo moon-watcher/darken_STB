@@ -290,22 +290,18 @@ static inline uint16_t _darken_swap(darken_entity pool[], uint16_t i, uint16_t j
 void darken_init(darken *ctx)
 {
     ctx->size = 0;
-    ctx->paused = ctx->capacity;
-
-    uint8_t *p = ctx->storage;
+    uint16_t capacity = ctx->paused = ctx->capacity;
+    uint8_t *storage = ctx->storage;
     uint16_t step = ctx->stride;
-    darken_entity *pool = ctx->pool;
-    uint16_t n = ctx->capacity;
+    darken_entity entity, *pool = ctx->pool;
 
-    while (n--)
+    while (capacity--)
     {
-        darken_entity e = (darken_entity)p;
+        entity = pool[capacity] = (darken_entity)storage;
+        entity->owner = ctx;
+        entity->slot = capacity;
 
-        pool[n] = e;
-        e->owner = ctx;
-        e->slot = n;
-
-        p += step;
+        storage += step;
     }
 }
 
