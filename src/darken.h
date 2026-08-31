@@ -63,8 +63,7 @@
  * Receives entity->data and returns either another state callback or one of the Darken control values.
  */
 
-#ifndef DARKEN_H
-#define DARKEN_H
+#pragma once
 
 #include <stdint.h>
 
@@ -335,5 +334,3 @@ uint16_t darken_entity_resume(darken_entity entity) { _DARKEN_ASSERT(_DARKEN_ENT
 uint16_t darken_entity_delete(darken_entity entity) { _DARKEN_ASSERT(_DARKEN_ENTITY_IN_USE(entity), _DARKEN_DELETE(entity), 1); }
 
 #endif // DARKEN_IMPLEMENTATION
-
-#endif // DARKEN_H
