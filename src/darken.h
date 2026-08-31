@@ -49,11 +49,12 @@
  *     slot (and therefore its entity->data pointer) stays valid and untouched until it's explicitly resumed or
  *     deleted. This is what lets keep safely pointing at a paused entity's data.
  *
- * Every entity handed out by DARKEN_SPAWN() — whether fresh from darken_init() or recycled after a
- * previous entity in that slot was deleted — always starts with update/destroy == DARKEN_DELETE and
- * tag/usr == 0. Deletion (whichever path triggers it) resets those four fields before the slot goes
- * back to the free zone, so no state ever leaks from one entity's lifetime into the next one reusing
- * its slot.
+ * Neither darken_init(), nor DARKEN_SPAWN(), nor deletion (whichever path triggers it) initializes
+ * or clears update/destroy/tag/usr. An entity handed out by DARKEN_SPAWN() — whether fresh from
+ * darken_init() or recycled after a previous entity in that slot was deleted — may still carry
+ * whatever values that slot's previous occupant left behind. Setting these fields to the values
+ * your entity actually needs (including clearing any you don't want carried over) is the caller's
+ * responsibility on every spawn.
  *
  *
  *
@@ -170,8 +171,8 @@ uint16_t darken_entity_delete(darken_entity);
 
 #define DARKEN_SPAWN(CTX) ({                                  \
     darken *_ctx = (CTX);                                     \
-    _ctx->size < _ctx->paused ? _ctx->pool[_ctx->size++] : 0; \
-})
+        _ctx->size < _ctx->paused ? _ctx->pool[_ctx->size++] : 0; \
+    })
 
 void darken_init(darken *);
 void darken_update(darken *);
