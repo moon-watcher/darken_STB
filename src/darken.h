@@ -287,7 +287,6 @@ static inline uint16_t _darken_swap(darken_entity pool[], uint16_t i, uint16_t j
 //     darken_init(&m);
 //     ...
 // }
-
 void darken_init(darken *ctx)
 {
     ctx->size = 0;
