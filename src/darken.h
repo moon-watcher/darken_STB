@@ -6,7 +6,7 @@
  * Full documentation: README.Darken.md
  *
  * GNU C note:
- * - This header uses GNU C __attribute__ extension.
+ * - This header uses GNU C __attribute__ extension and statement expressions.
  * - 4-byte align boundary because Darken targets GCC and the Motorola 68000.
  * - 16-bit members preference for optimal 68K performance.
  *
@@ -48,6 +48,12 @@
  *     never visits them. Crucially, DARKEN_SPAWN() never hands out a slot from this zone, so a paused entity's
  *     slot (and therefore its entity->data pointer) stays valid and untouched until it's explicitly resumed or
  *     deleted. This is what lets keep safely pointing at a paused entity's data.
+ *
+ * Every entity handed out by DARKEN_SPAWN() — whether fresh from darken_init() or recycled after a
+ * previous entity in that slot was deleted — always starts with update/destroy == DARKEN_DELETE and
+ * tag/usr == 0. Deletion (whichever path triggers it) resets those four fields before the slot goes
+ * back to the free zone, so no state ever leaks from one entity's lifetime into the next one reusing
+ * its slot.
  *
  *
  *
@@ -162,8 +168,10 @@ uint16_t darken_entity_delete(darken_entity);
         }                                          \
     })
 
-#define DARKEN_SPAWN(ctx) \
-    ((ctx)->size < (ctx)->paused ? (ctx)->pool[(ctx)->size++] : 0)
+#define DARKEN_SPAWN(CTX) ({                                  \
+    darken *_ctx = (CTX);                                     \
+    _ctx->size < _ctx->paused ? _ctx->pool[_ctx->size++] : 0; \
+})
 
 void darken_init(darken *);
 void darken_update(darken *);
@@ -230,8 +238,8 @@ void darken_reset(darken *);
         _DARKEN_DESTROY(ENTITY);              \
     else _darken_swap(ENTITY->owner->pool, ENTITY->slot, ENTITY->owner->paused++););
 
-// Provably will be public
-#define _BARKEN_STATE_IS_DELETED(STATE) ((STATE) == (darken_state)0)
+// Probably will be public
+#define _DARKEN_STATE_IS_DELETED(STATE) ((STATE) == (darken_state)0)
 #define _DARKEN_STATE_IS_LOOP(STATE) ((STATE) == (darken_state)1)
 #define _DARKEN_STATE_IS_PAUSED(STATE) ((STATE) == (darken_state)2)
 #define _DARKEN_STATE_IS_ACTIVE(STATE) ((STATE) > (darken_state)2)
@@ -260,16 +268,25 @@ static inline uint16_t _darken_swap(darken_entity pool[], uint16_t i, uint16_t j
 
 //
 // DYNAMIC
-// darken my_manager = DARKEN_POOL_ALLOC(malloc, MAX_ENEMIES, sizeof(struct enemies));
-// darken_init(&my_manager);
+// darken m = DARKEN_POOL_ALLOC(MEM_alloc, 5, sizeof(struct MyComponent));
+// darken_init(&m);
 // ...
-// free(my_manager.pool);
-// free(my_manager.storage);
+// free(m.pool);
+// free(m.storage);
 
-// STATIC
-// DARKEN_POOL_DECLARE(bullets, MAX_BULLETS, sizeof(struct bullet));
-// darken bullet_manager = DARKEN_POOL_BIND(bullets);
-// darken_init(&bullet_manager);
+// STATIC:  Runtime: locals, reassignment, any context
+// DARKEN_POOL_DECLARE(storage, 5, sizeof(struct MyComponent));
+// darken m = DARKEN_POOL_BIND(storage);
+// darken_init(&m);
+
+// STATIC:  Static/global initialization: compile-time constants
+// DARKEN_POOL_DECLARE(storage, 5, sizeof(struct MyComponent));
+// darken m = DARKEN_POOL_INIT(storage);
+//
+// void init_test_manager() {
+//     darken_init(&m);
+//     ...
+// }
 
 void darken_init(darken *ctx)
 {
@@ -302,7 +319,7 @@ void darken_update(darken *ctx)
         else if (_DARKEN_STATE_IS_PAUSED(_entity->update))
             _DARKEN_PAUSE(_entity);
 
-        else if (_BARKEN_STATE_IS_DELETED(_entity->update))
+        else if (_DARKEN_STATE_IS_DELETED(_entity->update))
             _DARKEN_DESTROY(_entity);
     });
 }
