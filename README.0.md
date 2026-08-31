@@ -181,7 +181,7 @@ if (e) e->update = particle_falling;
 ```
 
 Nota: no hizo falta ningún *cast* al asignar `particle_falling` (que recibe `Particle *`) a
-`e->update` (declarado como `darken_callback`, que recibe "algo"): lo comprobé compilando con
+`e->update` (declarado como `darken_state`, que recibe "algo"): lo comprobé compilando con
 `-Wall -Wextra` y no aparece ningún aviso. Es cómodo — cada tipo de entidad puede escribir sus
 funciones con su propio tipo de puntero — pero también significa que el compilador no te avisará
 si mezclas el tipo equivocado entre `state`/`destructor` de dos tipos de entidad distintos.
@@ -410,16 +410,16 @@ supuesto bug ahí, no lo pude reproducir contra este header.
 | --------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `darken`        | Puntero opaco al manager (`darken *`).                                                                                     |
 | `darken_entity` | Puntero opaco a una entidad (`struct darken_entity *`).                                                                    |
-| `darken_callback`  | `void *(*)()` — callback de estado/destructor. Recibe `entity->data` y devuelve el siguiente estado o un valor de control. |
+| `darken_state`  | `void *(*)()` — callback de estado/destructor. Recibe `entity->data` y devuelve el siguiente estado o un valor de control. |
 
-### Valores de control (lo que puede devolver un `darken_callback`)
+### Valores de control (lo que puede devolver un `darken_state`)
 
 | Valor                    | Efecto                                                        |
 | ------------------------ | ------------------------------------------------------------- |
 | `DARKEN_DELETE`          | Elimina la entidad (invoca su destructor si tiene).           |
 | `DARKEN_LOOP`            | Mantiene el estado actual sin cambios.                        |
 | `DARKEN_PAUSE`           | Pausa la entidad (sale del bucle de update).                  |
-| *cualquier otro puntero* | Se interpreta como el **nuevo** `darken_callback` de la entidad. |
+| *cualquier otro puntero* | Se interpreta como el **nuevo** `darken_state` de la entidad. |
 
 ### Funciones a nivel *manager*
 
@@ -448,14 +448,14 @@ supuesto bug ahí, no lo pude reproducir contra este header.
 | `DARKEN_ARGS(nombre)`                                               | Expande a `pool, data, capacity, payload_size` para pasar a `darken_init`.                                              |
 | `DARKEN_DATA(TIPO, var, entidad)`                                   | `TIPO *var = (TIPO *)entidad->data;` — acceso tipado al payload.                                                        |
 | `DARKEN_FOREACH(manager, CODIGO)`                                   | Itera la zona activa; expone `ENTITY` (tipo `darken_entity`) dentro de `CODIGO`.                                        |
-| `DARKEN_STATE_IS_DELETED/LOOP/PAUSED/ACTIVE(estado)`                | Clasifica un valor `darken_callback`.                                                                                      |
+| `DARKEN_STATE_IS_DELETED/LOOP/PAUSED/ACTIVE(estado)`                | Clasifica un valor `darken_state`.                                                                                      |
 | `DARKEN_ASSERT(condicion, valor_de_retorno)`                        | `if (!condicion) return valor_de_retorno;` — guard rápido.                                                              |
 
 ### Campos públicos de `darken_entity`
 
 ```c
-darken_callback state;       // callback ejecutado cada update
-darken_callback destructor;  // opcional; se llama al borrar la entidad
+darken_state state;       // callback ejecutado cada update
+darken_state destructor;  // opcional; se llama al borrar la entidad
 uint32_t     tag;          // libre para el usuario
 uint16_t     usr;           // libre para el usuario
 uint8_t      data[];        // payload de tamaño variable
@@ -499,7 +499,7 @@ uint8_t      data[];        // payload de tamaño variable
   entidades pausadas presentes, el mensaje no aparece para ellas. Si el
   destructor libera recursos (memoria externa, handles, etc.), esto es una fuga
   silenciosa cada vez que reseteas el manager con algo pausado.
-- **`darken_callback` sin prototipo** (`void *(*)()` en vez de `void *(*)(void *)`):
+- **`darken_state` sin prototipo** (`void *(*)()` en vez de `void *(*)(void *)`):
   es sintaxis C válida pero de estilo K&R, y el compilador no puede verificar que
   tus callbacks reciban el argumento correcto.
 - **Comparación de punteros con `>` para `DARKEN_STATE_IS_ACTIVE`**: formalmente
@@ -589,8 +589,8 @@ struct darken_entity {
     uint16_t slot;
 
     // públicos
-    darken_callback state;
-    darken_callback destructor;
+    darken_state state;
+    darken_state destructor;
     uint32_t tag;   // libre para el usuario
     uint16_t usr;   // libre para el usuario
     uint8_t data[]; // payload de tamaño variable (flexible array member)
@@ -650,7 +650,7 @@ darken_init(&manager, DARKEN_ARGS(storage));
 
 ## 5. El ciclo de vida basado en estados
 
-Cada entidad ejecuta, frame a frame, una función `darken_callback` que recibe `entity->data` y
+Cada entidad ejecuta, frame a frame, una función `darken_state` que recibe `entity->data` y
 devuelve:
 
 - **`DARKEN_LOOP`** → seguir en el mismo estado el próximo frame.
@@ -695,8 +695,8 @@ darken_entity ent = darken_spawn(&manager);
 if (ent) { // ¡comprobar NULL! puede que no haya slots libres
     DARKEN_DATA(Enemy, e, ent);
     e->x = 100; e->salud = 10;
-    ent->update = (darken_callback)enemigo_patrulla;
-    ent->destroy= (darken_callback)enemigo_destructor;
+    ent->update = (darken_state)enemigo_patrulla;
+    ent->destroy= (darken_state)enemigo_destructor;
     ent->tag = 0; ent->usr = 0;
 }
 
@@ -744,7 +744,7 @@ DARKEN_FOREACH(&manager, {
   precondición falla, la función simplemente retorna sin hacer nada — no hay log, ni abort, ni
   código de error. Un uso incorrecto (p. ej. pausar dos veces la misma entidad) no se detecta en
   ningún sitio; se enmascara como un no-op.
-- **`darken_callback` es un puntero a función sin prototipo** (`void *(*)()`), lo que desactiva la
+- **`darken_state` es un puntero a función sin prototipo** (`void *(*)()`), lo que desactiva la
   comprobación de tipos de argumentos en la llamada. Da flexibilidad (cada función de estado
   puede tomar el tipo de puntero que quiera), pero también elimina una red de seguridad del
   compilador; un desajuste de tipos entre lo que el motor pasa (`entity->data`, un
@@ -853,7 +853,7 @@ entA->destroy= destructor_de_A;
 
 // Ciclo 2: entidad B recicla el slot 5
 darken_entity entB = darken_spawn(&manager); // puede ser el mismo puntero que entA
-entB->update = (darken_callback)estado_de_B;
+entB->update = (darken_state)estado_de_B;
 // *** si olvidas poner entB->destructor, sigue apuntando a destructor_de_A ***
 
 // Cuando B se borra, el motor llama a destructor_de_A(entB->data),
@@ -1019,7 +1019,7 @@ if (!bala) {
     b->x = jugador.x; b->y = jugador.y;
     b->vx = 0; b->vy = -8; b->ttl = 90;
 
-    bala->update = (darken_callback)bala_estado_volando;
+    bala->update = (darken_state)bala_estado_volando;
     bala->destroy= NULL; // esta entidad no necesita limpieza
 }
 ```
@@ -1135,7 +1135,7 @@ static void *bala_estado_explotando(Bullet *b)
 }
 ```
 
-Nota práctica: como `darken_callback` se declara sin prototipo de argumentos, puedes escribir tus funciones tomando directamente el tipo de puntero que te convenga (`Bullet *` en vez de `void *`) sin necesidad de castear al asignarlas a `entity->update` — cómodo, pero también significa que el compilador no te avisará si te equivocas de tipo entre lo que declaras y lo que realmente vas a recibir. Sé consistente: un `state`/`destructor` de una entidad de balas siempre debe esperar un `Bullet *`, nunca otra cosa.
+Nota práctica: como `darken_state` se declara sin prototipo de argumentos, puedes escribir tus funciones tomando directamente el tipo de puntero que te convenga (`Bullet *` en vez de `void *`) sin necesidad de castear al asignarlas a `entity->update` — cómodo, pero también significa que el compilador no te avisará si te equivocas de tipo entre lo que declaras y lo que realmente vas a recibir. Sé consistente: un `state`/`destructor` de una entidad de balas siempre debe esperar un `Bullet *`, nunca otra cosa.
 
 ## Macros públicas
 
@@ -1471,7 +1471,7 @@ void disparar(float x, float y)
 
     DARKEN_DATA(Bullet, b, e);
     b->x = x; b->y = y; b->vx = 0; b->vy = -8; b->ttl = 90;
-    e->update = (darken_callback)bala_volando;
+    e->update = (darken_state)bala_volando;
     e->destroy= NULL;
 }
 
