@@ -171,8 +171,8 @@ uint16_t darken_entity_delete(darken_entity);
 
 #define DARKEN_SPAWN(CTX) ({                                  \
     darken *_ctx = (CTX);                                     \
-        _ctx->size < _ctx->paused ? _ctx->pool[_ctx->size++] : 0; \
-    })
+    _ctx->size < _ctx->paused ? _ctx->pool[_ctx->size++] : 0; \
+})
 
 void darken_init(darken *);
 void darken_update(darken *);
