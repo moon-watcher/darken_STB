@@ -121,35 +121,25 @@ uint16_t darken_entity_pause(darken_entity);
 uint16_t darken_entity_resume(darken_entity);
 uint16_t darken_entity_delete(darken_entity);
 
-/**
- * Align a byte count to a 4-byte boundary.
- *
- * The Motorola 68000 requires word alignment for word/long accesses.
- * Longword alignment keeps entity strides predictable and efficient.
- */
-#define DARKEN_ALIGN4(X) (((X) + 3U) & ~3U)
-
-#define DARKEN_ENTITY_STRIDE(PAYLOAD) DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD))
-
-// Free .pool & .storage 
-#define DARKEN_POOL_ALLOC(ALLOC, CAPACITY, PAYLOAD)                                \
-    {                                                                              \
-        .pool = (darken_entity *)(ALLOC)((CAPACITY) * sizeof(darken_entity)),      \
-        .storage = (uint8_t *)(ALLOC)((CAPACITY) * DARKEN_ENTITY_STRIDE(PAYLOAD)), \
-        .capacity = (CAPACITY),                                                    \
-        .stride = DARKEN_ENTITY_STRIDE(PAYLOAD),                                   \
+// Free .pool & .storage
+#define DARKEN_POOL_ALLOC(ALLOC, CAPACITY, PAYLOAD)                                 \
+    {                                                                               \
+        .pool = (darken_entity *)(ALLOC)((CAPACITY) * sizeof(darken_entity)),       \
+        .storage = (uint8_t *)(ALLOC)((CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)), \
+        .capacity = (CAPACITY),                                                     \
+        .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                                   \
     }
 
-#define DARKEN_POOL_DECLARE(NAME, CAPACITY, PAYLOAD)                                          \
-    struct                                                                                    \
-    {                                                                                         \
-        uint16_t capacity;                                                                    \
-        uint16_t stride;                                                                      \
-        darken_entity pool[(CAPACITY)];                                                       \
-        uint8_t data[(CAPACITY) * DARKEN_ENTITY_STRIDE(PAYLOAD)] __attribute__((aligned(4))); \
-    } NAME = {                                                                                \
-        .capacity = (CAPACITY),                                                               \
-        .stride = DARKEN_ENTITY_STRIDE(PAYLOAD),                                              \
+#define DARKEN_POOL_DECLARE(NAME, CAPACITY, PAYLOAD)                                           \
+    struct                                                                                     \
+    {                                                                                          \
+        uint16_t capacity;                                                                     \
+        uint16_t stride;                                                                       \
+        darken_entity pool[(CAPACITY)];                                                        \
+        uint8_t data[(CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)] __attribute__((aligned(4))); \
+    } NAME = {                                                                                 \
+        .capacity = (CAPACITY),                                                                \
+        .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                                              \
     }
 
 // Static/global initialization: compile-time constants
@@ -192,6 +182,16 @@ void darken_reset(darken *);
 /* ============================================================================
  * PRIVATE MACROS
  * ============================================================================ */
+
+/**
+ * Align a byte count to a 4-byte boundary.
+ *
+ * The Motorola 68000 requires word alignment for word/long accesses.
+ * Longword alignment keeps entity strides predictable and efficient.
+ */
+#define _DARKEN_ALIGN4(X) (((X) + 3U) & ~3U)
+
+#define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD))
 
 #define _DARKEN_BLOCK(CODE) \
     do                      \
