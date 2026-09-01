@@ -9,22 +9,27 @@ struct MyComponent
     uint8_t health;
 };
 
-static void bbb_update_walk(struct MyComponent *data)
-{
-    data->x += 1;
-    data->y += 1;
-    kprintf("Walking: (%d, %d) health=%d", data->x, data->y, data->health);
-}
-
 static void bbb_update_idle(struct MyComponent *data)
 {
     kprintf("Idle: (%d, %d) health=%d", data->x, data->y, data->health);
 }
 
+static void bbb_update_walk(struct MyComponent *data)
+{
+    data->x += 1;
+    data->y += 1;
+    kprintf("Walking: (%d, %d) health=%d", data->x, data->y, data->health);
+
+    /* Ejemplo: cambiar a idle tras 5 pasos */
+    if (data->x >= 5)
+        bbb_entity_set_update(data, bbb_update_idle);
+}
+
 static void bbb_destructor(struct MyComponent *data)
 {
     kprintf("Destructor llamado para entidad en (%d, %d)", data->x, data->y);
-    bbb_entity_pause(BBB_DATA_GET_ENTITY(data));
+    kprintf("Destructor tag=%d slot=%d", bbb_entity_tag(data), bbb_entity_slot(data));
+    bbb_entity_pause_data(data);   /* equivalente a bbb_entity_pause(BBB_DATA_GET_ENTITY(data)) */
 }
 
 void kimi_run_usage_example(void)
