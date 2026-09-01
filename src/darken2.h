@@ -116,7 +116,6 @@ void bbb_reset(bbb *);
  * ============================================================================ */
 
 #define _BBB_ALIGN4(X) (((X) + 3U) & ~3U)
-
 #define _BBB_ENTITY_STRIDE(PAYLOAD) _BBB_ALIGN4(sizeof(struct bbb_entity) + (PAYLOAD))
 
 static inline uint16_t _bbb_swap(bbb_entity pool[], uint16_t i, uint16_t j)

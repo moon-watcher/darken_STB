@@ -36,27 +36,24 @@ static void *st_darken_loop(void *d)  { (void)d; return DARKEN_LOOP; }
 static void *st_darken_delete(void *d){ (void)d; return DARKEN_DELETE; }
 static void *st_darken_pause(void *d) { (void)d; return DARKEN_PAUSE; }
 
-static void *st_darken_walk(void *d)
+static void *st_darken_walk(struct MyComponent *c)
 {
-    struct MyComponent *c = (struct MyComponent *)d;
     c->x++;
     return DARKEN_LOOP;
 }
 
 /* Estado que transiciona una sola vez y luego queda en idle */
-static void *st_darken_once_then_walk(void *d)
+static void *st_darken_once_then_walk(struct MyComponent *c)
 {
-    (void)d;
     return st_darken_walk;
 }
 
 /* ============================================================================
  * ESTADOS PARA DARKEN2.H (void, sin retorno)
  * ============================================================================ */
-static void st_bbb_loop(void *d)  { (void)d; }
-static void st_bbb_walk(void *d)
+static void st_bbb_loop(struct MyComponent *c)  { (void)c; }
+static void st_bbb_walk(struct MyComponent *c)
 {
-    struct MyComponent *c = (struct MyComponent *)d;
     c->x++;
 }
 
@@ -149,9 +146,8 @@ static void bench_raw(const char *sys, const char *test, u32 frames)
  * ============================================================================ */
 
 static void *st_dk_loop(void *d)  { (void)d; return DARKEN_LOOP; }
-static void *st_dk_walk(void *d)
+static void *st_dk_walk(struct MyComponent *c)
 {
-    struct MyComponent *c = (struct MyComponent *)d;
     c->x++;
     return DARKEN_LOOP;
 }
@@ -161,9 +157,8 @@ static void *st_dk_once_then_walk(void *d)
     (void)d;
     return st_dk_walk;
 }
-static void *st_dk_mixed(void *d)
+static void *st_dk_mixed(struct MyComponent *c)
 {
-    struct MyComponent *c = (struct MyComponent *)d;
     c->x++;
     if (c->x % 5 == 0) return DARKEN_PAUSE;
     if (c->x % 7 == 0) return DARKEN_DELETE;
@@ -175,30 +170,27 @@ static void *st_dk_mixed(void *d)
  * ============================================================================ */
 
 static void st_bb_loop(void *d) { (void)d; }
-static void st_bb_walk(void *d)
+static void st_bb_walk(struct MyComponent *c)
 {
-    struct MyComponent *c = (struct MyComponent *)d;
     c->x++;
 }
 
 /* Autodestruccion inline usando BBB_DATA_GET_ENTITY + kill_fast */
-static void st_bb_selfkill(void *d)
+static void st_bb_selfkill(struct MyComponent *c)
 {
-    struct MyComponent *c = (struct MyComponent *)d;
     c->x++;
     if (c->health == 0)
     {
-        bbb_entity e = BBB_DATA_GET_ENTITY(d);
+        bbb_entity e = BBB_DATA_GET_ENTITY(c);
         bbb_entity_kill_fast(e);   /* macro, 0 overhead de comprobaciones */
     }
 }
 
 /* Mixed inline: pause o kill desde el propio callback */
-static void st_bb_mixed(void *d)
+static void st_bb_mixed(struct MyComponent *c)
 {
-    struct MyComponent *c = (struct MyComponent *)d;
     c->x++;
-    bbb_entity e = BBB_DATA_GET_ENTITY(d);
+    bbb_entity e = BBB_DATA_GET_ENTITY(c);
     if (c->x % 5 == 0) { bbb_entity_pause(e); return; }
     if (c->x % 7 == 0) { bbb_entity_kill_fast(e); return; }
 }

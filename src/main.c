@@ -14,13 +14,22 @@
 #include "tests/darksys/tests.h"
 #include "tests_kimi/bench.h"
 #include "tests_kimi/compare.h"
+#include "tests_kimi/examples.h"
 
 int main(void)
 {
-    kimi_compare();
-    kimi_benchmarks();   
+    // kimi_compare();
+    // kimi_benchmarks();
 
+    //
 
+    BLASTEM_PROFIL_START
+    darken_run_usage_example();
+    kimi_run_usage_example();
+    BLASTEM_PROFIL_END
+
+    //
+    
     BLASTEM_PROFIL_START
     // darken_run_usage_example();
     // darken_run_all_tests();
