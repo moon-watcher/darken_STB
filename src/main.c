@@ -12,23 +12,23 @@
 #include "tests/darken/examples.h"
 #include "tests/darksys/ds.h"
 #include "tests/darksys/tests.h"
-#include "tests/kimi.h"
+#include "tests_kimi/bench.h"
+#include "tests_kimi/compare.h"
 
 int main(void)
 {
-    darken_run_benchmarks_compare();
-    run_kimi_benchmarks();
-    
+    kimi_compare();
+    kimi_benchmarks();   
 
 
-    // BLASTEM_PROFIL_START
+    BLASTEM_PROFIL_START
     // darken_run_usage_example();
     // darken_run_all_tests();
     // darken_run_benchmarks();
 
     // run_ds_test();
     // ds_run_all_tests();
-    // BLASTEM_PROFIL_END
+    BLASTEM_PROFIL_END
 
     return 0;
 }
