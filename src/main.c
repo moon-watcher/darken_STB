@@ -17,6 +17,7 @@
 int main(void)
 {
     darken_run_benchmarks_compare();
+    run_kimi_benchmarks();
     
 
 
