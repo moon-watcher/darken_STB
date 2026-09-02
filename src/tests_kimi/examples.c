@@ -28,7 +28,7 @@ static void bbb_update_walk(struct MyComponent *data)
 static void bbb_destructor(struct MyComponent *data)
 {
     kprintf("Destructor llamado para entidad en (%d, %d)", data->x, data->y);
-    kprintf("Destructor tag=%d slot=%d", bbb_entity_tag(data), bbb_entity_slot(data));
+    kprintf("Destructor tag=%d slot=%d", bbb_this(data)->tag, bbb_this(data)->slot);
     bbb_entity_pause_data(data);   /* equivalente a bbb_entity_pause(BBB_DATA_GET_ENTITY(data)) */
 }
 

@@ -51,46 +51,43 @@ void bbb_entity_delete(bbb_entity);
  * MACROS DE CONVENIENCIA: operar sobre la entidad desde su *data
  * ============================================================================ */
 
-/* Pausar / resumir / borrar la entidad propietaria de este data */
-#define bbb_entity_pause_data(DATA)   bbb_entity_pause(BBB_DATA_GET_ENTITY(DATA))
-#define bbb_entity_resume_data(DATA)  bbb_entity_resume(BBB_DATA_GET_ENTITY(DATA))
-#define bbb_entity_delete_data(DATA)  bbb_entity_delete(BBB_DATA_GET_ENTITY(DATA))
+// Pausar / resumir / borrar la entidad propietaria de este data
+#define bbb_entity_pause_data(DATA) bbb_entity_pause(BBB_DATA_GET_ENTITY(DATA))
+#define bbb_entity_resume_data(DATA) bbb_entity_resume(BBB_DATA_GET_ENTITY(DATA))
+#define bbb_entity_delete_data(DATA) bbb_entity_delete(BBB_DATA_GET_ENTITY(DATA))
 
-/* Kill rapido desde data (sin comprobaciones, sin llamar a destroy) */
+// Kill rapido desde data (sin comprobaciones, sin llamar a destroy)
 #define bbb_entity_kill_fast_data(DATA) bbb_entity_kill_fast(BBB_DATA_GET_ENTITY(DATA))
 
-/* Cambiar el callback de update de la entidad propietaria */
+// Cambiar el callback de update de la entidad propietaria
 #define bbb_entity_set_update(DATA, FN) (BBB_DATA_GET_ENTITY(DATA)->update = (FN))
 
-/* Cambiar el callback de destroy de la entidad propietaria */
+// Cambiar el callback de destroy de la entidad propietaria
 #define bbb_entity_set_destroy(DATA, FN) (BBB_DATA_GET_ENTITY(DATA)->destroy = (FN))
 
-/* Leer / escribir tag y usr desde data */
-#define bbb_entity_tag(DATA)          (BBB_DATA_GET_ENTITY(DATA)->tag)
-#define bbb_entity_set_tag(DATA, V)   (BBB_DATA_GET_ENTITY(DATA)->tag = (V))
-#define bbb_entity_usr(DATA)          (BBB_DATA_GET_ENTITY(DATA)->usr)
-#define bbb_entity_set_usr(DATA, V)   (BBB_DATA_GET_ENTITY(DATA)->usr = (V))
-#define bbb_entity_slot(DATA)          (BBB_DATA_GET_ENTITY(DATA)->slot)
-#define bbb_entity_set_slot(DATA, V)   (BBB_DATA_GET_ENTITY(DATA)->slot = (V))
+// // Leer / escribir tag y usr desde data
+// #define bbb_entity_tag(DATA) (BBB_DATA_GET_ENTITY(DATA)->tag)
+// #define bbb_entity_set_tag(DATA, V) (BBB_DATA_GET_ENTITY(DATA)->tag = (V))
+// #define bbb_entity_usr(DATA) (BBB_DATA_GET_ENTITY(DATA)->usr)
+// #define bbb_entity_set_usr(DATA, V) (BBB_DATA_GET_ENTITY(DATA)->usr = (V))
+// #define bbb_entity_slot(DATA) (BBB_DATA_GET_ENTITY(DATA)->slot)
+// #define bbb_entity_set_slot(DATA, V) (BBB_DATA_GET_ENTITY(DATA)->slot = (V))
 
-/* Alias del propio entity (para pasarlo a otras funciones) */
-#define bbb_this(DATA)                (BBB_DATA_GET_ENTITY(DATA))
+// Alias del propio entity (para pasarlo a otras funciones)
+#define bbb_this(DATA) (BBB_DATA_GET_ENTITY(DATA))
 
-/* Cambiar update y destroy de golte (transicion de estado completa) */
-#define bbb_entity_set_state(DATA, UP, DEST) \
-    do { \
+// Cambiar update y destroy de golte (transicion de estado completa)
+#define bbb_entity_set_state(DATA, UP, DEST)       \
+    do                                             \
+    {                                              \
         bbb_entity _e = BBB_DATA_GET_ENTITY(DATA); \
-        _e->update = (UP); \
-        _e->destroy = (DEST); \
+        _e->update = (UP);                         \
+        _e->destroy = (DEST);                      \
     } while (0)
 
-/* Saber si la entidad esta activa o pausada (util para asserts en MD) */
-#define bbb_entity_is_active(DATA) \
-    (BBB_DATA_GET_ENTITY(DATA)->slot < BBB_DATA_GET_ENTITY(DATA)->owner->size)
-#define bbb_entity_is_paused(DATA) \
-    (BBB_DATA_GET_ENTITY(DATA)->slot >= BBB_DATA_GET_ENTITY(DATA)->owner->paused)
-
-
+// // Saber si la entidad esta activa o pausada (util para asserts en MD)
+// #define bbb_entity_is_active(DATA) (BBB_DATA_GET_ENTITY(DATA)->slot < BBB_DATA_GET_ENTITY(DATA)->owner->size)
+// #define bbb_entity_is_paused(DATA) (BBB_DATA_GET_ENTITY(DATA)->slot >= BBB_DATA_GET_ENTITY(DATA)->owner->paused)
 
 void bbb_init(bbb *);
 void bbb_update(bbb *);
@@ -247,12 +244,12 @@ void bbb_entity_delete(bbb_entity entity)
         _bbb_swap(ctx->pool, entity->slot, ctx->paused++);
 }
 
-#define bbb_entity_kill_fast(ENTITY)                         \
-    do                                                       \
-    {                                                        \
-        bbb_entity _kfe = (ENTITY);                          \
-        bbb *_kfc = _kfe->owner;                             \
-        _bbb_swap(_kfc->pool, _kfe->slot, --_kfc->size);   \
+#define bbb_entity_kill_fast(ENTITY)                     \
+    do                                                   \
+    {                                                    \
+        bbb_entity _kfe = (ENTITY);                      \
+        bbb *_kfc = _kfe->owner;                         \
+        _bbb_swap(_kfc->pool, _kfe->slot, --_kfc->size); \
     } while (0)
 
 #endif // BBB_IMPLEMENTATION
