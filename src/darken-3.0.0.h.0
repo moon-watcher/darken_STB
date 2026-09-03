@@ -151,20 +151,19 @@ void darken_reset(darken *);
         .stride = (NAME).stride,     \
     }
 
-#define DARKEN_FOREACH(CTX, CODE)                      \
-    do                                                 \
-    {                                                  \
-        uint16_t _index = (CTX)->size;                 \
-        if (_index)                                    \
-        {                                              \
-            darken_entity *_pool = (CTX)->pool;        \
-            while (_index--)                           \
-            {                                          \
-                darken_entity _entity = _pool[_index]; \
-                (void)_entity;                         \
-                CODE;                                  \
-            }                                          \
-        }                                              \
+#define DARKEN_FOREACH(CTX, CODE)                        \
+    do                                                   \
+    {                                                    \
+        uint16_t _index = (CTX)->size;                   \
+        if (_index)                                      \
+        {                                                \
+            darken_entity _entity, *_pool = (CTX)->pool; \
+            while (_index--)                             \
+            {                                            \
+                _entity = _pool[_index];                 \
+                CODE;                                    \
+            }                                            \
+        }                                                \
     } while (0)
 
 #define DARKEN_SPAWN(CTX) ({                                  \
