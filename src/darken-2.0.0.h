@@ -86,8 +86,8 @@ typedef struct darken_entity *darken_entity;
 
 typedef struct darken
 {
-    darken_entity *pool;
-    uint8_t *storage;
+    darken_entity *pool; // Pointer array to entitys in the ctx's storage block
+    uint8_t *storage;    // Pointer to the contiguous memory block where entitys are allocated
     uint16_t capacity;
     uint16_t size;
     uint16_t paused;
@@ -96,20 +96,13 @@ typedef struct darken
 
 struct darken_entity
 {
-    // Private
-    uint16_t slot;
-    darken *owner;
-
-    // Lifecycle callbacks
-    darken_state update;
-    darken_state destroy;
-
-    // User-defined fields
-    uint32_t tag;
-    uint16_t usr;
-
-    // Payload
-    uint8_t data[];
+    uint16_t slot;        // Private: Index in the ctx's pool array
+    uint16_t usr;         // User-defined field for custom data
+    darken_state update;  // User-defined update callback
+    darken_state destroy; // User-defined destroy callback
+    uint32_t tag;         // User-defined tag for identification or categorization
+    darken *owner;        // Private: Pointer to the owning ctx
+    uint8_t data[];       // Payload
 };
 
 /* ============================================================================
@@ -186,10 +179,9 @@ void darken_entity_delete(darken_entity);
 #define DARKEN_DATA(TYPE, VAR, ENTITY) TYPE *VAR = (TYPE *)(ENTITY)->data;
 #define DARKEN_ENTITY(DATA) ((darken_entity)((uint8_t *)(DATA) - (uint32_t)&((darken_entity)0)->data))
 
-#define DARKEN_ENTITY_IS_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->owner->size)
-#define DARKEN_ENTITY_IS_PAUSED(ENTITY) ((ENTITY)->slot >= (ENTITY)->owner->paused)
-#define DARKEN_ENTITY_IS_USE(ENTITY) (DARKEN_ENTITY_IS_ACTIVE(ENTITY) || DARKEN_ENTITY_IS_PAUSED(ENTITY))
-#define DARKEN_ENTITY_IS_FREE(ENTITY) (!DARKEN_ENTITY_IS_USE(ENTITY))
+#define DARKEN_ENTITY_IN_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->owner->size)
+#define DARKEN_ENTITY_IN_PAUSE(ENTITY) ((ENTITY)->slot >= (ENTITY)->owner->paused)
+#define DARKEN_ENTITY_IN_FREE(ENTITY) (!DARKEN_ENTITY_IN_ACTIVE(ENTITY) && !DARKEN_ENTITY_IN_PAUSE(ENTITY))
 
 /* ============================================================================
  * PRIVATE
@@ -234,7 +226,7 @@ void darken_update(darken *ctx)
 {
     DARKEN_FOREACH(ctx, {
         // if (_entity->update)
-            _entity->update(_entity, _entity->data);
+        _entity->update(_entity, _entity->data);
     });
 }
 
@@ -251,7 +243,7 @@ void darken_reset(darken *ctx)
 
 void darken_entity_pause(darken_entity entity)
 {
-    if (!DARKEN_ENTITY_IS_ACTIVE(entity))
+    if (!DARKEN_ENTITY_IN_ACTIVE(entity))
         return;
 
     _darken_swap(entity->owner->pool, entity->slot, --entity->owner->size);
@@ -260,7 +252,7 @@ void darken_entity_pause(darken_entity entity)
 
 void darken_entity_resume(darken_entity entity)
 {
-    if (!DARKEN_ENTITY_IS_PAUSED(entity))
+    if (!DARKEN_ENTITY_IN_PAUSE(entity))
         return;
 
     _darken_swap(entity->owner->pool, entity->slot, entity->owner->paused++);
@@ -269,14 +261,14 @@ void darken_entity_resume(darken_entity entity)
 
 void darken_entity_delete(darken_entity entity)
 {
-    if (DARKEN_ENTITY_IS_ACTIVE(entity))
+    if (DARKEN_ENTITY_IN_ACTIVE(entity))
     {
         if (entity->destroy)
             entity->destroy(entity, entity->data);
 
         _darken_swap(entity->owner->pool, entity->slot, --entity->owner->size);
     }
-    else if (DARKEN_ENTITY_IS_PAUSED(entity))
+    else if (DARKEN_ENTITY_IN_PAUSE(entity))
         _darken_swap(entity->owner->pool, entity->slot, entity->owner->paused++);
 }
 
