@@ -1,7 +1,7 @@
 /**
- * darken.h — Darken (DARKula ENgine) 3.0 Entity System
+ * darken.h — Darken (DARKula ENgine) 2.0 Entity System
  *
- * darken-3.0.0-dev
+ * darken-2.0.0-dev
  *
  * Full documentation: README.Darken.md
  *
@@ -35,15 +35,15 @@
  * The entity entitys themselves live in the caller-provided storage block; * ctx->pool contains pointers to
  * those fixed addresses.
  *
- * - Active zone [0, size):
+ * - Active zone [0, size]:
  *     Entity pointers updated every frame by darken_update(). Iterable with DARKEN_FOREACH. Freely created
  *     (DARKEN_SPAWN) and deleted.
  *
- * - Free zone [size, paused):
+ * - Free zone [size, paused]:
  *     Pointer slots not currently assigned to an entity. This is where DARKEN_SPAWN() takes its next entity from,
  *     and where an active entity's slot goes right after it's deleted.
  *
- * - Paused zone [paused, capacity):
+ * - Paused zone [paused, capacity]:
  *     Entity pointers parked out of the update loop. darken_update() never touches them and DARKEN_FOREACH
  *     never visits them. Crucially, DARKEN_SPAWN() never hands out a slot from this zone, so a paused entity's
  *     slot (and therefore its entity->data pointer) stays valid and untouched until it's explicitly resumed or
@@ -59,7 +59,22 @@
  *
  * Entity state/destroy callback type.
  *
- * Receives entity->data and returns either another state callback or one of the Darken control values.
+ * Signature: void callback(darken_entity entity, void *data)
+ *
+ * Called every frame for `update`, and once on delete/reset for `destroy`. Receives the entity handle as the
+ * first parameter, and the entity's own payload (entity->data, cast to your payload type) as the second parameter.
+ * The second parameter may be omitted in the callback's own declaration (or marked unused) when it isn't needed,
+ * since darken_state is declared without a prototype.
+ *
+ * To transition an entity to a different state, assign directly to entity->update (and/or entity->destroy) from
+ * within the callback itself:
+ *
+ *     void player_walk_state(darken_entity entity, struct player *data) {
+ *         data->x++;
+ *
+ *         if (should_stop(data))
+ *             entity->update = player_stop_state;
+ *     }
  */
 
 #pragma once
@@ -219,7 +234,7 @@ void darken_update(darken *ctx)
 {
     DARKEN_FOREACH(ctx, {
         // if (_entity->update)
-            _entity->update(_entity->data, _entity);
+            _entity->update(_entity, _entity->data);
     });
 }
 
@@ -227,7 +242,7 @@ void darken_reset(darken *ctx)
 {
     DARKEN_FOREACH(ctx, {
         if (_entity->destroy)
-            _entity->destroy(_entity->data, _entity);
+            _entity->destroy(_entity, _entity->data);
     });
 
     ctx->size = 0;
@@ -257,7 +272,7 @@ void darken_entity_delete(darken_entity entity)
     if (DARKEN_ENTITY_IN_ACTIVE(entity))
     {
         if (entity->destroy)
-            entity->destroy(entity->data, entity);
+            entity->destroy(entity, entity->data);
 
         _darken_swap(entity->owner->pool, entity->slot, --entity->owner->size);
     }

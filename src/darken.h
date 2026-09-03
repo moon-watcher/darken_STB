@@ -1,7 +1,7 @@
 /**
- * darken.h — Darken (DARKula ENgine) 2.0 Entity System
+ * darken.h — Darken (DARKula ENgine) Entity System
  *
- * darken-2.0.0-dev
+ * darken-1.0.0-dev
  *
  * Full documentation: README.Darken.md
  *
