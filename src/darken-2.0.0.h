@@ -226,7 +226,7 @@ void darken_update(darken *ctx)
 {
     DARKEN_FOREACH(ctx, {
         // if (_entity->update)
-        _entity->update(_entity, _entity->data);
+            _entity->update(_entity, _entity->data);
     });
 }
 
