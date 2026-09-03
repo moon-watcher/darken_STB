@@ -218,7 +218,10 @@ void darken_init(darken *ctx)
 
 void darken_update(darken *ctx)
 {
-    DARKEN_FOREACH(ctx, _entity->update(_entity->data, _entity));
+    DARKEN_FOREACH(ctx, {
+        // if (_entity->update)
+            _entity->update(_entity->data, _entity);
+    });
 }
 
 void darken_reset(darken *ctx)
