@@ -1,6 +1,6 @@
 #include <genesis.h>
 
-#include "../darken2.h"
+#include "../bbb.h"
 #include "examples.h"
 
 struct MyComponent

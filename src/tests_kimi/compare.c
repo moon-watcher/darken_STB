@@ -1,12 +1,12 @@
 /*
  * benchmarks_compare.c
- * Comparativa darken.h (v1 state-machine) vs darken2.h (v2 API explicita)
+ * Comparativa darken.h (v1 state-machine) vs bbb.h (v2 API explicita)
  * Para SGDK / Motorola 68000 / Mega Drive
  */
 
 #include <genesis.h>
 #include "../darken.h"
-#include "../darken2.h"   /* renombrado desde bbb2.h para claridad */
+#include "../bbb.h"   /* renombrado desde bbb2.h para claridad */
 
 /* ============================================================================
  * CONFIGURACION
@@ -51,7 +51,7 @@ static void *st_darken_once_then_walk(void *d)
 }
 
 /* ============================================================================
- * ESTADOS PARA DARKEN2.H (void, sin retorno)
+ * ESTADOS PARA bbb.h (void, sin retorno)
  * ============================================================================ */
 static void st_bbb_loop(void *d)  { (void)d; }
 static void st_bbb_walk(void *d)

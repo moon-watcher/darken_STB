@@ -4,7 +4,7 @@
 #define BBB_IMPLEMENTATION
 #define DARKSYS_IMPLEMENTATION
 #include "darken.h"
-#include "darken2.h"
+#include "bbb.h"
 #include "darksys.h"
 
 #include "tests/darken/benchmarks.h"
