@@ -124,9 +124,6 @@ uint16_t darken_entity_pause(darken_entity);
 uint16_t darken_entity_resume(darken_entity);
 uint16_t darken_entity_delete(darken_entity);
 
-#define DARKEN_DATA(TYPE, VAR, ENTITY) TYPE *VAR = (TYPE *)(ENTITY)->data;
-#define DARKEN_ENTITY(DATA) ((darken_entity)((uint8_t *)(DATA) - (uint32_t)&((darken_entity)0)->data))
-
 // Free .pool & .storage
 #define DARKEN_POOL_ALLOC(ALLOC, CAPACITY, PAYLOAD)                                 \
     {                                                                               \
@@ -185,6 +182,9 @@ uint16_t darken_entity_delete(darken_entity);
     darken *_ctx = (CTX);                                     \
     _ctx->size < _ctx->paused ? _ctx->pool[_ctx->size++] : 0; \
 })
+
+#define DARKEN_DATA(TYPE, VAR, ENTITY) TYPE *VAR = (TYPE *)(ENTITY)->data;
+#define DARKEN_ENTITY(DATA) ((darken_entity)((uint8_t *)(DATA) - (uint32_t)&((darken_entity)0)->data))
 
 #define DARKEN_ENTITY_IN_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->owner->size)
 #define DARKEN_ENTITY_IN_PAUSED(ENTITY) ((ENTITY)->slot >= (ENTITY)->owner->paused)
