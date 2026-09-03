@@ -120,9 +120,9 @@ void darken_init(darken *);
 void darken_update(darken *);
 void darken_reset(darken *);
 
-uint16_t darken_entity_pause(darken_entity);
-uint16_t darken_entity_resume(darken_entity);
-uint16_t darken_entity_delete(darken_entity);
+void darken_entity_pause(darken_entity);
+void darken_entity_resume(darken_entity);
+void darken_entity_delete(darken_entity);
 
 // Free .pool & .storage
 #define DARKEN_POOL_ALLOC(ALLOC, CAPACITY, PAYLOAD)                                 \
@@ -249,33 +249,26 @@ void darken_reset(darken *ctx)
     ctx->paused = ctx->capacity;
 }
 
-uint16_t darken_entity_pause(darken_entity entity)
+void darken_entity_pause(darken_entity entity)
 {
     if (!DARKEN_ENTITY_IS_ACTIVE(entity))
-        return 0;
+        return;
 
     _darken_swap(entity->owner->pool, entity->slot, --entity->owner->size);
     _darken_swap(entity->owner->pool, entity->slot, --entity->owner->paused);
-
-    return 1;
 }
 
-uint16_t darken_entity_resume(darken_entity entity)
+void darken_entity_resume(darken_entity entity)
 {
     if (!DARKEN_ENTITY_IS_PAUSED(entity))
-        return 0;
+        return;
 
     _darken_swap(entity->owner->pool, entity->slot, entity->owner->paused++);
     _darken_swap(entity->owner->pool, entity->slot, entity->owner->size++);
-
-    return 1;
 }
 
-uint16_t darken_entity_delete(darken_entity entity)
+void darken_entity_delete(darken_entity entity)
 {
-    if (DARKEN_ENTITY_IS_FREE(entity))
-        return 0;
-
     if (DARKEN_ENTITY_IS_ACTIVE(entity))
     {
         if (entity->destroy)
@@ -283,10 +276,8 @@ uint16_t darken_entity_delete(darken_entity entity)
 
         _darken_swap(entity->owner->pool, entity->slot, --entity->owner->size);
     }
-    else
+    else if (DARKEN_ENTITY_IS_PAUSED(entity))
         _darken_swap(entity->owner->pool, entity->slot, entity->owner->paused++);
-
-    return 1;
 }
 
 #endif // DARKEN_IMPLEMENTATION
