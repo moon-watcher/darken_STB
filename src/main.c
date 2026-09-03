@@ -2,9 +2,11 @@
 
 #define DARKEN_IMPLEMENTATION
 #define BBB_IMPLEMENTATION
+#define CCC_IMPLEMENTATION
 #define DARKSYS_IMPLEMENTATION
 #include "darken.h"
 #include "bbb.h"
+#include "ccc.h"
 #include "darksys.h"
 
 #include "tests/darken/benchmarks.h"
@@ -18,14 +20,14 @@
 
 int main(void)
 {
-    // kimi_compare();
-    // kimi_benchmarks();
+    kimi_compare();
+    kimi_benchmarks();
 
     //
 
     BLASTEM_PROFIL_START
-    darken_run_usage_example();
-    kimi_run_usage_example();
+    // darken_run_usage_example();
+    // kimi_run_usage_example();
     BLASTEM_PROFIL_END
 
     //

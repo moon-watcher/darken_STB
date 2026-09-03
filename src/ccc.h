@@ -154,8 +154,8 @@ void ccc_init(ccc *ctx)
 void ccc_update(ccc *ctx)
 {
     CCC_FOREACH(ctx, {
-        if (_entity->update)
-            _entity->update(_entity->data, _entity);
+        // if (_entity->update)
+            _entity->update(_entity, _entity->data);
     });
 }
 
@@ -163,7 +163,7 @@ void ccc_reset(ccc *ctx)
 {
     CCC_FOREACH(ctx, {
         if (_entity->destroy)
-            _entity->destroy(_entity->data, _entity);
+            _entity->destroy(_entity, _entity->data);
     });
 
     ctx->size = 0;
@@ -193,7 +193,7 @@ void ccc_entity_delete(ccc_entity entity)
     if (entity->slot < ctx->size)
     {
         if (entity->destroy)
-            entity->destroy(entity->data, entity);
+            entity->destroy(entity, entity->data);
 
         _ccc_swap(ctx->pool, entity->slot, --ctx->size);
     }

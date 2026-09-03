@@ -7,6 +7,7 @@
 #include <genesis.h>
 #include "../darken.h"
 #include "../bbb.h"   /* renombrado desde bbb2.h para claridad */
+#include "../ccc.h"   /* renombrado desde bbb2.h para claridad */
 
 /* ============================================================================
  * CONFIGURACION
@@ -547,7 +548,209 @@ static void b_scale_bb(u16 n, u32 reps, const char *label)
 
 
 /* ============================================================================
- * ORQUESTADOR
+ * ESTADOS CCC (reciben entidad y data, sin retorno)
+ * ============================================================================ */
+
+static void st_cc_loop(ccc_entity e, void *d) { (void)e; (void)d; }
+static void st_cc_walk(ccc_entity e, void *d)
+{
+    (void)e;
+    struct MyComponent *c = (struct MyComponent *)d;
+    c->x++;
+}
+
+/* Autodestruccion inline usando CCC_DATA */
+static void st_cc_selfkill(ccc_entity e, void *d)
+{
+    struct MyComponent *c = (struct MyComponent *)d;
+    c->x++;
+    if (c->health == 0)
+    {
+        ccc_entity_delete(e);  /* API explícita, sin sentinelas */
+    }
+}
+
+/* Mixed inline: pause o kill desde el propio callback */
+static void st_cc_mixed(ccc_entity e, void *d)
+{
+    struct MyComponent *c = (struct MyComponent *)d;
+    c->x++;
+    if (c->x % 5 == 0) { ccc_entity_pause(e); return; }
+    if (c->x % 7 == 0) { ccc_entity_delete(e); return; }
+}
+
+/* ============================================================================
+ * BENCHMARKS CCC
+ * ============================================================================ */
+
+/* --- 1. create + reset --- */
+static void b_create_reset_cc(void)
+{
+    CCC_POOL_DECLARE(st, 32, sizeof(struct MyComponent));
+    ccc m = CCC_POOL_BIND(st);
+    ccc_init(&m);
+    u32 t = bench_start();
+    for (u32 r = 0; r < REPS_S; ++r) {
+        for (u16 i = 0; i < 32; ++i) CCC_SPAWN(&m);
+        ccc_reset(&m);
+    }
+    bench_report("CCC   ", "create+reset 32", bench_elapsed(t), REPS_S, 32);
+}
+
+/* --- 2. update puro LOOP --- */
+static void b_update_loop_cc(void)
+{
+    CCC_POOL_DECLARE(st, 32, sizeof(struct MyComponent));
+    ccc m = CCC_POOL_BIND(st);
+    ccc_init(&m);
+    for (u16 i = 0; i < 32; ++i) { ccc_entity e = CCC_SPAWN(&m); e->update = st_cc_loop; }
+    u32 t = bench_start();
+    for (u32 r = 0; r < REPS_S; ++r) ccc_update(&m);
+    bench_report("CCC   ", "update LOOP 32", bench_elapsed(t), REPS_S, 32);
+}
+
+/* --- 3. update con trabajo --- */
+static void b_update_work_cc(void)
+{
+    CCC_POOL_DECLARE(st, 32, sizeof(struct MyComponent));
+    ccc m = CCC_POOL_BIND(st);
+    ccc_init(&m);
+    for (u16 i = 0; i < 32; ++i) { ccc_entity e = CCC_SPAWN(&m); e->update = st_cc_walk; }
+    u32 t = bench_start();
+    for (u32 r = 0; r < REPS_S; ++r) ccc_update(&m);
+    bench_report("CCC   ", "update WORK 32", bench_elapsed(t), REPS_S, 32);
+}
+
+/* --- 4. transicion de estado (manual en CCC) --- */
+static void b_transition_cc(void)
+{
+    CCC_POOL_DECLARE(st, 32, sizeof(struct MyComponent));
+    ccc m = CCC_POOL_BIND(st);
+    ccc_init(&m);
+
+    /* En CCC no hay transición automática; simulamos con cambio manual */
+    ccc_entity ents[32];
+    for (u16 i = 0; i < 32; ++i) {
+        ents[i] = CCC_SPAWN(&m);
+        ents[i]->update = st_cc_walk;
+    }
+
+    u32 t = bench_start();
+    for (u32 r = 0; r < REPS_S; ++r) {
+        /* Simular transición: cambiar callback manualmente */
+        for (u16 i = 0; i < 32; ++i) {
+            if (r == 0) ents[i]->update = st_cc_loop;  /* transición una vez */
+        }
+        ccc_update(&m);
+    }
+    bench_report("CCC   ", "transition 32", bench_elapsed(t), REPS_S, 32);
+}
+
+/* --- 5. autodestruccion masiva (inline con API explícita) --- */
+static void b_selfkill_cc(void)
+{
+    CCC_POOL_DECLARE(st, 32, sizeof(struct MyComponent));
+    ccc m = CCC_POOL_BIND(st);
+    ccc_init(&m);
+    u32 t = bench_start();
+    for (u32 r = 0; r < REPS_S; ++r) {
+        for (u16 i = 0; i < 32; ++i) {
+            ccc_entity e = CCC_SPAWN(&m);
+            e->update = st_cc_selfkill;
+            ((struct MyComponent *)e->data)->health = (i == 31) ? 0 : 100;
+        }
+        ccc_update(&m);   /* nacen y mueren en la misma pasada */
+    }
+    bench_report("CCC   ", "self-kill 32", bench_elapsed(t), REPS_S, 32);
+}
+
+/* --- 6. pause / resume --- */
+static void b_pause_cc(void)
+{
+    CCC_POOL_DECLARE(st, 32, sizeof(struct MyComponent));
+    ccc m = CCC_POOL_BIND(st);
+    ccc_init(&m);
+    ccc_entity e[32];
+    for (u16 i = 0; i < 32; ++i) { e[i] = CCC_SPAWN(&m); e[i]->update = st_cc_loop; }
+    u32 t = bench_start();
+    for (u32 r = 0; r < REPS_S; ++r) {
+        for (u16 i = 0; i < 32; ++i) ccc_entity_pause(e[i]);
+        for (u16 i = 0; i < 32; ++i) ccc_entity_resume(e[i]);
+    }
+    bench_report("CCC   ", "pause+resume 32", bench_elapsed(t), REPS_S, 32);
+}
+
+/* --- 7. apply condicional (borrar pares) --- */
+static void b_apply_cc(void)
+{
+    CCC_POOL_DECLARE(st, 32, sizeof(struct MyComponent));
+    ccc m = CCC_POOL_BIND(st);
+    ccc_init(&m);
+    u32 t = bench_start();
+    for (u32 r = 0; r < REPS_S; ++r) {
+        for (u16 i = 0; i < 32; ++i) { ccc_entity e = CCC_SPAWN(&m); e->tag = i; }
+        uint16_t idx = 0;
+        while (idx < m.size) {
+            if ((m.pool[idx]->tag % 2) == 0) ccc_entity_delete(m.pool[idx]);
+            else ++idx;
+        }
+        ccc_reset(&m);
+    }
+    bench_report("CCC   ", "apply-del 32", bench_elapsed(t), REPS_S, 32);
+}
+
+/* --- 8. mixed stress (inline con API explícita) --- */
+static void b_mixed_cc(void)
+{
+    CCC_POOL_DECLARE(st, 64, sizeof(struct MyComponent));
+    ccc m = CCC_POOL_BIND(st);
+    ccc_init(&m);
+    u32 t = bench_start();
+    for (u32 r = 0; r < REPS_M; ++r) {
+        if (r > 0) {
+            ccc_reset(&m);
+            for (u16 i = 0; i < 64; ++i) {
+                ccc_entity e = CCC_SPAWN(&m);
+                e->update = st_cc_mixed;
+                ((struct MyComponent *)e->data)->x = i;
+            }
+        } else {
+            for (u16 i = 0; i < 64; ++i) {
+                ccc_entity e = CCC_SPAWN(&m);
+                e->update = st_cc_mixed;
+                ((struct MyComponent *)e->data)->x = i;
+            }
+        }
+        ccc_update(&m);
+    }
+    bench_report("CCC   ", "mixed 64", bench_elapsed(t), REPS_M, 64);
+}
+
+/* --- 9. empty manager --- */
+static void b_empty_cc(void)
+{
+    CCC_POOL_DECLARE(st, 64, sizeof(struct MyComponent));
+    ccc m = CCC_POOL_BIND(st);
+    ccc_init(&m);
+    u32 t = bench_start();
+    for (u32 r = 0; r < REPS_S; ++r) ccc_update(&m);
+    bench_raw("CCC   ", "empty 64", bench_elapsed(t));
+}
+
+/* --- 10. escalabilidad 128 / 256 --- */
+static void b_scale_cc(u16 n, u32 reps, const char *label)
+{
+    CCC_POOL_DECLARE(st, 256, sizeof(struct MyComponent)); /* max 256 */
+    ccc m = CCC_POOL_BIND(st);
+    ccc_init(&m);
+    for (u16 i = 0; i < n; ++i) { ccc_entity e = CCC_SPAWN(&m); e->update = st_cc_walk; }
+    u32 t = bench_start();
+    for (u32 r = 0; r < reps; ++r) ccc_update(&m);
+    bench_report("CCC   ", label, bench_elapsed(t), reps, n);
+}
+
+/* ============================================================================
+ * ORQUESTADOR ACTUALIZADO
  * ============================================================================ */
 
 void kimi_benchmarks(void)
@@ -557,17 +760,63 @@ void kimi_benchmarks(void)
 
     kprintf("========== BENCHMARKS ==========");
 
-    b_create_reset_dk();                   b_create_reset_bb();
-    b_update_loop_dk();                    b_update_loop_bb();
-    b_update_work_dk();                    b_update_work_bb();
-    b_transition_dk();                     b_transition_bb();
-    b_selfkill_dk();                       b_selfkill_bb_fast();  b_selfkill_bb_slow();
-    b_pause_dk();                          b_pause_bb();
-    b_apply_dk();                          b_apply_bb();
-    b_mixed_dk();                          b_mixed_bb_fast();     b_mixed_bb_slow();
-    b_empty_dk();                          b_empty_bb();
-    b_scale_dk(128, REPS_M, "update 128"); b_scale_bb(128, REPS_M, "update 128");
-    b_scale_dk(256, REPS_L, "update 256"); b_scale_bb(256, REPS_L, "update 256");
+    /* Creación y reset */
+    b_create_reset_dk();    b_create_reset_bb();    b_create_reset_cc();
+
+    /* Update puro */
+    b_update_loop_dk();     b_update_loop_bb();     b_update_loop_cc();
+
+    /* Update con trabajo */
+    b_update_work_dk();     b_update_work_bb();     b_update_work_cc();
+
+    /* Transiciones */
+    b_transition_dk();      b_transition_bb();      b_transition_cc();
+
+    /* Auto-destrucción */
+    b_selfkill_dk();        b_selfkill_bb_fast();   b_selfkill_bb_slow();   b_selfkill_cc();
+
+    /* Pausa y resume */
+    b_pause_dk();           b_pause_bb();           b_pause_cc();
+
+    /* Aplicación condicional */
+    b_apply_dk();           b_apply_bb();           b_apply_cc();
+
+    /* Mixto */
+    b_mixed_dk();           b_mixed_bb_fast();      b_mixed_bb_slow();      b_mixed_cc();
+
+    /* Vacío */
+    b_empty_dk();           b_empty_bb();           b_empty_cc();
+
+    /* Escalabilidad */
+    b_scale_dk(128, REPS_M, "update 128");  b_scale_bb(128, REPS_M, "update 128");  b_scale_cc(128, REPS_M, "update 128");
+    b_scale_dk(256, REPS_L, "update 256");  b_scale_bb(256, REPS_L, "update 256");  b_scale_cc(256, REPS_L, "update 256");
 
     kprintf("========== DONE ==========");
 }
+
+
+/* ============================================================================
+ * ORQUESTADOR
+ * ============================================================================ */
+
+// void kimi_benchmarks(void)
+// {
+//     SYS_setVIntCallback(vblank_count);   /* UNICO callback, UNICA variable */
+//     g_frameCounter = 0;
+
+//     kprintf("========== BENCHMARKS ==========");
+
+//     b_create_reset_dk();                   b_create_reset_bb();
+//     b_update_loop_dk();                    b_update_loop_bb();
+//     b_update_work_dk();                    b_update_work_bb();
+//     b_transition_dk();                     b_transition_bb();
+//     b_selfkill_dk();                       b_selfkill_bb_fast();  b_selfkill_bb_slow();
+//     b_pause_dk();                          b_pause_bb();
+//     b_apply_dk();                          b_apply_bb();
+//     b_mixed_dk();                          b_mixed_bb_fast();     b_mixed_bb_slow();
+//     b_empty_dk();                          b_empty_bb();
+//     b_scale_dk(128, REPS_M, "update 128"); b_scale_bb(128, REPS_M, "update 128");
+//     b_scale_dk(256, REPS_L, "update 256"); b_scale_bb(256, REPS_L, "update 256");
+
+//     kprintf("========== DONE ==========");
+// }
