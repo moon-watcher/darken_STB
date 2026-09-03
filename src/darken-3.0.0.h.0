@@ -1,0 +1,230 @@
+/**
+ * darken.h — Darken (DARKula ENgine) 3.0 Entity System
+ *
+ * darken-3.0.0
+ *
+ * Basado en el patrón de CCC: Entity-Owned State
+ * - Sin valores centinela de retorno
+ * - API explícita para pause/delete/resume
+ * - El estado recibe (data, entity)
+ * - Máximo rendimiento en updates
+ *
+ * GNU C note:
+ * - This header uses GNU C __attribute__ extension and statement expressions.
+ * - 4-byte align boundary because Darken targets GCC and the Motorola 68000.
+ * - 16-bit members preference for optimal 68K performance.
+ */
+
+#pragma once
+
+#include <stdint.h>
+
+typedef void (*darken_state)();
+
+typedef struct darken_entity *darken_entity;
+
+typedef struct darken
+{
+    darken_entity *pool;
+    uint8_t *storage;
+    uint16_t capacity;
+    uint16_t size;
+    uint16_t paused;
+    uint16_t stride;
+} darken;
+
+struct darken_entity
+{
+    // Private
+    uint16_t slot;
+    darken *owner;
+
+    // Lifecycle callbacks
+    darken_state update;
+    darken_state destroy;
+
+    // User-defined fields
+    uint32_t tag;
+    uint16_t usr;
+
+    // Payload
+    uint8_t data[];
+};
+
+/* ============================================================================
+ * PUBLIC API
+ * ============================================================================ */
+
+void darken_entity_pause(darken_entity);
+void darken_entity_resume(darken_entity);
+void darken_entity_delete(darken_entity);
+
+void darken_init(darken *);
+void darken_update(darken *);
+void darken_reset(darken *);
+
+#define DARKEN_DATA(TYPE, VAR, ENTITY) TYPE *VAR = (TYPE *)(ENTITY)->data;
+#define DARKEN_DATA_GET_ENTITY(DATA) ((darken_entity)((uint8_t *)(DATA) - (uint32_t)&((darken_entity)0)->data))
+
+// Free .pool & .storage
+#define DARKEN_POOL_ALLOC(ALLOC, CAPACITY, PAYLOAD)                                 \
+    {                                                                               \
+        .pool = (darken_entity *)(ALLOC)((CAPACITY) * sizeof(darken_entity)),       \
+        .storage = (uint8_t *)(ALLOC)((CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)), \
+        .capacity = (CAPACITY),                                                     \
+        .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                                   \
+    }
+
+#define DARKEN_POOL_DECLARE(NAME, CAPACITY, PAYLOAD)                                           \
+    struct                                                                                     \
+    {                                                                                          \
+        uint16_t capacity;                                                                     \
+        uint16_t stride;                                                                       \
+        darken_entity pool[(CAPACITY)];                                                        \
+        uint8_t data[(CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)] __attribute__((aligned(4))); \
+    } NAME = {                                                                                 \
+        .capacity = (CAPACITY),                                                                \
+        .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                                              \
+    }
+
+// Static/global initialization: compile-time constants
+#define DARKEN_POOL_INIT(STORAGE)                                                            \
+    {                                                                                        \
+        .pool = (STORAGE).pool,                                                              \
+        .storage = (STORAGE).data,                                                           \
+        .capacity = sizeof((STORAGE).pool) / sizeof(darken_entity),                          \
+        .stride = sizeof((STORAGE).data) / (sizeof((STORAGE).pool) / sizeof(darken_entity)), \
+    }
+
+// Runtime: locals, reassignment, any context
+#define DARKEN_POOL_BIND(NAME)       \
+    {                                \
+        .pool = (NAME).pool,         \
+        .storage = (NAME).data,      \
+        .capacity = (NAME).capacity, \
+        .stride = (NAME).stride,     \
+    }
+
+#define DARKEN_FOREACH(CTX, CODE)                      \
+    do                                                 \
+    {                                                  \
+        uint16_t _index = (CTX)->size;                 \
+        if (_index)                                    \
+        {                                              \
+            darken_entity *_pool = (CTX)->pool;        \
+            while (_index--)                           \
+            {                                          \
+                darken_entity _entity = _pool[_index]; \
+                (void)_entity;                         \
+                CODE;                                  \
+            }                                          \
+        }                                              \
+    } while (0)
+
+#define DARKEN_SPAWN(CTX) ({                                  \
+    darken *_ctx = (CTX);                                     \
+    _ctx->size < _ctx->paused ? _ctx->pool[_ctx->size++] : 0; \
+})
+
+#define DARKEN_ENTITY_IN_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->owner->size)
+#define DARKEN_ENTITY_IN_PAUSED(ENTITY) ((ENTITY)->slot >= (ENTITY)->owner->paused)
+#define DARKEN_ENTITY_IN_USE(ENTITY) (DARKEN_ENTITY_IN_ACTIVE(ENTITY) || DARKEN_ENTITY_IN_PAUSED(ENTITY))
+#define DARKEN_ENTITY_IN_FREE(ENTITY) (!DARKEN_ENTITY_IN_USE(ENTITY))
+
+/* ============================================================================
+ * PRIVATE
+ * ============================================================================ */
+
+#define _DARKEN_ALIGN4(X) (((X) + 3U) & ~3U)
+#define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD))
+
+static inline uint16_t _darken_swap(darken_entity pool[], uint16_t i, uint16_t j)
+{
+    if (i == j)
+        return 0;
+
+    darken_entity tmp = pool[i];
+    pool[i] = pool[j];
+    pool[j] = tmp;
+    pool[i]->slot = i;
+    pool[j]->slot = j;
+
+    return 1;
+}
+
+#ifdef DARKEN_IMPLEMENTATION
+
+void darken_init(darken *ctx)
+{
+    ctx->size = 0;
+    uint16_t capacity = ctx->paused = ctx->capacity;
+    uint8_t *storage = ctx->storage;
+    uint16_t step = ctx->stride;
+    darken_entity entity, *pool = ctx->pool;
+
+    while (capacity--)
+    {
+        entity = pool[capacity] = (darken_entity)storage;
+        entity->owner = ctx;
+        entity->slot = capacity;
+
+        storage += step;
+    }
+}
+
+void darken_update(darken *ctx)
+{
+    DARKEN_FOREACH(ctx, _entity->update(_entity->data, _entity));
+}
+
+void darken_reset(darken *ctx)
+{
+    DARKEN_FOREACH(ctx, {
+        if (_entity->destroy)
+            _entity->destroy(_entity->data, _entity);
+    });
+
+    ctx->size = 0;
+    ctx->paused = ctx->capacity;
+}
+
+void darken_entity_pause(darken_entity entity)
+{
+    if (!DARKEN_ENTITY_IN_ACTIVE(entity))
+        return;
+
+    darken *ctx = entity->owner;
+    _darken_swap(ctx->pool, entity->slot, --ctx->size);
+    _darken_swap(ctx->pool, entity->slot, --ctx->paused);
+}
+
+void darken_entity_resume(darken_entity entity)
+{
+    if (!DARKEN_ENTITY_IN_PAUSED(entity))
+        return;
+
+    darken *ctx = entity->owner;
+    _darken_swap(ctx->pool, entity->slot, ctx->paused);
+    _darken_swap(ctx->pool, entity->slot, ctx->size);
+    ++ctx->paused;
+    ++ctx->size;
+}
+
+void darken_entity_delete(darken_entity entity)
+{
+    if (DARKEN_ENTITY_IN_ACTIVE(entity))
+    {
+        if (entity->destroy)
+            entity->destroy(entity->data, entity);
+
+        darken *ctx = entity->owner;
+        _darken_swap(ctx->pool, entity->slot, --ctx->size);
+    }
+    else if (DARKEN_ENTITY_IN_PAUSED(entity))
+    {
+        darken *ctx = entity->owner;
+        _darken_swap(ctx->pool, entity->slot, ctx->paused++);
+    }
+}
+
+#endif // DARKEN_IMPLEMENTATION

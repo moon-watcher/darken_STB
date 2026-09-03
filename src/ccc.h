@@ -155,7 +155,7 @@ void ccc_update(ccc *ctx)
 {
     CCC_FOREACH(ctx, {
         // if (_entity->update)
-            _entity->update(_entity, _entity->data);
+        _entity->update(_entity, _entity->data);
     });
 }
 
