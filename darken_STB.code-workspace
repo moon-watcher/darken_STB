@@ -21,7 +21,7 @@
 		"workbench.tree.indent": 26,
 		"workbench.activityBar.location": "top",
 		"workbench.colorTheme": "Visual Studio Dark - C++",
-		"workbench.statusBar.visible": false,
+		"workbench.statusBar.visible": true,
 		"editor.lineNumbers": "off",
 		"editor.stickyScroll.enabled": false,
 		"editor.minimap.enabled": false,
