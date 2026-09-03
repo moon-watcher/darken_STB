@@ -35,15 +35,15 @@
  * The entity entitys themselves live in the caller-provided storage block; * ctx->pool contains pointers to
  * those fixed addresses.
  *
- * - Active zone [0, size]:
+ * - Active zone [0, size):
  *     Entity pointers updated every frame by darken_update(). Iterable with DARKEN_FOREACH. Freely created
  *     (DARKEN_SPAWN) and deleted.
  *
- * - Free zone [size, paused]:
+ * - Free zone [size, paused):
  *     Pointer slots not currently assigned to an entity. This is where DARKEN_SPAWN() takes its next entity from,
  *     and where an active entity's slot goes right after it's deleted.
  *
- * - Paused zone [paused, capacity]:
+ * - Paused zone [paused, capacity):
  *     Entity pointers parked out of the update loop. darken_update() never touches them and DARKEN_FOREACH
  *     never visits them. Crucially, DARKEN_SPAWN() never hands out a slot from this zone, so a paused entity's
  *     slot (and therefore its entity->data pointer) stays valid and untouched until it's explicitly resumed or
@@ -116,13 +116,13 @@ struct darken_entity
  * PUBLIC API
  * ============================================================================ */
 
-void darken_entity_pause(darken_entity);
-void darken_entity_resume(darken_entity);
-void darken_entity_delete(darken_entity);
-
 void darken_init(darken *);
 void darken_update(darken *);
 void darken_reset(darken *);
+
+uint16_t darken_entity_pause(darken_entity);
+uint16_t darken_entity_resume(darken_entity);
+uint16_t darken_entity_delete(darken_entity);
 
 #define DARKEN_DATA(TYPE, VAR, ENTITY) TYPE *VAR = (TYPE *)(ENTITY)->data;
 #define DARKEN_ENTITY(DATA) ((darken_entity)((uint8_t *)(DATA) - (uint32_t)&((darken_entity)0)->data))
@@ -249,26 +249,33 @@ void darken_reset(darken *ctx)
     ctx->paused = ctx->capacity;
 }
 
-void darken_entity_pause(darken_entity entity)
+uint16_t darken_entity_pause(darken_entity entity)
 {
     if (!DARKEN_ENTITY_IN_ACTIVE(entity))
-        return;
+        return 0;
 
     _darken_swap(entity->owner->pool, entity->slot, --entity->owner->size);
     _darken_swap(entity->owner->pool, entity->slot, --entity->owner->paused);
+
+    return 1;
 }
 
-void darken_entity_resume(darken_entity entity)
+uint16_t darken_entity_resume(darken_entity entity)
 {
     if (!DARKEN_ENTITY_IN_PAUSED(entity))
-        return;
+        return 0;
 
     _darken_swap(entity->owner->pool, entity->slot, entity->owner->paused++);
     _darken_swap(entity->owner->pool, entity->slot, entity->owner->size++);
+
+    return 1;
 }
 
-void darken_entity_delete(darken_entity entity)
+uint16_t darken_entity_delete(darken_entity entity)
 {
+    if (DARKEN_ENTITY_IN_FREE(entity))
+        return 0;
+
     if (DARKEN_ENTITY_IN_ACTIVE(entity))
     {
         if (entity->destroy)
@@ -276,8 +283,10 @@ void darken_entity_delete(darken_entity entity)
 
         _darken_swap(entity->owner->pool, entity->slot, --entity->owner->size);
     }
-    else if (DARKEN_ENTITY_IN_PAUSED(entity))
+    else
         _darken_swap(entity->owner->pool, entity->slot, entity->owner->paused++);
+
+    return 1;
 }
 
 #endif // DARKEN_IMPLEMENTATION
