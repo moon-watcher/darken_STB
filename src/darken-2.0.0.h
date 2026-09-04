@@ -14,7 +14,7 @@
  *
  * Entity: Base entity managed by the entity ctx
  *
- * The entity structure serves as a container for user data with lifecycle  management. The flexible array member
+ * The entity structure serves as a container for user data with lifecycle management. The flexible array member
  * 'data[]' allows entitys to have variable-sized payloads while maintaining contiguous memory layout.
  *
  * The stride between entitys is pre-calculated during ctx initialization to enable O(1) access to any entity
@@ -32,7 +32,7 @@
  *    [ active entitys ][   free slots    ][ paused entitys ]
  *    0                 size               paused             capacity
  *
- * The entity entitys themselves live in the caller-provided storage block; * ctx->pool contains pointers to
+ * The entity entitys themselves live in the caller-provided storage block; ctx->pool contains pointers to
  * those fixed addresses.
  *
  * - Active zone [0, size):
@@ -40,8 +40,8 @@
  *     (DARKEN_SPAWN) and deleted.
  *
  * - Free zone [size, paused):
- *     Pointer slots not currently assigned to an entity. This is where DARKEN_SPAWN() takes its next entity from,
- *     and where an active entity's slot goes right after it's deleted.
+ *     Pointer slots not currently assigned to an entity. This is where DARKEN_SPAWN() takes its next entity
+ *     from, and where an active entity's slot goes right after it's deleted.
  *
  * - Paused zone [paused, capacity):
  *     Entity pointers parked out of the update loop. darken_update() never touches them and DARKEN_FOREACH
@@ -57,31 +57,92 @@
  *
  *
  *
- * Entity state/destroy callback type.
+ * Update / lifecycle control — two selectable modes
+ * ==================================================
  *
- * Signature: void callback(darken_entity entity, void *data)
+ * Define DARKEN_STATE_MACHINE before including this header to switch modes. It changes the signature of
+ * `update`/`destroy` callbacks and what darken_update() does with their result; everything else in the API
+ * (spawn/pause/resume/delete, the pool macros, the zone layout) is identical either way.
  *
- * Called every frame for `update`, and once on delete/reset for `destroy`. Receives the entity handle as the
- * first parameter, and the entity's own payload (entity->data, cast to your payload type) as the second parameter.
- * The second parameter may be omitted in the callback's own declaration (or marked unused) when it isn't needed,
- * since darken_state is declared without a prototype.
+ * 1) MANUAL mode — default, DARKEN_STATE_MACHINE not defined
+ * ---------------------------------------------------------
+ *     darken_update() just calls entity->update(...) every frame and ignores any return value;
+ *     entity->destroy(...) is called the same way by darken_reset() and darken_entity_delete(). The callback
+ *     is in full control of the entity's lifecycle: it changes state by assigning directly to entity->update
+ *     (and/or entity->destroy), and it pauses/resumes/deletes itself by calling darken_entity_pause(),
+ *     darken_entity_resume() or darken_entity_delete() explicitly.
  *
- * To transition an entity to a different state, assign directly to entity->update (and/or entity->destroy) from
- * within the callback itself:
+ *     What gets passed as `...` is controlled by one macro, DARKEN_CALLBACK_ARGS(ENTITY), redefinable before
+ *     including this header. It receives the darken_entity handle and must expand to the argument list you want.
+ *     Default (matches the original, fixed behavior):
  *
- *     void player_walk_state(darken_entity entity, struct player *data) {
- *         data->x++;
+ *         #define DARKEN_CALLBACK_ARGS(ENTITY) (ENTITY)->data   // callback(data)
  *
- *         if (should_stop(data))
- *             entity->update = player_stop_state;
- *     }
+ *     Other useful redefinitions:
+ *
+ *         #define DARKEN_CALLBACK_ARGS(ENTITY) (ENTITY)                   // callback(entity)
+ *         #define DARKEN_CALLBACK_ARGS(ENTITY) (ENTITY), (ENTITY)->data   // callback(entity, data)
+ *         #define DARKEN_CALLBACK_ARGS(ENTITY) (ENTITY)->data, (ENTITY)   // callback(data, entity)
+ *
+ *     Passing the entity directly means you no longer need DARKEN_ENTITY(data) to recover the handle inside
+ *     the callback:
+ *
+ *         #define DARKEN_CALLBACK_ARGS(ENTITY) (ENTITY), (ENTITY)->data
+ *
+ *         void player_walk_state(darken_entity entity, struct player *data) {
+ *             data->x++;
+ *
+ *             if (should_stop(data))
+ *                 entity->update = player_stop_state;
+ *         }
+ *
+ *     DARKEN_CALLBACK_ARGS has no effect in state-machine mode (see below) — there the signature is fixed so
+ *     the return-value protocol stays well-defined.
+ *
+ * 2) STATE-MACHINE mode — DARKEN_STATE_MACHINE defined
+ * ---------------------------------------------------------
+ *     Signature: darken_state callback(void *data)
+ *
+ *     darken_update() reads the callback's return value and drives the lifecycle itself:
+ *
+ *         DARKEN_CONTINUE          stay active, keep the same update callback
+ *         DARKEN_DELETE            call destroy (if set), then delete the entity
+ *         DARKEN_PAUSE             move the entity straight to the paused zone
+ *         (anything else)       treated as a new update callback pointer;
+ *                                installed as entity->update for next frame
+ *
+ *         darken_state player_walk_state(struct player *data) {
+ *             data->x++;
+ *
+ *             if (should_stop(data))
+ *                 return player_stop_state;
+ *
+ *             if (should_die(data))
+ *                 return DARKEN_DELETE;
+ *
+ *             return DARKEN_CONTINUE;
+ *         }
+ *
+ *     `destroy` keeps the same callback type as `update` in this mode too, but its return value is always
+ *     ignored — darken_reset() and darken_entity_delete() only ever call it for its side effects.
+ *
+ *     Comparing an darken_state value against the sentinels with `==`/`>` relies on GNU C's permissive
+ *     pointer/integer handling (see the GNU C note above); it's the same technique the original state-machine
+ *     variant of this engine already used.
  */
 
 #pragma once
 
 #include <stdint.h>
 
+// Define DARKEN_STATE_MACHINE (before including this header) to switch update callbacks from "void, self-managed"
+// to "returns darken_state, engine-managed". See the big comment above for the full explanation of both modes.
+#ifdef DARKEN_STATE_MACHINE
+typedef void *(*darken_state)();
+#else
 typedef void (*darken_state)();
+#endif
+
 typedef struct darken_entity *darken_entity;
 
 typedef struct darken
@@ -116,6 +177,22 @@ void darken_reset(darken *);
 void darken_entity_pause(darken_entity);
 void darken_entity_resume(darken_entity);
 void darken_entity_delete(darken_entity);
+
+#ifdef DARKEN_STATE_MACHINE
+// Sentinel return values for update() callbacks in state-machine mode.
+// Any other darken_state value returned is treated as the next update callback.
+#define DARKEN_CONTINUE ((darken_state)1)
+#define DARKEN_DELETE ((darken_state)0)
+#define DARKEN_PAUSE ((darken_state)2)
+#endif
+
+// Argument list passed to update()/destroy() in MANUAL mode (ignored in DARKEN_STATE_MACHINE mode, where the
+// signature is always fixed to (data)).
+// Redefine this before including the header to change it; ENTITY is the darken_entity handle. Default matches
+// the original, non-configurable behavior: callback(data).
+#ifndef DARKEN_CALLBACK_ARGS
+#define DARKEN_CALLBACK_ARGS(ENTITY) (ENTITY)->data
+#endif
 
 // Free .pool & .storage
 #define DARKEN_POOL_ALLOC(ALLOC, CAPACITY, PAYLOAD)                                 \
@@ -183,12 +260,27 @@ void darken_entity_delete(darken_entity);
 #define DARKEN_ENTITY_IN_PAUSE(ENTITY) ((ENTITY)->slot >= (ENTITY)->owner->paused)
 #define DARKEN_ENTITY_IN_FREE(ENTITY) (!DARKEN_ENTITY_IN_ACTIVE(ENTITY) && !DARKEN_ENTITY_IN_PAUSE(ENTITY))
 
+// Zone sizes, so callers don't have to do the size/paused/capacity math by hand.
+#define DARKEN_COUNT_ACTIVE(CTX) ((CTX)->size)
+#define DARKEN_COUNT_FREE(CTX) ((uint16_t)((CTX)->paused - (CTX)->size))
+#define DARKEN_COUNT_PAUSED(CTX) ((uint16_t)((CTX)->capacity - (CTX)->paused))
+
 /* ============================================================================
  * PRIVATE
  * ============================================================================ */
 
 #define _DARKEN_ALIGN4(X) (((X) + 3U) & ~3U)
 #define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD))
+
+// Single call-site helper for invoking update()/destroy(), used everywhere the engine calls into user code.
+// Fixed to (data) in DARKEN_STATE_MACHINE mode; otherwise expands via DARKEN_CALLBACK_ARGS.
+// Since darken_state has no prototype, the callback only needs to declare whichever leading arguments it
+// actually reads.
+#ifdef DARKEN_STATE_MACHINE
+#define _DARKEN_CALL(FN, ENTITY) (FN)((ENTITY)->data)
+#else
+#define _DARKEN_CALL(FN, ENTITY) (FN)(DARKEN_CALLBACK_ARGS(ENTITY))
+#endif
 
 static inline void _darken_swap(darken_entity pool[], uint16_t i, uint16_t j)
 {
@@ -222,19 +314,52 @@ void darken_init(darken *ctx)
     }
 }
 
+#ifdef DARKEN_STATE_MACHINE
+
+void darken_update(darken *ctx)
+{
+    DARKEN_FOREACH(ctx, {
+        darken_state state = _entity->update(_entity->data);
+
+        if (state == DARKEN_CONTINUE)
+            continue;
+
+        if (state > DARKEN_PAUSE)
+        {
+            _entity->update = state;
+        }
+        else if (state == DARKEN_DELETE)
+        {
+            if (_entity->destroy)
+                _entity->destroy(_entity->data);
+
+            _darken_swap(ctx->pool, _entity->slot, --ctx->size);
+        }
+        else if (state == DARKEN_PAUSE)
+        {
+            _darken_swap(ctx->pool, _entity->slot, --ctx->size);
+            _darken_swap(ctx->pool, _entity->slot, --ctx->paused);
+        }
+    });
+}
+
+#else // !DARKEN_STATE_MACHINE
+
 void darken_update(darken *ctx)
 {
     DARKEN_FOREACH(ctx, {
         // if (_entity->update)
-            _entity->update(_entity, _entity->data);
+            _DARKEN_CALL(_entity->update, _entity);
     });
 }
+
+#endif // DARKEN_STATE_MACHINE
 
 void darken_reset(darken *ctx)
 {
     DARKEN_FOREACH(ctx, {
         if (_entity->destroy)
-            _entity->destroy(_entity, _entity->data);
+            _DARKEN_CALL(_entity->destroy, _entity);
     });
 
     ctx->size = 0;
@@ -264,7 +389,7 @@ void darken_entity_delete(darken_entity entity)
     if (DARKEN_ENTITY_IN_ACTIVE(entity))
     {
         if (entity->destroy)
-            entity->destroy(entity, entity->data);
+            _DARKEN_CALL(entity->destroy, entity);
 
         _darken_swap(entity->owner->pool, entity->slot, --entity->owner->size);
     }
