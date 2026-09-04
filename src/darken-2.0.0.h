@@ -137,10 +137,10 @@
 
 // Define DARKEN_STATE_MACHINE (before including this header) to switch update callbacks from "void, self-managed"
 // to "returns darken_state, engine-managed". See the big comment above for the full explanation of both modes.
+typedef void (*darken_state)();
+
 #ifdef DARKEN_STATE_MACHINE
 typedef void *(*darken_state)();
-#else
-typedef void (*darken_state)();
 #endif
 
 typedef struct darken_entity *darken_entity;
@@ -314,10 +314,9 @@ void darken_init(darken *ctx)
     }
 }
 
-#ifdef DARKEN_STATE_MACHINE
-
 void darken_update(darken *ctx)
 {
+#ifdef DARKEN_STATE_MACHINE
     DARKEN_FOREACH(ctx, {
         darken_state state = _entity->update(_entity->data);
 
@@ -341,19 +340,13 @@ void darken_update(darken *ctx)
             _darken_swap(ctx->pool, _entity->slot, --ctx->paused);
         }
     });
-}
-
-#else // !DARKEN_STATE_MACHINE
-
-void darken_update(darken *ctx)
-{
+#else  // !DARKEN_STATE_MACHINE
     DARKEN_FOREACH(ctx, {
         // if (_entity->update)
-            _DARKEN_CALL(_entity->update, _entity);
+        _DARKEN_CALL(_entity->update, _entity);
     });
-}
-
 #endif // DARKEN_STATE_MACHINE
+}
 
 void darken_reset(darken *ctx)
 {
