@@ -105,10 +105,10 @@
  *
  *     darken_update() reads the callback's return value and drives the lifecycle itself:
  *
- *         DARKEN_CONTINUE:    stay active, keep the same update callback
- *         DARKEN_DELETE:      call destroy (if set), then delete the entity
- *         DARKEN_PAUSE:       move the entity straight to the paused zone
- *         (anything else):    treated as a new update callback pointer; installed as entity->update for next frame
+ *         DARKEN_CONTINUE: stay active, keep the same update callback
+ *         DARKEN_DELETE:   call destroy (if set), then delete the entity
+ *         DARKEN_PAUSE:    move the entity straight to the paused zone
+ *         (anything else): treated as a new update callback pointer; installed as entity->update for next frame
  *
  *         void *player_walk_state(struct player *data) {
  *             data->x++;
@@ -340,7 +340,7 @@ void darken_update(darken *ctx)
 #else  // !DARKEN_STATE_MACHINE
     DARKEN_FOREACH(ctx, {
         // if (_entity->update)
-        _DARKEN_CALL(_entity->update, _entity);
+            _DARKEN_CALL(_entity->update, _entity);
     });
 #endif // DARKEN_STATE_MACHINE
 }

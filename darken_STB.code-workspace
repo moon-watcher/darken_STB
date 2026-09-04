@@ -20,7 +20,7 @@
 		"files.autoSave": "afterDelay",
 		"workbench.tree.indent": 26,
 		"workbench.activityBar.location": "top",
-		"workbench.colorTheme": "GitHub Dark Dimmed",
+		"workbench.colorTheme": "Visual Studio Dark - C++",
 		"workbench.statusBar.visible": false,
 		"editor.lineNumbers": "off",
 		"editor.stickyScroll.enabled": false,
