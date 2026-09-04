@@ -138,12 +138,6 @@
 // to "returns darken_state, engine-managed". See the big comment above for the full explanation of both modes.
 #ifdef DARKEN_STATE_MACHINE
 typedef void *(*darken_state)();
-
-// Sentinel return values for update() callbacks in state-machine mode.
-// Any other darken_state value returned is treated as the next update callback.
-#define DARKEN_CONTINUE ((darken_state)1)
-#define DARKEN_DELETE ((darken_state)0)
-#define DARKEN_PAUSE ((darken_state)2)
 #else
 typedef void (*darken_state)();
 #endif
@@ -183,12 +177,17 @@ void darken_entity_pause(darken_entity);
 void darken_entity_resume(darken_entity);
 void darken_entity_delete(darken_entity);
 
-// Argument list passed to update()/destroy() in MANUAL mode (ignored in DARKEN_STATE_MACHINE mode, where the
-// signature is always fixed to (data)).
-// Redefine this before including the header to change it; ENTITY is the darken_entity handle. Default matches
-// the original, non-configurable behavior: callback(data).
+// Argument list passed to update()/destroy() in both modes. Redefine this before including
+// the header to change it; ENTITY is the darken_entity handle. Default matches the original,
+// non-configurable behavior: callback(data).
 #ifndef DARKEN_CALLBACK_ARGS
 #define DARKEN_CALLBACK_ARGS(ENTITY) (ENTITY)->data
+#endif
+
+#ifdef DARKEN_STATE_MACHINE
+#define DARKEN_CONTINUE ((darken_state)1)
+#define DARKEN_DELETE ((darken_state)0)
+#define DARKEN_PAUSE ((darken_state)2)
 #endif
 
 // Free .pool & .storage
@@ -266,18 +265,13 @@ void darken_entity_delete(darken_entity);
  * PRIVATE
  * ============================================================================ */
 
-#define _DARKEN_ALIGN4(X) (((X) + 3U) & ~3U)
-#define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD))
-
 // Single call-site helper for invoking update()/destroy(), used everywhere the engine calls into user code.
-// Fixed to (data) in DARKEN_STATE_MACHINE mode; otherwise expands via DARKEN_CALLBACK_ARGS.
 // Since darken_state has no prototype, the callback only needs to declare whichever leading arguments it
 // actually reads.
-#ifdef DARKEN_STATE_MACHINE
-#define _DARKEN_CALL(FN, ENTITY) (FN)((ENTITY)->data)
-#else
 #define _DARKEN_CALL(FN, ENTITY) (FN)(DARKEN_CALLBACK_ARGS(ENTITY))
-#endif
+
+#define _DARKEN_ALIGN4(X) (((X) + 3U) & ~3U)
+#define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD))
 
 static inline void _darken_swap(darken_entity pool[], uint16_t i, uint16_t j)
 {
@@ -293,6 +287,27 @@ static inline void _darken_swap(darken_entity pool[], uint16_t i, uint16_t j)
 
 #ifdef DARKEN_IMPLEMENTATION
 
+//
+// DYNAMIC
+// darken m = DARKEN_POOL_ALLOC(MEM_alloc, 5, sizeof(struct MyComponent));
+// darken_init(&m);
+// ...
+// free(m.pool);
+// free(m.storage);
+
+// STATIC:  Runtime: locals, reassignment, any context
+// DARKEN_POOL_DECLARE(storage, 5, sizeof(struct MyComponent));
+// darken m = DARKEN_POOL_BIND(storage);
+// darken_init(&m);
+
+// STATIC:  Static/global initialization: compile-time constants
+// DARKEN_POOL_DECLARE(storage, 5, sizeof(struct MyComponent));
+// darken m = DARKEN_POOL_INIT(storage);
+//
+// void init_test_manager() {
+//     darken_init(&m);
+//     ...
+// }
 void darken_init(darken *ctx)
 {
     ctx->size = 0;
@@ -340,7 +355,7 @@ void darken_update(darken *ctx)
 #else  // !DARKEN_STATE_MACHINE
     DARKEN_FOREACH(ctx, {
         // if (_entity->update)
-            _DARKEN_CALL(_entity->update, _entity);
+        _DARKEN_CALL(_entity->update, _entity);
     });
 #endif // DARKEN_STATE_MACHINE
 }
