@@ -105,13 +105,12 @@
  *
  *     darken_update() reads the callback's return value and drives the lifecycle itself:
  *
- *         DARKEN_CONTINUE          stay active, keep the same update callback
- *         DARKEN_DELETE            call destroy (if set), then delete the entity
- *         DARKEN_PAUSE             move the entity straight to the paused zone
- *         (anything else)       treated as a new update callback pointer;
- *                                installed as entity->update for next frame
+ *         DARKEN_CONTINUE:    stay active, keep the same update callback
+ *         DARKEN_DELETE:      call destroy (if set), then delete the entity
+ *         DARKEN_PAUSE:       move the entity straight to the paused zone
+ *         (anything else):    treated as a new update callback pointer; installed as entity->update for next frame
  *
- *         darken_state player_walk_state(struct player *data) {
+ *         void *player_walk_state(struct player *data) {
  *             data->x++;
  *
  *             if (should_stop(data))
@@ -137,10 +136,16 @@
 
 // Define DARKEN_STATE_MACHINE (before including this header) to switch update callbacks from "void, self-managed"
 // to "returns darken_state, engine-managed". See the big comment above for the full explanation of both modes.
-typedef void (*darken_state)();
-
 #ifdef DARKEN_STATE_MACHINE
 typedef void *(*darken_state)();
+
+// Sentinel return values for update() callbacks in state-machine mode.
+// Any other darken_state value returned is treated as the next update callback.
+#define DARKEN_CONTINUE ((darken_state)1)
+#define DARKEN_DELETE ((darken_state)0)
+#define DARKEN_PAUSE ((darken_state)2)
+#else
+typedef void (*darken_state)();
 #endif
 
 typedef struct darken_entity *darken_entity;
@@ -177,14 +182,6 @@ void darken_reset(darken *);
 void darken_entity_pause(darken_entity);
 void darken_entity_resume(darken_entity);
 void darken_entity_delete(darken_entity);
-
-#ifdef DARKEN_STATE_MACHINE
-// Sentinel return values for update() callbacks in state-machine mode.
-// Any other darken_state value returned is treated as the next update callback.
-#define DARKEN_CONTINUE ((darken_state)1)
-#define DARKEN_DELETE ((darken_state)0)
-#define DARKEN_PAUSE ((darken_state)2)
-#endif
 
 // Argument list passed to update()/destroy() in MANUAL mode (ignored in DARKEN_STATE_MACHINE mode, where the
 // signature is always fixed to (data)).
