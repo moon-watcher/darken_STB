@@ -5,8 +5,8 @@
 #define CCC_IMPLEMENTATION
 #define DARKSYS_IMPLEMENTATION
 #include "darken.h"
-#include "bbb.h"
-#include "ccc.h"
+#include "_bbb.h"
+#include "_ccc.h"
 #include "darksys.h"
 
 #include "tests/darken/benchmarks.h"

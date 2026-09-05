@@ -1,6 +1,6 @@
 #include <genesis.h>
 
-#include "../bbb.h"
+#include "../_bbb.h"
 #include "examples.h"
 
 struct MyComponent

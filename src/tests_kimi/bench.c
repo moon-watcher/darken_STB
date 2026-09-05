@@ -6,8 +6,8 @@
 
 #include <genesis.h>
 #include "../darken.h"
-#include "../bbb.h"   /* renombrado desde bbb2.h para claridad */
-#include "../ccc.h"   /* renombrado desde bbb2.h para claridad */
+#include "../_bbb.h"   /* renombrado desde bbb2.h para claridad */
+#include "../_ccc.h"   /* renombrado desde bbb2.h para claridad */
 
 /* ============================================================================
  * CONFIGURACION
@@ -72,7 +72,7 @@ static void st_bbb_walk(struct MyComponent *c)
 
 // #include <genesis.h>
 // #include "../darken.h"
-// #include "../bbb.h"   /* renombrado desde bbb2.h para claridad */
+// #include "../_bbb.h"   /* renombrado desde bbb2.h para claridad */
 
 
 /* ============================================================================
