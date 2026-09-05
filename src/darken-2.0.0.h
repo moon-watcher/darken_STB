@@ -15,9 +15,9 @@
  * Entity: Base entity managed by the entity ctx
  *
  * The entity structure serves as a container for user data with lifecycle management. The flexible array member
- * 'data[]' allows entitys to have variable-sized payloads while maintaining contiguous memory layout.
+ * 'data[]' allows entities to have variable-sized payloads while maintaining contiguous memory layout.
  *
- * The stride between entitys is pre-calculated during ctx initialization to enable O(1) access to any entity
+ * The stride between entities is pre-calculated during ctx initialization to enable O(1) access to any entity
  * by index.
  *
  * An entity's own memory address (this struct) never moves once allocated by darken_init(). What moves between
@@ -29,10 +29,10 @@
  * Ctx: Entity container and lifecycle ctx. Maintains the pointer array in three logical zones:
  *
  * Array Layout:
- *    [ active entitys ][   free slots    ][ paused entitys ]
+ *    [ active entities ][   free slots    ][ paused entities ]
  *    0                 size               paused             capacity
  *
- * The entity entitys themselves live in the caller-provided storage block; ctx->pool contains pointers to
+ * The entities themselves live in the caller-provided storage block; ctx->pool contains pointers to
  * those fixed addresses.
  *
  * - Active zone [0, size):
@@ -144,8 +144,8 @@ typedef struct darken_entity *darken_entity;
 
 typedef struct darken
 {
-    darken_entity *pool; // Pointer array to entitys in the ctx's storage block
-    uint8_t *storage;    // Pointer to the contiguous memory block where entitys are allocated
+    darken_entity *pool; // Pointer array to entities in the ctx's storage block
+    uint8_t *storage;    // Pointer to the contiguous memory block where entities are allocated
     uint16_t capacity;
     uint16_t size;
     uint16_t paused;
@@ -236,9 +236,9 @@ void darken_entity_delete(darken_entity);
 // Spawn a new entity from the free zone. Returns the entity or NULL if no free slots.
 // The returned entity may contain garbage from a previous occupant — always initialize
 // all fields you care about (update, destroy, tag, usr, and data).
-#define DARKEN_SPAWN(CTX) ({                                                   \
-    darken *_ctx = (CTX);                                                      \
-    (darken_entity)(_ctx->size < _ctx->paused ? _ctx->pool[_ctx->size++] : 0); \
+#define DARKEN_SPAWN(CTX) ({                                  \
+    darken *_ctx = (CTX);                                     \
+    _ctx->size < _ctx->paused ? _ctx->pool[_ctx->size++] : 0; \
 })
 
 // Iterate over all active entities in REVERSE order (from size-1 down to 0).
@@ -315,11 +315,13 @@ static inline void _darken_swap(darken_entity pool[], uint16_t i, uint16_t j)
 // free(m.storage);
 //
 // STATIC (Runtime binding):
+// Runtime: locals, reassignment, any context
 // DARKEN_POOL_DECLARE(storage, 5, sizeof(struct MyComponent));
 // darken m = DARKEN_POOL_BIND(storage);
 // darken_init(&m);
 //
 // STATIC (Compile-time initialization):
+// Static/global initialization: compile-time constants
 // DARKEN_POOL_DECLARE(storage, 5, sizeof(struct MyComponent));
 // darken m = DARKEN_POOL_INIT(storage);
 //
