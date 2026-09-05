@@ -288,9 +288,9 @@ void darken_entity_delete(darken_entity);
 // Single call-site helper for invoking update()/destroy(), used everywhere the engine calls into user code.
 // The argument list is fixed per mode (see the big comment above), so there is nothing to configure here.
 #ifdef DARKEN_DIRECT
-#define _DARKEN_CALL(FN, ENTITY) (FN)((ENTITY), (ENTITY)->data)
+#define _DARKEN_ARGS(ENTITY) (ENTITY), (ENTITY)->data
 #else
-#define _DARKEN_CALL(FN, ENTITY) (FN)((ENTITY)->data)
+#define _DARKEN_ARGS(ENTITY) (ENTITY)->data
 #endif
 
 #define _DARKEN_ALIGN4(X) (((X) + 3U) & ~3U)
@@ -357,11 +357,11 @@ void darken_update(darken *ctx)
 {
 #ifdef DARKEN_DIRECT
     DARKEN_FOREACH(ctx, {
-        _DARKEN_CALL(_entity->update, _entity);
+        _entity->update(_DARKEN_ARGS(_entity));
     });
 #else
     DARKEN_FOREACH(ctx, {
-        darken_state state = _DARKEN_CALL(_entity->update, _entity);
+        darken_state state = _entity->update(_DARKEN_ARGS(_entity));
 
         if (state == DARKEN_CONTINUE)
             continue;
@@ -375,7 +375,7 @@ void darken_update(darken *ctx)
         if (state == DARKEN_DELETE)
         {
             if (_entity->destroy)
-                _DARKEN_CALL(_entity->destroy, _entity);
+                _entity->destroy(_DARKEN_ARGS(_entity));
 
             _darken_swap(ctx->pool, _entity->slot, --ctx->size);
             continue;
@@ -392,7 +392,7 @@ void darken_reset(darken *ctx)
 {
     DARKEN_FOREACH(ctx, {
         if (_entity->destroy)
-            _DARKEN_CALL(_entity->destroy, _entity);
+            _entity->destroy(_DARKEN_ARGS(_entity));
     });
 
     ctx->size = 0;
@@ -424,7 +424,7 @@ void darken_entity_delete(darken_entity entity)
     if (DARKEN_ENTITY_IN_ACTIVE(entity))
     {
         if (entity->destroy)
-            _DARKEN_CALL(entity->destroy, entity);
+            entity->destroy(_DARKEN_ARGS(entity));
 
         _darken_swap(entity->owner->pool, entity->slot, --entity->owner->size);
     }
