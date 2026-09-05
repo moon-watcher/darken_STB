@@ -369,19 +369,21 @@ void darken_update(darken *ctx)
         if (state > DARKEN_PAUSE)
         {
             _entity->update = state;
+            continue;
         }
-        else if (state == DARKEN_DELETE)
+
+        if (state == DARKEN_DELETE)
         {
             if (_entity->destroy)
                 _DARKEN_CALL(_entity->destroy, _entity);
 
             _darken_swap(ctx->pool, _entity->slot, --ctx->size);
+            continue;
         }
-        else if (state == DARKEN_PAUSE)
-        {
-            _darken_swap(ctx->pool, _entity->slot, --ctx->size);
-            _darken_swap(ctx->pool, _entity->slot, --ctx->paused);
-        }
+
+        // DARKEN_PAUSE
+        _darken_swap(ctx->pool, _entity->slot, --ctx->size);
+        _darken_swap(ctx->pool, _entity->slot, --ctx->paused);
     });
 #endif
 }
