@@ -430,4 +430,4 @@ void darken_entity_delete(darken_entity entity)
         _darken_swap(entity->owner->pool, entity->slot, entity->owner->paused++);
 }
 
-#endif // DARKEN_IMPLEMENTATION
+#endif // defined(DARKEN_DIRECT) || defined(DARKEN_STATE_MACHINE)
