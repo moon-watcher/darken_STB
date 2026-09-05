@@ -273,8 +273,8 @@ void darken_entity_delete(darken_entity);
 
 // Zone membership tests
 #define DARKEN_ENTITY_IN_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->owner->size)
-#define DARKEN_ENTITY_IN_PAUSE(ENTITY) ((ENTITY)->slot >= (ENTITY)->owner->paused)
-#define DARKEN_ENTITY_IN_FREE(ENTITY) (!DARKEN_ENTITY_IN_ACTIVE(ENTITY) && !DARKEN_ENTITY_IN_PAUSE(ENTITY))
+#define DARKEN_ENTITY_IN_FREE(ENTITY) (!DARKEN_ENTITY_IN_ACTIVE(ENTITY) && !DARKEN_ENTITY_IN_PAUSED(ENTITY))
+#define DARKEN_ENTITY_IN_PAUSED(ENTITY) ((ENTITY)->slot >= (ENTITY)->owner->paused)
 
 // Zone sizes, so callers don't have to do the size/paused/capacity math by hand.
 #define DARKEN_COUNT_ACTIVE(CTX) ((CTX)->size)
@@ -410,7 +410,7 @@ void darken_entity_pause(darken_entity entity)
 
 void darken_entity_resume(darken_entity entity)
 {
-    if (!DARKEN_ENTITY_IN_PAUSE(entity))
+    if (!DARKEN_ENTITY_IN_PAUSED(entity))
         return;
 
     _darken_swap(entity->owner->pool, entity->slot, entity->owner->paused++);
@@ -428,7 +428,7 @@ void darken_entity_delete(darken_entity entity)
 
         _darken_swap(entity->owner->pool, entity->slot, --entity->owner->size);
     }
-    else if (DARKEN_ENTITY_IN_PAUSE(entity))
+    else if (DARKEN_ENTITY_IN_PAUSED(entity))
         _darken_swap(entity->owner->pool, entity->slot, entity->owner->paused++);
 }
 
