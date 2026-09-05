@@ -105,7 +105,8 @@
  *
  * 2) DIRECT mode — DARKEN_DIRECT defined
  * ---------------------------------------------------------
- *     Signature: void callback(darken_entity entity, void *data)
+ *     Signature: void callback(darken_entity entity)
+ *                void callback(darken_entity entity, void *data)
  *
  *     Both the entity handle and its payload are passed, in that order. darken_update() just calls
  *     entity->update(entity, entity->data) every frame and ignores any return value; entity->destroy(entity,
@@ -114,6 +115,11 @@
  *     (and/or entity->destroy), and it pauses/resumes/deletes itself by calling darken_entity_pause(),
  *     darken_entity_resume() or darken_entity_delete() — all of which take the handle it was just given
  *     directly, no DARKEN_ENTITY(data) lookup needed.
+ *
+ *         void player_walk_state(darken_entity entity) {
+ *             DARKEN_DATA(struct player, data, entity);
+ *             data->x++;
+ *         }
  *
  *         void player_walk_state(darken_entity entity, struct player *data) {
  *             data->x++;
@@ -302,7 +308,7 @@ static inline void _darken_swap(darken_entity pool[], uint16_t i, uint16_t j)
     pool[j]->slot = j;
 }
 
-#ifdef DARKEN_IMPLEMENTATION
+#if defined(DARKEN_DIRECT) || defined(DARKEN_STATE_MACHINE)
 
 //
 // USAGE EXAMPLES:
