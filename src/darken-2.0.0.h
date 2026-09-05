@@ -261,7 +261,8 @@ void darken_entity_delete(darken_entity);
 // Declare a typed pointer to an entity's data payload
 #define DARKEN_DATA(TYPE, VAR, ENTITY) TYPE *VAR = (TYPE *)(ENTITY)->data;
 
-// Recover the entity handle from a pointer to its data payload (STATE-MACHINE mode only)
+// Recover the entity handle from a pointer to its data payload
+// (Mostly useful in STATE-MACHINE mode where callbacks only receive data)
 #define DARKEN_ENTITY(DATA) ((darken_entity)((uint8_t *)(DATA) - (uint32_t)&((darken_entity)0)->data))
 
 // Zone membership tests
@@ -350,7 +351,7 @@ void darken_update(darken *ctx)
     DARKEN_FOREACH(ctx, {
         _DARKEN_CALL(_entity->update, _entity);
     });
-#else  // !DARKEN_DIRECT
+#else
     DARKEN_FOREACH(ctx, {
         darken_state state = _DARKEN_CALL(_entity->update, _entity);
 
@@ -374,7 +375,7 @@ void darken_update(darken *ctx)
             _darken_swap(ctx->pool, _entity->slot, --ctx->paused);
         }
     });
-#endif // DARKEN_DIRECT
+#endif
 }
 
 void darken_reset(darken *ctx)
