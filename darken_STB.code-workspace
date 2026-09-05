@@ -20,7 +20,7 @@
 		"files.autoSave": "afterDelay",
 		"workbench.tree.indent": 26,
 		"workbench.activityBar.location": "top",
-		"workbench.colorTheme": "Visual Studio Dark - C++",
+		"workbench.colorTheme": "SynthWave '84",
 		"workbench.statusBar.visible": false,
 		"editor.lineNumbers": "off",
 		"editor.stickyScroll.enabled": false,
@@ -28,5 +28,6 @@
 		"editor.fontLigatures": true,
 		"editor.fontFamily": "'Victor Mono', 'Fira Code', Consolas, 'Courier New', monospace",
 		"editor.fontSize": 13.5,
+		"synthwave84.brightness": 0.9,
 	}
 }
