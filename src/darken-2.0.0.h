@@ -407,6 +407,8 @@ void darken_entity_resume(darken_entity entity)
     _darken_swap(entity->owner->pool, entity->slot, entity->owner->size++);
 }
 
+// Note: darken_entity_delete() only calls destroy() if the entity is active.
+// If the entity is paused, it's moved to the free zone without calling destroy().
 void darken_entity_delete(darken_entity entity)
 {
     if (DARKEN_ENTITY_IN_ACTIVE(entity))
