@@ -100,9 +100,6 @@
  *     Comparing a darken_state value against the sentinels with `==`/`>` relies on GNU C's permissive
  *     pointer/integer handling (see the GNU C note above).
  *
- *     IMPORTANT: In STATE-MACHINE mode, callbacks receive ONLY the data pointer. They do NOT receive
- *     the entity handle. If you need the entity handle, use DARKEN_ENTITY(data) to recover it.
- *
  * 2) DIRECT mode — DARKEN_DIRECT defined
  * ---------------------------------------------------------
  *     Signature: void callback(darken_entity entity)
@@ -121,7 +118,7 @@
  *             data->x++;
  *         }
  *
- *         void player_walk_state(darken_entity entity, struct player *data) {
+ *         void player_walk_events_state(darken_entity entity, struct player *data) {
  *             data->x++;
  *
  *             if (should_stop(data))
