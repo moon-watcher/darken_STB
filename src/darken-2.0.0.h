@@ -308,7 +308,7 @@ static inline void _darken_swap(darken_entity pool[], uint16_t i, uint16_t j)
     pool[j]->slot = j;
 }
 
-#if defined(DARKEN_DIRECT) || defined(DARKEN_STATE_MACHINE)
+#ifdef DARKEN_IMPLEMENTATION
 
 //
 // USAGE EXAMPLES:
@@ -430,4 +430,4 @@ void darken_entity_delete(darken_entity entity)
         _darken_swap(entity->owner->pool, entity->slot, entity->owner->paused++);
 }
 
-#endif // defined(DARKEN_DIRECT) || defined(DARKEN_STATE_MACHINE)
+#endif // DARKEN_IMPLEMENTATION
