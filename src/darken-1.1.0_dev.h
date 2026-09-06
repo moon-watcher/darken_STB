@@ -372,16 +372,11 @@ void darken_update(darken *ctx)
 
         if (state == DARKEN_DELETE)
         {
-            if (_entity->destroy)
-                _entity->destroy(_DARKEN_ARGS(_entity));
-
-            _darken_swap(ctx->pool, _entity->slot, --ctx->size);
+            darken_entity_delete(_entity);
             continue;
         }
 
-        // DARKEN_PAUSE
-        _darken_swap(ctx->pool, _entity->slot, --ctx->size);
-        _darken_swap(ctx->pool, _entity->slot, --ctx->paused);
+        darken_entity_pause(_entity);
     });
 #endif
 }
