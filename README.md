@@ -1,6 +1,6 @@
 # Darken
 
-**Darken** (part of the DARKula ENgine) is a small, single-header C entity system: a fixed-capacity pool that owns your game objects' memory, updates them every frame, and lets you pause, resume or delete them in O(1) — without ever moving an object's own memory address.
+**Darken** (DARKula ENgine) is a small, single-header C entity system: a fixed-capacity pool that owns your game objects' memory, updates them every frame, and lets you pause, resume or delete them in O(1) — without ever moving an object's own memory address.
 
 It's written in GNU C and aimed at resource-constrained / retro targets — GCC + Motorola 68000 (e.g. Sega Genesis / Mega Drive homebrew via SGDK) — but there's nothing 68k-specific about the design; it works anywhere a GNU-C-compatible compiler is available.
 
