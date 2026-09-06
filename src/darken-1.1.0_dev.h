@@ -32,8 +32,8 @@
  *    [ active entities ][   free slots    ][ paused entities ]
  *    0                 size               paused             capacity
  *
- * The entities themselves live in the caller-provided storage block; ctx->pool contains pointers to
- * those fixed addresses.
+ * The entities themselves live in the caller-provided storage block; ctx->pool contains pointers to those
+ * fixed addresses.
  *
  * - Active zone [0, size):
  *     Entity pointers updated every frame by darken_update(). Iterable with DARKEN_FOREACH (note: iterates
@@ -63,10 +63,10 @@
  * STATE-MACHINE mode is the default. Define DARKEN_DIRECT before including this header to opt into direct
  * mode instead.
  *
- * Each mode has one fixed callback signature — there is no separate configuration macro for the argument
- * list anymore. The signature is chosen per mode to match how that mode is actually used: state-machine
- * callbacks rarely need the entity handle, since the return value drives the lifecycle; direct-mode callbacks
- * almost always need it, since they call darken_entity_pause()/resume()/delete() themselves.
+ * Each mode has one fixed callback signature — there is no separate configuration macro for the argument list
+ * anymore. The signature is chosen per mode to match how that mode is actually used: state-machine callbacks
+ * rarely need the entity handle, since the return value drives the lifecycle; direct-mode callbacks almost
+ * always need it, since they call darken_entity_pause()/resume()/delete() themselves.
  *
  * 1) STATE-MACHINE mode — default
  * ---------------------------------------------------------
@@ -78,7 +78,8 @@
  *         DARKEN_CONTINUE: stay active, keep the same update callback
  *         DARKEN_DELETE:   call destroy (if set), then delete the entity
  *         DARKEN_PAUSE:    move the entity straight to the paused zone
- *         (anything else): treated as a new update callback pointer; installed as entity->update for next frame
+ *         (anything else): treated as a new update callback pointer; installed as entity->update for next
+ *                          frame
  *
  *         void *player_walk_state(struct player *data) {
  *             data->x++;
@@ -92,8 +93,8 @@
  *             return DARKEN_CONTINUE;
  *         }
  *
- *     `destroy` has the same signature and the same (data)-only argument as `update`, but its return value is
- *     always ignored — darken_reset() and darken_entity_delete() only ever call it for its side effects.
+ *     `destroy` has the same signature and the same (data)-only argument as `update`, but its return value
+ *     is always ignored — darken_reset() and darken_entity_delete() only ever call it for its side effects.
  *
  *     Need the entity handle anyway (e.g. to read/write usr or tag)? Recover it with DARKEN_ENTITY(data).
  *
