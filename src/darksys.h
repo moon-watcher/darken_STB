@@ -1,8 +1,8 @@
 /**
  * darksys.h
  *
- * darksys-1.0.0_dev
- * 
+ * darksys-1.1.0_dev
+ *
  * System: Flat packed pool of data pointers.
  *
  * Each item/entity occupies `params` consecutive pointers:
@@ -11,7 +11,10 @@
  *     [A.a, A.b] [B.a, B.b] [C.a, C.b]...
  *
  * `capacity` is expressed in GROUPS/items.
- * `size` is expressed in occupied POINTERS.
+ * `count` is the number of occupied GROUPS/items.
+ * `size` is the number of occupied POINTERS.
+ *
+ * Each group is identified by its slot.
  */
 
 #pragma once
@@ -21,21 +24,22 @@
 typedef struct
 {
     void **pool;
-    uint16_t capacity; // Number of groups/items the pool can contain
-    uint16_t size;     // Number of pointers currently stored
-    uint16_t params;   // Number of pointers associated with each group
+    uint16_t capacity; // Maximum number of groups/items
+    uint16_t size;     // Number of occupied pointers
+    uint16_t params;   // Number of pointers per group
     uint16_t limit;    // Maximum number of pointers
+    uint16_t count;    // Number of occupied groups/items
 } darksys;
 
 /* ============================================================================
  * PUBLIC API
  * ============================================================================ */
 
-// Dynamic allocation
-//     darksys m = DARKSYS_POOL_ALLOC(MEM_alloc, 5, 2);
-//     DARKSYS_ADD(&m, a);
-//     DARKSYS_ADD(&m, b);
-//     free(m.pool);
+// Dynamic allocation:
+//     darksys system = DARKSYS_POOL_ALLOC(malloc, 100, 3);
+//     uint16_t slot = DARKSYS_ADD(&system, entity, position, velocity);
+//     darksys_remove(&system, slot);
+//     free(system.pool);
 #define DARKSYS_POOL_ALLOC(ALLOC, CAPACITY, PARAMS)                       \
     {                                                                     \
         .pool = (void **)(ALLOC)((CAPACITY) * (PARAMS) * sizeof(void *)), \
@@ -43,11 +47,12 @@ typedef struct
         .size = 0,                                                        \
         .params = (PARAMS),                                               \
         .limit = (CAPACITY) * (PARAMS),                                   \
+        .count = 0,                                                       \
     }
 
-// Static allocation
-//     DARKSYS_POOL_DECLARE(storage, 5, 2);
-//     darksys m = DARKSYS_POOL_BIND(storage);
+// Static allocation:
+//     DARKSYS_POOL_DECLARE(storage, 100, 3);
+//     darksys system = DARKSYS_POOL_BIND(storage);
 #define DARKSYS_POOL_DECLARE(NAME, CAPACITY, PARAMS) \
     struct                                           \
     {                                                \
@@ -67,6 +72,7 @@ typedef struct
         .size = 0,                                   \
         .params = (PARAMS),                          \
         .limit = (CAPACITY) * (PARAMS),              \
+        .count = 0,                                  \
     }
 
 // Runtime binding
@@ -77,50 +83,81 @@ typedef struct
         .size = 0,                                \
         .params = (NAME).params,                  \
         .limit = (NAME).capacity * (NAME).params, \
+        .count = 0,                               \
     }
 
-#define DARKSYS_ADD(SYSTEM, VALUE) ({                           \
-    darksys *s = (SYSTEM);                                      \
-    s->size < s->limit ? (s->pool[s->size++] = (VALUE), 1) : 0; \
+// The number of arguments must match `params`.
+//     uint16_t slot = DARKSYS_ADD(&system, A);
+//     uint16_t slot = DARKSYS_ADD(&system, A, B, C);
+//
+// Returns:
+//     0 .. capacity - 1 : slot
+//     -1                : pool full
+#define DARKSYS_ADD(SYSTEM, ...) ({                                             \
+    darksys *s = (SYSTEM);                                                      \
+    (s->count < s->capacity) ? _DARKSYS_WRITE(s, __VA_ARGS__), s->count++ : -1; \
 })
 
-#define DARKSYS_FOREACH(...) _DARKSYS_FOREACH_DISPATCH(_DARKSYS_NARGS(__VA_ARGS__), __VA_ARGS__)
+#define DARKSYS_FOREACH(...) _DARKSYS_FOREACH_DISPATCH(_DARKSYS_FOREACH_NARGS(__VA_ARGS__), __VA_ARGS__)
 
-uint16_t darksys_remove(darksys *, void *);
+uint16_t darksys_remove(darksys *, uint16_t);
 void darksys_clear(darksys *);
 
 /* ============================================================================
- * INTERNAL MACRO IMPLEMENTATIONS
+ * PRIVATE
  * ============================================================================ */
+
+#define _DARKSYS_NARGS(...) _DARKSYS_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1)
+#define _DARKSYS_NARGS_I(_1, _2, _3, _4, _5, N, ...) N
+
+#define _DARKSYS_WRITE(SYSTEM, ...) _DARKSYS_WRITE_N(_DARKSYS_NARGS(__VA_ARGS__), SYSTEM, __VA_ARGS__)
+#define _DARKSYS_WRITE_N(N, SYSTEM, ...) _DARKSYS_WRITE_##N(SYSTEM, __VA_ARGS__)
+
+#define _DARKSYS_WRITE_1(SYSTEM, A) \
+    (SYSTEM)->pool[(SYSTEM)->size++] = (A)
+
+#define _DARKSYS_WRITE_2(SYSTEM, A, B) \
+    _DARKSYS_WRITE_1(SYSTEM, A);       \
+    _DARKSYS_WRITE_1(SYSTEM, B)
+
+#define _DARKSYS_WRITE_3(SYSTEM, A, B, C) \
+    _DARKSYS_WRITE_2(SYSTEM, A, B);       \
+    _DARKSYS_WRITE_1(SYSTEM, C)
+
+#define _DARKSYS_WRITE_4(SYSTEM, A, B, C, D) \
+    _DARKSYS_WRITE_3(SYSTEM, A, B, C);       \
+    _DARKSYS_WRITE_1(SYSTEM, D)
+
+#define _DARKSYS_WRITE_5(SYSTEM, A, B, C, D, E) \
+    _DARKSYS_WRITE_4(SYSTEM, A, B, C, D);       \
+    _DARKSYS_WRITE_1(SYSTEM, E)
+
+#define _DARKSYS_FOREACH_DISPATCH(N, ...) _DARKSYS_FOREACH_##N(__VA_ARGS__)
+#define _DARKSYS_FOREACH_NARGS(...) _DARKSYS_FOREACH_NARGS_I(__VA_ARGS__, 6, 5, 4, 3, 2, 1)
+#define _DARKSYS_FOREACH_NARGS_I(_1, _2, _3, _4, _5, _6, N, ...) N
+
+#define _DARKSYS_FOREACH_0(SYSTEM, IT) _DARKSYS_FOREACH(SYSTEM, { IT; })
+#define _DARKSYS_FOREACH_1(SYSTEM, A, IT) _DARKSYS_FOREACH(SYSTEM, { A = _pool[0]; IT; })
+#define _DARKSYS_FOREACH_2(SYSTEM, A, B, IT) _DARKSYS_FOREACH(SYSTEM, { A = _pool[0];B = _pool[1]; IT; })
+#define _DARKSYS_FOREACH_3(SYSTEM, A, B, C, IT) _DARKSYS_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; C = _pool[2]; IT; })
+#define _DARKSYS_FOREACH_4(SYSTEM, A, B, C, D, IT) _DARKSYS_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; C = _pool[2]; D = _pool[3]; IT; })
+#define _DARKSYS_FOREACH_5(SYSTEM, A, B, C, D, E, IT) _DARKSYS_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; C = _pool[2]; D = _pool[3]; E = _pool[4]; IT; })
 
 #define _DARKSYS_FOREACH(SYSTEM, CODE) \
     do                                 \
     {                                  \
         darksys *s = (SYSTEM);         \
-        uint16_t _size = s->size;      \
+        uint16_t _count = s->count;    \
         void **_pool = s->pool;        \
         uint16_t _params = s->params;  \
                                        \
-        while (_size)                  \
+        while (_count)                 \
         {                              \
             CODE;                      \
             _pool += _params;          \
-            _size -= _params;          \
+            --_count;                  \
         }                              \
     } while (0)
-
-#define _DARKSYS_FOREACH_DISPATCH(N, ...) _DARKSYS_FOREACH_CONCAT(N, __VA_ARGS__)
-#define _DARKSYS_FOREACH_CONCAT(N, ...) _DARKSYS_FOREACH_##N(__VA_ARGS__)
-
-#define _DARKSYS_NARGS(...) _DARKSYS_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1, 0, -1)
-#define _DARKSYS_NARGS_I(_1, _2, _3, _4, _5, _6, _7, N, ...) N
-
-#define _DARKSYS_FOREACH_0(SYSTEM, IT) _DARKSYS_FOREACH(SYSTEM, { IT; })
-#define _DARKSYS_FOREACH_1(SYSTEM, A, IT) _DARKSYS_FOREACH(SYSTEM, { A = _pool[0]; IT; })
-#define _DARKSYS_FOREACH_2(SYSTEM, A, B, IT) _DARKSYS_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; IT; })
-#define _DARKSYS_FOREACH_3(SYSTEM, A, B, C, IT) _DARKSYS_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; C = _pool[2]; IT; })
-#define _DARKSYS_FOREACH_4(SYSTEM, A, B, C, D, IT) _DARKSYS_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; C = _pool[2]; D = _pool[3]; IT; })
-#define _DARKSYS_FOREACH_5(SYSTEM, A, B, C, D, E, IT) _DARKSYS_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; C = _pool[2]; D = _pool[3]; E = _pool[4]; IT; })
 
 /* ============================================================================
  * IMPLEMENTATION
@@ -128,34 +165,32 @@ void darksys_clear(darksys *);
 
 #ifdef DARKSYS_IMPLEMENTATION
 
-uint16_t darksys_remove(darksys *$, void *first)
+uint16_t darksys_remove(darksys *s, uint16_t slot)
 {
-    uint16_t params = $->params;
-    void **pool = $->pool;
-    uint16_t i = $->size;
+    if (slot >= s->count)
+        return 0;
 
-    while (i)
+    uint16_t last = (uint16_t)(s->count - 1u);
+
+    if (slot != last)
     {
-        i -= params;
+        uint16_t dst = (uint16_t)(slot * s->params);
+        uint16_t src = (uint16_t)(last * s->params);
 
-        if (pool[i] != first)
-            continue;
-
-        uint16_t size = $->size -= params;
-
-        if (i != size)
-            while (params--)
-                pool[i + params] = pool[size + params];
-
-        return 1;
+        for (uint16_t i = 0; i < s->params; ++i)
+            s->pool[dst + i] = s->pool[src + i];
     }
 
-    return 0;
+    --s->count;
+    s->size -= s->params;
+
+    return 1;
 }
 
-void darksys_clear(darksys *$)
+void darksys_clear(darksys *s)
 {
-    $->size = 0;
+    s->count = 0;
+    s->size = 0;
 }
 
 #endif // DARKSYS_IMPLEMENTATION
