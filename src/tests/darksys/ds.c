@@ -109,7 +109,7 @@ static darken test_mgr = DARKEN_POOL_INIT(test_mgr_storage);
 
 #define TEST_SYS_CAPACITY 32
 #define TEST_SYS_PARAMS 2
-DARKSYS_STORAGE(test_sys_storage, TEST_SYS_CAPACITY, TEST_SYS_PARAMS);
+DARKSYS_POOL_DECLARE(test_sys_storage, TEST_SYS_CAPACITY, TEST_SYS_PARAMS);
 static darksys test_sys;
 
 static void init_test_manager(void)
@@ -430,7 +430,7 @@ static darken bench_mgr = DARKEN_POOL_INIT(bench_mgr_storage);
 
 #define BENCH_SYS_CAPACITY 128
 #define BENCH_SYS_PARAMS 2
-DARKSYS_STORAGE(bench_sys_storage, BENCH_SYS_CAPACITY, BENCH_SYS_PARAMS);
+DARKSYS_POOL_DECLARE(bench_sys_storage, BENCH_SYS_CAPACITY, BENCH_SYS_PARAMS);
 static darksys bench_sys;
 
 static void bench_entity_new_delete(void)

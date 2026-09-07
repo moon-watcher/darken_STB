@@ -4,28 +4,32 @@
 #define BBB_IMPLEMENTATION
 #define CCC_IMPLEMENTATION
 #define DARKSYS_IMPLEMENTATION
-#include "darken-1.1.0_dev.h"
-#include "_bbb.h"
-#include "_ccc.h"
-#include "darksys.h"
 
-#include "tests/darken/benchmarks.h"
-#include "tests/darken/tests.h"
-#include "tests/darken/examples.h"
-#include "tests/darksys/ds.h"
-#include "tests/darksys/tests.h"
-#include "tests_kimi/bench.h"
-#include "tests_kimi/compare.h"
-#include "tests_kimi/examples.h"
+// #include "darken-1.1.0_dev.h"
+// #include "_bbb.h"
+// #include "_ccc.h"
+#include "darksys.h"
+#define DARKSYS_IMPLEMENTATION
+
+// #include "tests/darken/benchmarks.h"
+// #include "tests/darken/tests.h"
+// #include "tests/darken/examples.h"
+// #include "tests/darksys/ds.h"
+// #include "tests/darksys/tests.h"
+// #include "tests_kimi/bench.h"
+// #include "tests_kimi/compare.h"
+// #include "tests_kimi/examples.h"
 
 int main(void)
 {
     // bench_darksys();
     // test_darksys();
+    darksys_run_benchmarks();
+    darksys_run_tests();
 
     
-    kimi_compare();
-    kimi_benchmarks();
+    // kimi_compare();
+    // kimi_benchmarks();
 
     //
 

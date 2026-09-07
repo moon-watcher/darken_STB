@@ -340,13 +340,13 @@ static void test_darksys_as_entities(void)
     darksys *movement = (darksys *)movement_entity->data;
     darksys *physics = (darksys *)physics_entity->data;
 
-    DARKSYS_STORAGE(frames_storage, 2, 1);
+    DARKSYS_POOL_DECLARE(frames_storage, 2, 1);
     darksys_init(frames, DARKSYS_ARGS(frames_storage));
 
-    DARKSYS_STORAGE(movement_storage, 2, 4);
+    DARKSYS_POOL_DECLARE(movement_storage, 2, 4);
     darksys_init(movement, DARKSYS_ARGS(movement_storage));
 
-    DARKSYS_STORAGE(physics_storage, 2, 1);
+    DARKSYS_POOL_DECLARE(physics_storage, 2, 1);
     darksys_init(physics, DARKSYS_ARGS(physics_storage));
 
     frames_entity->update = test_darksys_frames;

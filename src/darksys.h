@@ -78,9 +78,9 @@ typedef struct
         .limit = (NAME).capacity * (NAME).params, \
     }
 
-#define DARKSYS_ADD(SYSTEM, VALUE) ({                      \
-    darksys *s = (SYSTEM);                                 \
-    s->size < s->limit ? s->pool[s->size++] = (VALUE) : 0; \
+#define DARKSYS_ADD(SYSTEM, VALUE) ({                           \
+    darksys *s = (SYSTEM);                                      \
+    s->size < s->limit ? (s->pool[s->size++] = (VALUE), 1) : 0; \
 })
 
 #define DARKSYS_FOREACH(...) _DARKSYS_FOREACH_DISPATCH(_DARKSYS_NARGS(__VA_ARGS__), __VA_ARGS__)
