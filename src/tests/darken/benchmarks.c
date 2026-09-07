@@ -1,6 +1,6 @@
 #include <genesis.h>
 
-#include "../../darken.h"
+#include "../../darken-1.1.0_dev.h"
 #include "benchmarks.h"
 
 struct MyComponent
@@ -37,7 +37,7 @@ static void darken_bench_create_destroy(void)
 static void *darken_bench_state_fn(void *data)
 {
     (void)data;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 

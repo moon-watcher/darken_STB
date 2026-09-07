@@ -104,7 +104,7 @@ This is the classic "think function returns the next think function" pattern (th
 | Return value                             | Effect                                           |
 | ---------------------------------------- | ------------------------------------------------ |
 | a pointer to another compatible function | transition to that state next tick               |
-| `DARKEN_LOOP` (`1`)                      | keep running the *current* state again next tick |
+| `DARKEN_CONTINUE` (`1`)                      | keep running the *current* state again next tick |
 | `DARKEN_PAUSE` (`2`)                     | move this entity to the paused zone              |
 | `DARKEN_DELETE` (`0`, `NULL`)            | destroy this entity                              |
 
@@ -137,7 +137,7 @@ than it looks.
 | Value           | Numeric    | Meaning                                        |
 | --------------- | ---------- | ---------------------------------------------- |
 | `DARKEN_DELETE` | `(void*)0` | Destroy the entity                             |
-| `DARKEN_LOOP`   | `(void*)1` | Keep the current state, run it again next tick |
+| `DARKEN_CONTINUE`   | `(void*)1` | Keep the current state, run it again next tick |
 | `DARKEN_PAUSE`  | `(void*)2` | Move the entity to the paused zone             |
 
 **Setup macros**
@@ -233,7 +233,7 @@ These go beyond "read the header comment" — each one below was reproduced with
 
 > **Never delete or pause the entity currently executing its own `update` callback — return the control value instead.**
 >
-> Calling `darken_entity_delete(self)` synchronously from inside `self`'s own think function destroys and recycles the slot *immediately*, while that same call frame is still nested inside `darken_update()`'s dispatch for this entity. When your function then returns (say, `DARKEN_LOOP`, or a further transition), the dispatcher writes that return value into `entity->update` — on a struct that has *already* been destroyed and possibly recycled. Nothing in Darken clears `update`/`destroy` on spawn (that's explicitly the caller's job), so this can leave a freshly recycled slot carrying a leftover, stale function pointer from the entity that "deleted itself" incorrectly, invoked later against the *new* entity's completely different payload layout. Just `return DARKEN_DELETE;` (or `DARKEN_PAUSE`) — reserve `darken_entity_delete/pause()` for acting on entities *other* than the one whose callback you're currently inside (exactly how the collision examples above use it).
+> Calling `darken_entity_delete(self)` synchronously from inside `self`'s own think function destroys and recycles the slot *immediately*, while that same call frame is still nested inside `darken_update()`'s dispatch for this entity. When your function then returns (say, `DARKEN_CONTINUE`, or a further transition), the dispatcher writes that return value into `entity->update` — on a struct that has *already* been destroyed and possibly recycled. Nothing in Darken clears `update`/`destroy` on spawn (that's explicitly the caller's job), so this can leave a freshly recycled slot carrying a leftover, stale function pointer from the entity that "deleted itself" incorrectly, invoked later against the *new* entity's completely different payload layout. Just `return DARKEN_DELETE;` (or `DARKEN_PAUSE`) — reserve `darken_entity_delete/pause()` for acting on entities *other* than the one whose callback you're currently inside (exactly how the collision examples above use it).
 
 > **Deleting a *different*, not-yet-visited entity from inside a `DARKEN_FOREACH` pass over the *same* pool can visit one entity twice and skip another.**
 >
@@ -255,9 +255,9 @@ These go beyond "read the header comment" — each one below was reproduced with
 >
 > Perfectly legal C, but inside the inner loop's braces you cannot refer to the outer pool's current entity by the bare name `_entity` — it resolves to the *inner* loop's entity for as long as you're inside those braces (verified: it correctly reverts back once the inner loop's block closes, so nothing is corrupted — you simply lose access to the outer one *while nested*). Always capture the outer entity into your own uniquely named local **before** opening a nested `DARKEN_FOREACH` over a different pool, exactly as `bullet_entity`/`enemy_entity` do in [5.6](#56-collisions-across-pools).
 
-> **Never assign `entity->update = DARKEN_LOOP` directly.**
+> **Never assign `entity->update = DARKEN_CONTINUE` directly.**
 >
-> `DARKEN_LOOP` is only meaningful as a callback's *return value*, telling `darken_update()` "don't overwrite the current callback." `darken_update`'s dispatch only checks for "is this a real callback," "is this exactly `DARKEN_PAUSE`," or "is this exactly `DARKEN_DELETE`" — there is no branch for a bare `DARKEN_LOOP` sitting in the field. If it ever ends up there directly (rather than as a transient return value), the entity becomes a silent zombie: still inside the active zone, still visited every frame, but matching none of `darken_update`'s three branches, so it does nothing, forever, wasting a slot with no way to notice from the outside.
+> `DARKEN_CONTINUE` is only meaningful as a callback's *return value*, telling `darken_update()` "don't overwrite the current callback." `darken_update`'s dispatch only checks for "is this a real callback," "is this exactly `DARKEN_PAUSE`," or "is this exactly `DARKEN_DELETE`" — there is no branch for a bare `DARKEN_CONTINUE` sitting in the field. If it ever ends up there directly (rather than as a transient return value), the entity becomes a silent zombie: still inside the active zone, still visited every frame, but matching none of `darken_update`'s three branches, so it does nothing, forever, wasting a slot with no way to notice from the outside.
 
 > **`darken_entity_run()` and `darken_entity_update()` are not interchangeable, despite the similar names.**
 >
@@ -281,7 +281,7 @@ These go beyond "read the header comment" — each one below was reproduced with
 - [ ] Use `darken_entity_pause()`/`_resume()`/`_delete()` directly only from *outside* the target entity's own callback (collision passes, external systems, cutscene triggers) — that's also where they apply immediately, without the one-tick deferral of a returned control value.
 - [ ] Never delete a second, not-yet-visited entity from the *same pool* you're currently walking with `DARKEN_FOREACH`; collect victims and delete them after the loop.
 - [ ] Capture `_entity` (and its `DARKEN_DATA`) into your own named variable before opening a nested `DARKEN_FOREACH` over another pool.
-- [ ] Never write `entity->update = DARKEN_LOOP;` — it's a return value, not a state to assign.
+- [ ] Never write `entity->update = DARKEN_CONTINUE;` — it's a return value, not a state to assign.
 - [ ] Don't trust a cached `darken_entity`/`data` pointer without your own liveness check (flag or generation counter) — slots get recycled.
 - [ ] Remember `darken_entity_delete()` skips `destroy` for paused entities; resume before deleting if that callback matters.
 - [ ] Build with GCC or Clang in a GNU dialect (`-std=gnu11` or similar) — the statement-expression and `__attribute__` usage require it.
@@ -395,7 +395,7 @@ void *player_update(player_t *p) {
         p->fire_cd = 6;
     }
 
-    return DARKEN_LOOP; // stay in player_update forever
+    return DARKEN_CONTINUE; // stay in player_update forever
 }
 ```
 
@@ -420,7 +420,7 @@ void *bullet_update(bullet_t *b) {
     b->y += b->vy;
     if (b->y < -8 || b->y > SCREEN_H + 8)
         return DARKEN_DELETE; // off-screen: gone
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 void spawn_player_bullet(int16_t x, int16_t y) {
@@ -463,7 +463,7 @@ void *enemy_move(enemy_t *en) {
         en->timer = 45;
         return (void *)enemy_shoot; // switch state
     }
-    return DARKEN_LOOP; // keep moving
+    return DARKEN_CONTINUE; // keep moving
 }
 
 void *enemy_shoot(enemy_t *en) {
@@ -503,7 +503,7 @@ darken enemy_bullets;
 void *enemy_bullet_update(enemy_bullet_t *b) {
     b->y += b->vy;
     if (b->y > SCREEN_H + 8) return DARKEN_DELETE;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 void spawn_enemy_bullet(int16_t x, int16_t y) {
@@ -560,7 +560,7 @@ darken particles;
 void *particle_update(particle_t *p) {
     p->frame++;
     if (--p->ttl == 0) return DARKEN_DELETE;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 void spawn_explosion(int16_t x, int16_t y) {
@@ -638,18 +638,18 @@ void *boss_intro(boss_t *bo) {
         DARKEN_FOREACH(&enemy_bullets, { darken_entity_resume(_entity); });
         return (void *)boss_phase1;
     }
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 void *boss_phase1(boss_t *bo) {
     // ... movement + bullet pattern for phase 1 ...
     if (bo->hp < 60) return (void *)boss_phase2;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 void *boss_phase2(boss_t *bo) {
     // ... faster / denser pattern for phase 2 ...
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 

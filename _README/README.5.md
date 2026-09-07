@@ -152,7 +152,7 @@ darken_state enemy_update(void *data)
     enemy->x += enemy->vx;
     enemy->y += enemy->vy;
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 
@@ -172,16 +172,16 @@ Darken defines three special callback results:
 
 ```c
 #define DARKEN_DELETE ((void *)0)
-#define DARKEN_LOOP   ((void *)1)
+#define DARKEN_CONTINUE   ((void *)1)
 #define DARKEN_PAUSE  ((void *)2)
 ```
 
-### `DARKEN_LOOP`
+### `DARKEN_CONTINUE`
 
 Continue using the current callback.
 
 ```c
-return DARKEN_LOOP;
+return DARKEN_CONTINUE;
 ```
 
 ### `DARKEN_PAUSE`
@@ -532,7 +532,7 @@ darken_state enemy_update(void *data)
     if (e->y > SCREEN_HEIGHT)
         return DARKEN_DELETE;
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 

@@ -57,7 +57,7 @@ Moving an entity between zones is swapping two pointers in `pool[]`. The physica
 ```c
 void *bullet_update(Bullet *b) {
     b->x += b->vx;
-    return b->x > 640.0f ? DARKEN_DELETE : DARKEN_LOOP;
+    return b->x > 640.0f ? DARKEN_DELETE : DARKEN_CONTINUE;
 }
 
 // No cast, no warning:
@@ -70,7 +70,7 @@ The framework always invokes it as `entity->update(entity->data)`. If you need t
 
 ## State chaining
 
-A callback is not limited to returning `DARKEN_LOOP` or `DARKEN_DELETE`. It can return a pointer to another function. That function becomes the entity's `update` on the next frame. State machines without tables, without enums, without `switch`:
+A callback is not limited to returning `DARKEN_CONTINUE` or `DARKEN_DELETE`. It can return a pointer to another function. That function becomes the entity's `update` on the next frame. State machines without tables, without enums, without `switch`:
 
 ```c
 void *enemy_attack(Enemy *e);
@@ -131,7 +131,7 @@ typedef struct { int y, vy; } Particle;
 
 void *particle_update(Particle *p) {
     p->y += p->vy;
-    return p->y > 480 ? DARKEN_DELETE : DARKEN_LOOP;
+    return p->y > 480 ? DARKEN_DELETE : DARKEN_CONTINUE;
 }
 
 int main(void) {
@@ -175,7 +175,7 @@ Returned by `update`/`destroy` or assigned directly:
 | Value                      | Effect                                           |
 | -------------------------- | ------------------------------------------------ |
 | `DARKEN_DELETE` (`0`)      | Destroy the entity.                              |
-| `DARKEN_LOOP` (`1`)        | Keep calling the same `update` next frame.       |
+| `DARKEN_CONTINUE` (`1`)        | Keep calling the same `update` next frame.       |
 | `DARKEN_PAUSE` (`2`)       | Move to the paused zone.                         |
 | *any other `darken_state`* | That function pointer becomes the next `update`. |
 

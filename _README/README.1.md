@@ -176,7 +176,7 @@ darken_reset(&world);
 
 ## 3. Macros de control y estados
 
-### `DARKEN_LOOP`
+### `DARKEN_CONTINUE`
 
 Devuélvelo desde tu callback de estado para indicar: *"este frame no ha pasado nada especial, repite el mismo estado el próximo frame"*.
 
@@ -191,7 +191,7 @@ void *state_enemy_sine(struct enemy_data *e)
     if (e->y > SCREEN_H + 16)
         return DARKEN_DELETE;   // Se fue por abajo
 
-    return DARKEN_LOOP;         // Sigue oscilando
+    return DARKEN_CONTINUE;         // Sigue oscilando
 }
 ```
 
@@ -214,7 +214,7 @@ void *state_bullet_fly(struct bullet_data *b)
     if (b->y < -8 || b->y > SCREEN_H + 8 || b->x < -8 || b->x > SCREEN_W + 8)
         return DARKEN_DELETE;
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 
@@ -241,7 +241,7 @@ void *state_powerup_float(struct powerup_data *p)
     if (boss_intro_is_playing)
         return DARKEN_PAUSE;   // Congela el power-up durante la intro del jefe
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 
@@ -268,7 +268,7 @@ void *state_boss_core(struct boss_data *boss)
         return state_boss_frenzy;
     }
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 
@@ -276,7 +276,7 @@ void *state_boss_core(struct boss_data *boss)
 
 ### `DARKEN_STATE_IS_LOOP(state)` / `DARKEN_STATE_IS_PAUSED(state)` / `DARKEN_STATE_IS_DELETED(state)`
 
-Te dicen si un puntero de estado vale `DARKEN_LOOP`, `DARKEN_PAUSE` o `DARKEN_DELETE`.
+Te dicen si un puntero de estado vale `DARKEN_CONTINUE`, `DARKEN_PAUSE` o `DARKEN_DELETE`.
 
 **Uso en el shmup:**
 ```c
@@ -290,7 +290,7 @@ void *state_homing_missile(struct missile_data *m)
     }
 
     steer_towards(m, m->target);
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 
@@ -310,7 +310,7 @@ void *state_formation_leader(struct enemy_data *leader)
         if (!DARKEN_ENTITY_IN_USED(leader->wingmen[i]))
             leader->wingmen[i] = leader->wingmen[--leader->wingmen_count];
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 
@@ -513,7 +513,7 @@ void *state_enemy_flash(struct enemy_data *entity)
     if (--entity->usr == 0)
         return state_enemy_recover;   // Se acabó el frame de invencibilidad
 
-    return DARKEN_LOOP;               // Sigue parpadeando
+    return DARKEN_CONTINUE;               // Sigue parpadeando
 }
 ```
 
@@ -622,14 +622,14 @@ typedef struct
 void *state_player(actor *a)
 {
     // ... leer input, mover a ...
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 void *state_enemy(actor *a)
 {
     a->y += 2;   // Baja en línea recta
     if (a->y > 240) return DARKEN_DELETE;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 void destructor_enemy(void *data)

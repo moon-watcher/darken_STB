@@ -98,7 +98,7 @@ struct darken_entity
 
 // Darken control values
 #define DARKEN_DELETE _DARKEN_DELETE
-#define DARKEN_LOOP _DARKEN_LOOP
+#define DARKEN_CONTINUE _DARKEN_CONTINUE
 #define DARKEN_PAUSE _DARKEN_PAUSE
 
 #define DARKEN_STATE_IS_DELETED _DARKEN_STATE_IS_DELETED
@@ -143,7 +143,7 @@ void darken_reset(darken *);
     TYPE *VAR = (TYPE *)(ENTITY)->data;
 
 #define _DARKEN_DELETE ((void *)0)
-#define _DARKEN_LOOP ((void *)1)
+#define _DARKEN_CONTINUE ((void *)1)
 #define _DARKEN_PAUSE ((void *)2)
 
 #define _DARKEN_STATE_IS_DELETED(STATE) ((STATE) == (darken_state)0)

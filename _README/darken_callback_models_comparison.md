@@ -18,14 +18,14 @@ darken_state enemy_enter(void *data)
     if (e->y >= 40)
         return enemy_attack;
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 
 Special return values control lifecycle:
 
 ```c
-return DARKEN_LOOP;
+return DARKEN_CONTINUE;
 return DARKEN_PAUSE;
 return DARKEN_DELETE;
 ```
@@ -99,7 +99,7 @@ darken_state bullet_update(void *data)
     if (b->y < 0)
         return DARKEN_DELETE;
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 
@@ -123,7 +123,7 @@ void bullet_update(darken_entity entity)
 |---|---|---|
 | Callback receives | `data` | `darken_entity` |
 | State transition | `return next_state` | `entity->update = next_state` |
-| Continue | `DARKEN_LOOP` | Do nothing |
+| Continue | `DARKEN_CONTINUE` | Do nothing |
 | Pause | `return DARKEN_PAUSE` | `darken_entity_pause()` |
 | Delete | `return DARKEN_DELETE` | `darken_entity_delete()` |
 | Magic values | Yes | No |

@@ -632,7 +632,7 @@ entity->data
 and returns either:
 
 * another callback
-* `DARKEN_LOOP`
+* `DARKEN_CONTINUE`
 * `DARKEN_PAUSE`
 * `DARKEN_DELETE`
 
@@ -682,7 +682,7 @@ Darken defines:
 
 ```c
 #define DARKEN_DELETE ((void *)0)
-#define DARKEN_LOOP   ((void *)1)
+#define DARKEN_CONTINUE   ((void *)1)
 #define DARKEN_PAUSE  ((void *)2)
 ```
 
@@ -700,14 +700,14 @@ return DARKEN_DELETE;
 
 ---
 
-## `DARKEN_LOOP`
+## `DARKEN_CONTINUE`
 
 Keep the same callback.
 
 Example:
 
 ```c
-return DARKEN_LOOP;
+return DARKEN_CONTINUE;
 ```
 
 This is useful when the callback itself is already stored in:
@@ -760,7 +760,7 @@ darken_state enemy_update(void *data)
     if (e->hp == 0)
         return DARKEN_DELETE;
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 
@@ -1116,7 +1116,7 @@ darken_state bullet_update(void *data)
         return DARKEN_DELETE;
     }
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 
@@ -1137,7 +1137,7 @@ darken_state enemy_destroy(void *data)
 
     spawn_explosion(enemy->x, enemy->y);
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 
@@ -1511,7 +1511,7 @@ darken_state player_update(void *data)
     if (input_fire())
         fire_player_weapon(p);
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 
@@ -1572,7 +1572,7 @@ darken_state enemy_update(void *data)
     if (e->y > SCREEN_HEIGHT + 16)
         return DARKEN_DELETE;
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 
@@ -1651,7 +1651,7 @@ darken_state bullet_update(void *data)
         return DARKEN_DELETE;
     }
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 
@@ -1750,7 +1750,7 @@ darken_state enemy_update(void *data)
     e->x += e->vx;
     e->y += e->vy;
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 
@@ -1763,7 +1763,7 @@ darken_state enemy_destroy(void *data)
 
     spawn_explosion(e->x, e->y);
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 
@@ -1820,7 +1820,7 @@ darken_state particle_update(void *data)
     if (--p->life == 0)
         return DARKEN_DELETE;
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 
@@ -1929,7 +1929,7 @@ darken_state boss_enter(void *data)
     if (boss->y >= 40)
         return boss_attack;
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 
@@ -1942,7 +1942,7 @@ darken_state boss_attack(void *data)
 
     update_boss_attack(boss);
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 
@@ -1958,7 +1958,7 @@ darken_state boss_dying(void *data)
     if (boss->animation >= 30)
         return DARKEN_DELETE;
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 
@@ -2732,7 +2732,7 @@ while control values are:
 
 ```c
 #define DARKEN_DELETE ((void *)0)
-#define DARKEN_LOOP   ((void *)1)
+#define DARKEN_CONTINUE   ((void *)1)
 #define DARKEN_PAUSE  ((void *)2)
 ```
 
@@ -3143,7 +3143,7 @@ darken_state enemy_destroy(void *data)
 
     spawn_explosion(enemy->x, enemy->y);
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 darken_state enemy_update(void *data)
@@ -3159,7 +3159,7 @@ darken_state enemy_update(void *data)
     if (enemy->y > SCREEN_HEIGHT + 16)
         return DARKEN_DELETE;
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 
@@ -3182,7 +3182,7 @@ darken_state bullet_update(void *data)
         return DARKEN_DELETE;
     }
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 
@@ -3200,7 +3200,7 @@ darken_state particle_update(void *data)
     if (--particle->life == 0)
         return DARKEN_DELETE;
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 

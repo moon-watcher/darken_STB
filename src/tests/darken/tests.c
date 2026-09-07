@@ -1,5 +1,5 @@
 #include <genesis.h>
-#include "../../darken.h"
+#include "../../darken-1.1.0_dev.h"
 #include "tests.h"
 
 struct MyComponent
@@ -99,7 +99,7 @@ static void *darken_state_walk(void *data)
     struct MyComponent *c = (struct MyComponent *)data;
     c->x += 1;
     ++g_walkCalls;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 static void *darken_state_once_then_idle(void *data)
 {
@@ -134,7 +134,7 @@ static void *darken_state_idle_counter(void *data)
 {
     (void)data;
     ++g_idleCalls;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void darken_test_pause_resume(void)
@@ -172,7 +172,7 @@ static void *darken_my_destructor(void *data)
 static void *darken_state_noop(void *data)
 {
     (void)data;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void darken_test_delete(void)
@@ -259,7 +259,7 @@ static void *darken_state_abort_destructor(void *data)
 {
     (void)data;
     ++g_abortDestructorCalls;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void darken_test_destructor_abort(void)
@@ -415,13 +415,13 @@ static void *darken_state_stress_a(void *data)
 {
     (void)data;
     ++g_stressCallsA;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 static void *darken_state_stress_b(void *data)
 {
     (void)data;
     ++g_stressCallsB;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void darken_test_mixed_stress(void)
@@ -610,7 +610,7 @@ static void *darken_state_exec_counter(void *data)
 {
     (void)data;
     ++g_execCalls;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void darken_test_entity_exec(void)
@@ -634,7 +634,7 @@ static void *darken_state_transition_target(void *data)
 {
     struct MyComponent *c = (struct MyComponent *)data;
     c->x = 999;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *darken_state_transition_source(void *data)

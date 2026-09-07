@@ -1,6 +1,6 @@
 #include <genesis.h>
 
-#include "../../darken.h"
+#include "../../darken-1.1.0_dev.h"
 #include "examples.h"
 
 struct MyComponent
@@ -14,13 +14,13 @@ static void *darken_update_walk(struct MyComponent *data)
     data->x += 1;
     data->y += 1;
     kprintf("Walking: (%d, %d) health=%d", data->x, data->y, data->health);
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *darken_update_idle(struct MyComponent *data)
 {
     kprintf("Idle: (%d, %d) health=%d", data->x, data->y, data->health);
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *darken_destructor(struct MyComponent *data)

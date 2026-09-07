@@ -8,14 +8,14 @@ void *coin_state(void *data)
 {
     GameEntity *c = (GameEntity *)data;
     ++c->timer;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *coin_destroy(void *data)
 {
     GameEntity *c = (GameEntity *)data;
     c->flags |= ENTITY_FLAG_HIDDEN;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 darken_entity coin_spawn(fix16 x, fix16 y)

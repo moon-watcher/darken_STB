@@ -4,7 +4,7 @@
  * Adapted to actual implementation behavior (not documentation).
  */
 
-#include "../../darken.h"
+#include "../../darken-1.1.0_dev.h"
 #include "../../darksys.h"
 #include <genesis.h>
 
@@ -72,7 +72,7 @@ static void *state_inc2(TestData *d)
 {
     d->value++;
     d->updates++;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *state_inc(TestData *d)
@@ -88,7 +88,7 @@ static void *state_pause_after_1(void *data)
     d->value++;
     if (d->value >= 1)
         return DARKEN_PAUSE;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *state_delete_after_1(TestData *d)
@@ -96,7 +96,7 @@ static void *state_delete_after_1(TestData *d)
     d->value++;
     if (d->value >= 1)
         return DARKEN_DELETE;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 /* ============================================================================
@@ -184,7 +184,7 @@ TEST(test_entity_update_loop)
     e->update = state_inc;
 
     darken_entity_update(e);
-    // CHECK(e->update == DARKEN_LOOP);
+    // CHECK(e->update == DARKEN_CONTINUE);
     CHECK(d->value == 1);
     CHECK(d->updates == 1);
     CHECK(e->update == state_inc2);

@@ -2,7 +2,7 @@
  * entities.c — spawn helpers and the enemy AI state machine.
  *
  * Enemies alternate between two darken_state functions, enemy_state_patrol
- * and enemy_state_chase. Each returns DARKEN_LOOP to keep going, or the
+ * and enemy_state_chase. Each returns DARKEN_CONTINUE to keep going, or the
  * *other* function's pointer to switch behavior — the mechanism
  * darken_state exists for. When a chasing enemy reaches the player it calls
  * battle_start() and returns DARKEN_PAUSE, so darken itself moves the enemy
@@ -31,7 +31,7 @@ const char *enemy_name(EnemyType t) { return ENEMY_TABLE[t].name; }
 void *passive_state(void *data)
 {
     (void)data;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static u16 in_range(s16 ax, s16 ay, s16 bx, s16 by, s16 radius)
@@ -87,7 +87,7 @@ void *enemy_state_patrol(void *data)
             }
         }
     }
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 void *enemy_state_chase(void *data)
@@ -106,7 +106,7 @@ void *enemy_state_chase(void *data)
         battle_start(self);
         return DARKEN_PAUSE;
     }
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *enemy_destructor(void *data)

@@ -1,5 +1,5 @@
 #include <genesis.h>
-#include "../../darken.h"
+#include "../../darken-1.1.0_dev.h"
 #include "../../darksys.h"
 #include "tests.h"
 
@@ -29,7 +29,7 @@ static u16 g_testsRun = 0, g_testsPassed = 0;
 static void *state_noop(void *data)
 {
     (void)data;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 typedef struct TestSystemEntity
@@ -53,7 +53,7 @@ static void *test_system_physics(void *data)
         int16_t *vy = (int16_t *)system->items[i++];
         *vy += 1;
     }
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *test_system_movement(void *data)
@@ -69,7 +69,7 @@ static void *test_system_movement(void *data)
         *x += *vx;
         *y += *vy;
     }
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *test_system_frames(void *data)
@@ -81,7 +81,7 @@ static void *test_system_frames(void *data)
         uint16_t *frame = (uint16_t *)system->items[i++];
         *frame += 1;
     }
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void test_entity_system_basic(void)
@@ -250,7 +250,7 @@ static void *test_darksys_physics(darksys *system)
         *vy += 1;
     });
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *test_darksys_frames(darksys *system)
@@ -259,7 +259,7 @@ static void *test_darksys_frames(darksys *system)
         *frame += 1;
     });
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void test_darksys_init_add(void)

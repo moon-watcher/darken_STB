@@ -32,7 +32,7 @@ static void *enemy_state_patrol_impl(void *data)
     if (e->x < FIX16(32) || e->x > FIX16(1400))
         e->direction = -e->direction;
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 void *enemy_state_patrol(void *data)
@@ -44,7 +44,7 @@ static void *enemy_destroy(void *data)
 {
     GameEntity *e = (GameEntity *)data;
     e->flags |= ENTITY_FLAG_HIDDEN;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 darken_entity enemy_spawn(fix16 x, fix16 y, fix16 left, fix16 right)

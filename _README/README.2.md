@@ -112,7 +112,7 @@ typedef struct { float y, vy; } Particle;
 void *particle_update(Particle *p) {
     p->y += p->vy;
 
-    return p->y > 480.0f ? DARKEN_DELETE : DARKEN_LOOP;
+    return p->y > 480.0f ? DARKEN_DELETE : DARKEN_CONTINUE;
 }
 
 int main(void) {
@@ -158,7 +158,7 @@ What an `update`/`destroy` callback can return (or be directly assigned):
 | Value                          | Effect                                                                                                      |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------- |
 | `DARKEN_DELETE`                | Deletes the entity (runs `destroy` if set, frees the slot).                                                 |
-| `DARKEN_LOOP`                  | Keeps calling the *same* `update` next frame.                                                               |
+| `DARKEN_CONTINUE`                  | Keeps calling the *same* `update` next frame.                                                               |
 | `DARKEN_PAUSE`                 | Moves the entity to the paused zone; stops receiving `update`.                                              |
 | *(any other function pointer)* | Treated as the *next* callback to use — this is how you chain phases/states without a separate state table. |
 
@@ -248,7 +248,7 @@ static void *enemy_update(Enemy *e)
         return DARKEN_PAUSE;
 
     e->hp -= 1;
-    return e->hp <= 0 ? DARKEN_DELETE : DARKEN_LOOP;
+    return e->hp <= 0 ? DARKEN_DELETE : DARKEN_CONTINUE;
 }
 ```
 

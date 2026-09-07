@@ -73,7 +73,7 @@ void *player_state_idle(void *data)
     if (p->vx != 0)
         return player_state_run;
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 void *player_state_run(void *data)
@@ -94,7 +94,7 @@ void *player_state_run(void *data)
     if (p->vx == 0)
         return player_state_idle;
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 void *player_state_jump(void *data)
@@ -113,7 +113,7 @@ void *player_state_jump(void *data)
     if (p->vy >= 0)
         return player_state_fall;
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 void *player_state_fall(void *data)
@@ -131,7 +131,7 @@ void *player_state_fall(void *data)
         return player_state_idle;
     }
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 void *player_state_dead(void *data)
@@ -151,13 +151,13 @@ void *player_state_dead(void *data)
         return player_state_fall;
     }
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *player_destroy(GameEntity *p)
 {
     p->flags |= ENTITY_FLAG_HIDDEN;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 darken_entity player_spawn(fix16 x, fix16 y)

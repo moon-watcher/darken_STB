@@ -5,7 +5,7 @@
  */
 
 #include <genesis.h>
-#include "../darken.h"
+#include "../darken-1.1.0_dev.h"
 #include "../_bbb.h" /* renombrado desde bbb2.h para claridad */
 #include "../_ccc.h" /* renombrado desde bbb2.h para claridad */
 
@@ -33,10 +33,10 @@ struct MyComponent
 /* ============================================================================
  * ESTADOS PARA DARKEN.H (retornan siguiente estado)
  * ============================================================================ */
-static void *st_darken_loop(void *d)
+static void *st_DARKEN_CONTINUE(void *d)
 {
     (void)d;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 static void *st_darken_delete(void *d)
 {
@@ -53,7 +53,7 @@ static void *st_darken_walk(void *d)
 {
     struct MyComponent *c = (struct MyComponent *)d;
     c->x++;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 /* Estado que transiciona una sola vez y luego queda en idle */
@@ -122,7 +122,7 @@ static void bench_update_loop_32_darken(void)
     for (u16 i = 0; i < 32; ++i)
     {
         darken_entity e = DARKEN_SPAWN(&m);
-        e->update = st_darken_loop;
+        e->update = st_DARKEN_CONTINUE;
     }
     u32 t0 = bench_start();
     for (u32 r = 0; r < BENCH_REPS_SMALL; ++r)
@@ -320,7 +320,7 @@ static void bench_pause_resume_darken(void)
     for (u16 i = 0; i < 32; ++i)
     {
         ents[i] = DARKEN_SPAWN(&m);
-        ents[i]->update = st_darken_loop;
+        ents[i]->update = st_DARKEN_CONTINUE;
     }
     u32 t0 = bench_start();
     for (u32 r = 0; r < BENCH_REPS_SMALL; ++r)
@@ -460,7 +460,7 @@ static void *st_darken_mixed(void *d)
         return DARKEN_PAUSE;
     if (c->x % 7 == 0)
         return DARKEN_DELETE;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void bench_mixed_stress_darken(void)

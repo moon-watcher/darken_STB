@@ -8,14 +8,14 @@ void *bullet_state(void *data)
 {
     GameEntity *b = (GameEntity *)data;
     b->x += b->vx;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *bullet_destroy(void *data)
 {
     GameEntity *b = (GameEntity *)data;
     b->flags |= ENTITY_FLAG_HIDDEN;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 darken_entity bullet_spawn(fix16 x, fix16 y, int16_t direction)

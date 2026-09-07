@@ -11,7 +11,7 @@
  * ============================================================================ */
 
 #define DARKEN_IMPLEMENTATION
-#include "../../src/darken.h"
+#include "../../src/darken-1.1.0_dev.h"
 #include <genesis.h>
 
 /* ============================================================================
@@ -344,7 +344,7 @@ static void *state_player_alive(ship_data *s)
     if (s->inv_timer > 0) s->inv_timer--;
     if (s->shield_timer > 0) s->shield_timer--;
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *state_player_invulnerable(ship_data *s)
@@ -353,14 +353,14 @@ static void *state_player_invulnerable(ship_data *s)
     s->y = clamp_s16(s->y + s->vy, 16, 216);
     if (--s->inv_timer == 0)
         return state_player_alive;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *state_player_dead(ship_data *s)
 {
     (void)s;
     G.game_over = 1;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *state_bullet_fly(bullet_data *b)
@@ -369,7 +369,7 @@ static void *state_bullet_fly(bullet_data *b)
     b->y += b->vy;
     if (b->x < 0 || b->x >= 320 || b->y < 0 || b->y >= 224)
         return DARKEN_DELETE;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *state_enemy_sine(enemy_data *e)
@@ -379,7 +379,7 @@ static void *state_enemy_sine(enemy_data *e)
     e->y += 1;
     if (e->y > 224)
         return DARKEN_DELETE;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *state_enemy_straight(enemy_data *e)
@@ -387,7 +387,7 @@ static void *state_enemy_straight(enemy_data *e)
     e->y += 2;
     if (e->y > 224)
         return DARKEN_DELETE;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *state_enemy_shooter(enemy_data *e)
@@ -410,13 +410,13 @@ static void *state_enemy_shooter(enemy_data *e)
     }
     if (e->y > 224)
         return DARKEN_DELETE;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *state_boss_shield(enemy_data *e)
 {
     (void)e;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *state_boss_enter(boss_data *b)
@@ -424,7 +424,7 @@ static void *state_boss_enter(boss_data *b)
     b->y += 1;
     if (b->y > 40)
         return state_boss_attack;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *state_boss_attack(boss_data *b)
@@ -452,7 +452,7 @@ static void *state_boss_attack(boss_data *b)
 
     if (b->hp <= 0)
         return state_boss_defeated;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *state_boss_defeated(boss_data *b)
@@ -463,7 +463,7 @@ static void *state_boss_defeated(boss_data *b)
     }
     if (b->y > 250)
         return DARKEN_DELETE;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *state_powerup_fall(powerup_data *p)
@@ -472,7 +472,7 @@ static void *state_powerup_fall(powerup_data *p)
     p->blink++;
     if (p->y > 224)
         return DARKEN_DELETE;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 static void *state_particle_fade(particle_data *p)
@@ -481,7 +481,7 @@ static void *state_particle_fade(particle_data *p)
     p->y += p->vy;
     if (--p->life == 0)
         return DARKEN_DELETE;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 /* ============================================================================

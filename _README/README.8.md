@@ -230,7 +230,7 @@ darken_state enemy_update(void *data)
     if (enemy->y > SCREEN_HEIGHT)
         return DARKEN_DELETE;
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 
@@ -274,7 +274,7 @@ darken_state enemy_enter(void *data)
     if (enemy->y >= 40)
         return enemy_attack;
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 
@@ -289,7 +289,7 @@ This is a particularly nice fit for game objects with simple state machines.
 An update callback can return:
 
 ```c
-DARKEN_LOOP
+DARKEN_CONTINUE
 DARKEN_PAUSE
 DARKEN_DELETE
 ```
@@ -297,7 +297,7 @@ DARKEN_DELETE
 ### Continue
 
 ```c
-return DARKEN_LOOP;
+return DARKEN_CONTINUE;
 ```
 
 Keep updating normally.

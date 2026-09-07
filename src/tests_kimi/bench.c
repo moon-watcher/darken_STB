@@ -5,7 +5,7 @@
  */
 
 #include <genesis.h>
-#include "../darken.h"
+#include "../darken-1.1.0_dev.h"
 #include "../_bbb.h"   /* renombrado desde bbb2.h para claridad */
 #include "../_ccc.h"   /* renombrado desde bbb2.h para claridad */
 
@@ -33,14 +33,14 @@ struct MyComponent
 /* ============================================================================
  * ESTADOS PARA DARKEN.H (retornan siguiente estado)
  * ============================================================================ */
-static void *st_darken_loop(void *d)  { (void)d; return DARKEN_LOOP; }
+static void *st_DARKEN_CONTINUE(void *d)  { (void)d; return DARKEN_CONTINUE; }
 static void *st_darken_delete(void *d){ (void)d; return DARKEN_DELETE; }
 static void *st_darken_pause(void *d) { (void)d; return DARKEN_PAUSE; }
 
 static void *st_darken_walk(struct MyComponent *c)
 {
     c->x++;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 /* Estado que transiciona una sola vez y luego queda en idle */
@@ -71,7 +71,7 @@ static void st_bbb_walk(struct MyComponent *c)
  */
 
 // #include <genesis.h>
-// #include "../darken.h"
+// #include "../darken-1.1.0_dev.h"
 // #include "../_bbb.h"   /* renombrado desde bbb2.h para claridad */
 
 
@@ -146,11 +146,11 @@ static void bench_raw(const char *sys, const char *test, u32 frames)
  * ESTADOS DARKEN.H (retornan siguiente estado)
  * ============================================================================ */
 
-static void *st_dk_loop(void *d)  { (void)d; return DARKEN_LOOP; }
+static void *st_dk_loop(void *d)  { (void)d; return DARKEN_CONTINUE; }
 static void *st_dk_walk(struct MyComponent *c)
 {
     c->x++;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 static void *st_dk_delete(void *d) { (void)d; return DARKEN_DELETE; }
 static void *st_dk_once_then_walk(void *d)
@@ -163,7 +163,7 @@ static void *st_dk_mixed(struct MyComponent *c)
     c->x++;
     if (c->x % 5 == 0) return DARKEN_PAUSE;
     if (c->x % 7 == 0) return DARKEN_DELETE;
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 
 /* ============================================================================

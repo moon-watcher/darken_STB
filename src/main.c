@@ -4,7 +4,7 @@
 #define BBB_IMPLEMENTATION
 #define CCC_IMPLEMENTATION
 #define DARKSYS_IMPLEMENTATION
-#include "darken.h"
+#include "darken-1.1.0_dev.h"
 #include "_bbb.h"
 #include "_ccc.h"
 #include "darksys.h"
@@ -20,6 +20,10 @@
 
 int main(void)
 {
+    // bench_darksys();
+    // test_darksys();
+
+    
     kimi_compare();
     kimi_benchmarks();
 

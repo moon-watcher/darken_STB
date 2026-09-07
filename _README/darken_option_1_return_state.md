@@ -8,7 +8,7 @@ The update callback receives `entity->data` and returns either the next state ca
 typedef void *(*darken_state)();
 
 #define DARKEN_DELETE ((void *)0)
-#define DARKEN_LOOP   ((void *)1)
+#define DARKEN_CONTINUE   ((void *)1)
 #define DARKEN_PAUSE  ((void *)2)
 ```
 
@@ -24,7 +24,7 @@ darken_state enemy_enter(void *data)
     if (e->y >= 40)
         return enemy_attack;
 
-    return DARKEN_LOOP;
+    return DARKEN_CONTINUE;
 }
 ```
 
@@ -49,6 +49,6 @@ The callback does not directly manipulate the entity manager.
 ## Trade-offs
 
 - The return value has two meanings: next state or lifecycle command.
-- `DARKEN_LOOP`, `DARKEN_PAUSE` and `DARKEN_DELETE` are sentinel values.
+- `DARKEN_CONTINUE`, `DARKEN_PAUSE` and `DARKEN_DELETE` are sentinel values.
 - A callback cannot directly change `entity->update`.
 - Less similar to Doom's classic thinker pattern.
