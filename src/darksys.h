@@ -60,8 +60,8 @@ typedef struct
         uint16_t params;                             \
         void *pool[(CAPACITY) * (PARAMS)];           \
     } NAME = {                                       \
-        .capacity = (CAPACITY),                      \
-        .params = (PARAMS),                          \
+        .capacity = (CAPACITY),                     \
+        .params = (PARAMS),                         \
     }
 
 // Static/global initialization
@@ -98,7 +98,7 @@ typedef struct
     (s->count < s->capacity) ? _DARKSYS_WRITE(s, __VA_ARGS__), s->count++ : -1; \
 })
 
-#define DARKSYS_FOREACH(...) _DARKSYS_FOREACH_DISPATCH(_DARKSYS_FOREACH_NARGS(__VA_ARGS__), __VA_ARGS__)
+#define DARKSYS_FOREACH(SYSTEM, ...) _DARKSYS_FOREACH_DISPATCH(_DARKSYS_FOREACH_NARGS(__VA_ARGS__), SYSTEM, __VA_ARGS__)
 
 uint16_t darksys_remove(darksys *, uint16_t);
 void darksys_clear(darksys *);
@@ -111,7 +111,8 @@ void darksys_clear(darksys *);
 #define _DARKSYS_NARGS_I(_1, _2, _3, _4, _5, N, ...) N
 
 #define _DARKSYS_WRITE(SYSTEM, ...) _DARKSYS_WRITE_N(_DARKSYS_NARGS(__VA_ARGS__), SYSTEM, __VA_ARGS__)
-#define _DARKSYS_WRITE_N(N, SYSTEM, ...) _DARKSYS_WRITE_##N(SYSTEM, __VA_ARGS__)
+#define _DARKSYS_WRITE_N(N, SYSTEM, ...) _DARKSYS_WRITE_N_I(N, SYSTEM, __VA_ARGS__)
+#define _DARKSYS_WRITE_N_I(N, SYSTEM, ...) _DARKSYS_WRITE_##N(SYSTEM, __VA_ARGS__)
 
 #define _DARKSYS_WRITE_1(SYSTEM, A) \
     (SYSTEM)->pool[(SYSTEM)->size++] = (A)
@@ -132,13 +133,15 @@ void darksys_clear(darksys *);
     _DARKSYS_WRITE_4(SYSTEM, A, B, C, D);       \
     _DARKSYS_WRITE_1(SYSTEM, E)
 
-#define _DARKSYS_FOREACH_DISPATCH(N, ...) _DARKSYS_FOREACH_##N(__VA_ARGS__)
-#define _DARKSYS_FOREACH_NARGS(...) _DARKSYS_FOREACH_NARGS_I(__VA_ARGS__, 6, 5, 4, 3, 2, 1)
+#define _DARKSYS_FOREACH_DISPATCH(N, ...) _DARKSYS_FOREACH_DISPATCH_I(N, __VA_ARGS__)
+#define _DARKSYS_FOREACH_DISPATCH_I(N, ...) _DARKSYS_FOREACH_##N(__VA_ARGS__)
+
+#define _DARKSYS_FOREACH_NARGS(...) _DARKSYS_FOREACH_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1, 0)
 #define _DARKSYS_FOREACH_NARGS_I(_1, _2, _3, _4, _5, _6, N, ...) N
 
 #define _DARKSYS_FOREACH_0(SYSTEM, IT) _DARKSYS_FOREACH(SYSTEM, { IT; })
 #define _DARKSYS_FOREACH_1(SYSTEM, A, IT) _DARKSYS_FOREACH(SYSTEM, { A = _pool[0]; IT; })
-#define _DARKSYS_FOREACH_2(SYSTEM, A, B, IT) _DARKSYS_FOREACH(SYSTEM, { A = _pool[0];B = _pool[1]; IT; })
+#define _DARKSYS_FOREACH_2(SYSTEM, A, B, IT) _DARKSYS_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; IT; })
 #define _DARKSYS_FOREACH_3(SYSTEM, A, B, C, IT) _DARKSYS_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; C = _pool[2]; IT; })
 #define _DARKSYS_FOREACH_4(SYSTEM, A, B, C, D, IT) _DARKSYS_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; C = _pool[2]; D = _pool[3]; IT; })
 #define _DARKSYS_FOREACH_5(SYSTEM, A, B, C, D, E, IT) _DARKSYS_FOREACH(SYSTEM, { A = _pool[0]; B = _pool[1]; C = _pool[2]; D = _pool[3]; E = _pool[4]; IT; })
