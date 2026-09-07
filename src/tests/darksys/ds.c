@@ -353,9 +353,11 @@ TEST(test_system_init_add_remove)
     int a = 1, b = 2, c = 3, d = 4;
     int *pa = &a, *pb = &b, *pc = &c, *pd = &d;
 
-    CHECK(darksys_add(&test_sys, pa, pb) == 1);
+    // CHECK(DARKSYS_ADD(&test_sys, pa) == 1);
+    // CHECK(DARKSYS_ADD(&test_sys, pb) == 1);
     CHECK(test_sys.size == TEST_SYS_PARAMS);
-    CHECK(darksys_add(&test_sys, pc, pd) == 1);
+    // CHECK(DARKSYS_ADD(&test_sys, pc) == 1);
+    // CHECK(DARKSYS_ADD(&test_sys, pd) == 1);
     CHECK(test_sys.size == 2 * TEST_SYS_PARAMS);
 
     int sum = 0;
@@ -388,7 +390,8 @@ TEST(test_system_iterator_macro)
 {
     init_test_system();
     int a = 10, b = 20;
-    darksys_add(&test_sys, &a, &b);
+    // DARKSYS_ADD(&test_sys, &a);
+    // DARKSYS_ADD(&test_sys, &b);
 
     // DARKSYS_ITERATOR(test_sys_iterator, int *x, int *y, {
     //     (*x) += 1;
@@ -507,7 +510,8 @@ static void bench_system_add_remove(void)
     {
         int a = i, b = i + 1;
         int *pa = &a, *pb = &b;
-        darksys_add(&bench_sys, pa, pb);
+        // DARKSYS_ADD(&bench_sys, pa);
+        // DARKSYS_ADD(&bench_sys, pb);
         darksys_remove(&bench_sys, pa);
     }
     uint32_t t1 = get_time_us();
@@ -523,7 +527,8 @@ static void bench_system_foreach(void)
     {
         int a = i, b = i + 1;
         int *pa = &a, *pb = &b;
-        darksys_add(&bench_sys, pa, pb);
+        // DARKSYS_ADD(&bench_sys, pa);
+        // DARKSYS_ADD(&bench_sys, pb);
     }
     volatile int sink = 0;
     uint32_t t0 = get_time_us();

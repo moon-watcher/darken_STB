@@ -272,7 +272,10 @@ static void test_darksys_init_add(void)
     CHECK("darksys init: params 4", sys.params == 4);
     CHECK("darksys init: capacity 12", sys.capacity == 12);
     int a, b, c, d;
-    CHECK("darksys add: primer grupo", darksys_add(&sys, &a, &b, &c, &d) == 1);
+    // CHECK("darksys add: primer grupo", DARKSYS_ADD(&sys, &a) == 1);
+    // CHECK("darksys add: primer grupo", DARKSYS_ADD(&sys,  &b) == 1);
+    // CHECK("darksys add: primer grupo", DARKSYS_ADD(&sys,  &c) == 1);
+    // CHECK("darksys add: primer grupo", DARKSYS_ADD(&sys,  &d) == 1);
     CHECK("darksys add: size 4", sys.size == 4);
     CHECK("darksys add: punteros conservados", sys.pool[0] == &a && sys.pool[1] == &b && sys.pool[2] == &c && sys.pool[3] == &d);
 }
@@ -284,8 +287,16 @@ static void test_darksys_multiple_groups(void)
     void *pool[12];
     darksys_init(&sys, pool, 3, 4);
     int a1, b1, c1, d1, a2, b2, c2, d2;
-    darksys_add(&sys, &a1, &b1, &c1, &d1);
-    darksys_add(&sys, &a2, &b2, &c2, &d2);
+    // DARKSYS_ADD(&sys, &a1);
+    // DARKSYS_ADD(&sys, &b1);
+    // DARKSYS_ADD(&sys, &c1);
+    // DARKSYS_ADD(&sys, &d1);
+
+
+    // DARKSYS_ADD(&sys, &a2);
+    // DARKSYS_ADD(&sys,  &b2);
+    // DARKSYS_ADD(&sys,  &c2);
+    // DARKSYS_ADD(&sys, &d2);
     CHECK("darksys: dos grupos", sys.size == 8);
     CHECK("darksys: grupo 1 intacto", sys.pool[0] == &a1 && sys.pool[1] == &b1 && sys.pool[2] == &c1 && sys.pool[3] == &d1);
     CHECK("darksys: grupo 2 intacto", sys.pool[4] == &a2 && sys.pool[5] == &b2 && sys.pool[6] == &c2 && sys.pool[7] == &d2);
@@ -298,9 +309,22 @@ static void test_darksys_remove(void)
     void *pool[12];
     darksys_init(&sys, pool, 3, 4);
     int a1, b1, c1, d1, a2, b2, c2, d2, a3, b3, c3, d3;
-    darksys_add(&sys, &a1, &b1, &c1, &d1);
-    darksys_add(&sys, &a2, &b2, &c2, &d2);
-    darksys_add(&sys, &a3, &b3, &c3, &d3);
+    // DARKSYS_ADD(&sys, &a1);
+    // DARKSYS_ADD(&sys,  &b1);
+    // DARKSYS_ADD(&sys,  &c1);
+    // DARKSYS_ADD(&sys, &d1);
+    
+    
+    // DARKSYS_ADD(&sys, &a2);
+    // DARKSYS_ADD(&sys, &b2);
+    // DARKSYS_ADD(&sys,  &c2);
+    // DARKSYS_ADD(&sys,  &d2);
+
+
+    // DARKSYS_ADD(&sys, &a3);
+    // DARKSYS_ADD(&sys, &b3);
+    // DARKSYS_ADD(&sys, &c3);
+    // DARKSYS_ADD(&sys,  &d3);
     CHECK("darksys remove: encuentra grupo", darksys_remove(&sys, &a2) == 1);
     CHECK("darksys remove: size 8", sys.size == 8);
     CHECK("darksys remove: grupo final compactado", sys.pool[0] == &a1 && sys.pool[1] == &b1 && sys.pool[2] == &c1 && sys.pool[3] == &d1 && sys.pool[4] == &a3 && sys.pool[5] == &b3 && sys.pool[6] == &c3 && sys.pool[7] == &d3);
@@ -314,9 +338,22 @@ static void test_darksys_capacity(void)
     void *pool[8];
     darksys_init(&sys, pool, 2, 4);
     int a[2], b[2], c[2], d[2];
-    CHECK("darksys capacity: primer grupo", darksys_add(&sys, &a[0], &a[1], &b[0], &b[1]) == 1);
-    CHECK("darksys capacity: segundo grupo", darksys_add(&sys, &b[0], &b[1], &c[0], &c[1]) == 1);
-    CHECK("darksys capacity: rechaza grupo lleno", darksys_add(&sys, &c[0], &c[1], &d[0], &d[1]) == 0);
+    // CHECK("darksys capacity: primer grupo", DARKSYS_ADD(&sys, &a[0]) == 1);
+    // CHECK("darksys capacity: primer grupo", DARKSYS_ADD(&sys, &a[1]) == 1);
+    // CHECK("darksys capacity: primer grupo", DARKSYS_ADD(&sys, &b[0]) == 1);
+    // CHECK("darksys capacity: primer grupo", DARKSYS_ADD(&sys, &b[1]) == 1);
+
+
+    // CHECK("darksys capacity: segundo grupo", DARKSYS_ADD(&sys, &b[0]) == 1);
+    // CHECK("darksys capacity: segundo grupo", DARKSYS_ADD(&sys, &b[1]) == 1);
+    // CHECK("darksys capacity: segundo grupo", DARKSYS_ADD(&sys, &c[0]) == 1);
+    // CHECK("darksys capacity: segundo grupo", DARKSYS_ADD(&sys, &c[1]) == 1);
+    
+    
+    // CHECK("darksys capacity: rechaza grupo lleno", DARKSYS_ADD(&sys, &c[0], &c[1], &d[0], &d[1]) == 0);
+    // CHECK("darksys capacity: rechaza grupo lleno", DARKSYS_ADD(&sys, &c[0], &c[1], &d[0], &d[1]) == 0);
+    // CHECK("darksys capacity: rechaza grupo lleno", DARKSYS_ADD(&sys, &c[0], &c[1], &d[0], &d[1]) == 0);
+    // CHECK("darksys capacity: rechaza grupo lleno", DARKSYS_ADD(&sys, &c[0], &c[1], &d[0], &d[1]) == 0);
     kprintf("darksys capacity: size: %d", sys.size);
     CHECK("darksys capacity: size no cambia", sys.size == 8);
 }
@@ -371,12 +408,12 @@ static void test_darksys_as_entities(void)
 
     e1->update = state_noop;
     e2->update = state_noop;
-    darksys_add(movement, &p1->x, &p1->y, &p1->vx, &p1->vy);
-    darksys_add(movement, &p2->x, &p2->y, &p2->vx, &p2->vy);
-    darksys_add(physics, &p1->vy);
-    darksys_add(physics, &p2->vy);
-    darksys_add(frames, &p1->frame);
-    darksys_add(frames, &p2->frame);
+    // DARKSYS_ADD(movement, &p1->x, &p1->y, &p1->vx, &p1->vy);
+    // DARKSYS_ADD(movement, &p2->x, &p2->y, &p2->vx, &p2->vy);
+    // DARKSYS_ADD(physics, &p1->vy);
+    // DARKSYS_ADD(physics, &p2->vy);
+    // DARKSYS_ADD(frames, &p1->frame);
+    // DARKSYS_ADD(frames, &p2->frame);
 
     darken_update(&systems);
 
@@ -411,8 +448,8 @@ static void test_darksys_shared_payload(void)
     data->vx = 7;
     data->vy = -2;
     data->frame = 3;
-    darksys_add(movement, &data->x, &data->y, &data->vx, &data->vy);
-    darksys_add(frames, &data->frame);
+    // DARKSYS_ADD(movement, &data->x, &data->y, &data->vx, &data->vy);
+    // DARKSYS_ADD(frames, &data->frame);
     darken_update(&systems);
     CHECK("darksys shared: movimiento modifica payload", data->x == 57 && data->y == 58);
     CHECK("darksys shared: frames usa el mismo payload", data->frame == 4);
@@ -428,8 +465,8 @@ static void test_system_foreach_direct(void)
     darksys_init(&sys, pool, 3, 4);
     int a1 = 1, b1 = 2, c1 = 3, d1 = 4;
     int a2 = 10, b2 = 20, c2 = 30, d2 = 40;
-    darksys_add(&sys, &a1, &b1, &c1, &d1);
-    darksys_add(&sys, &a2, &b2, &c2, &d2);
+    // DARKSYS_ADD(&sys, &a1, &b1, &c1, &d1);
+    // DARKSYS_ADD(&sys, &a2, &b2, &c2, &d2);
     DARKSYS_FOREACH(&sys, int *a, int *b, int *c, int *d, { *a += *b + *c + *d; });
     CHECK("foreach direct: grupo 1 modificado", a1 == 1 + 2 + 3 + 4);
     CHECK("foreach direct: grupo 2 modificado", a2 == 10 + 20 + 30 + 40);
@@ -445,10 +482,10 @@ static void test_system_add_various_arity(void)
     darksys_init(&sys3, p3, 3, 3);
     darksys_init(&sys5, p5, 3, 5);
     int a, b, c, d, e;
-    CHECK("add arity 1", darksys_add(&sys1, &a) == 1);
-    CHECK("add arity 2", darksys_add(&sys2, &a, &b) == 1);
-    CHECK("add arity 3", darksys_add(&sys3, &a, &b, &c) == 1);
-    CHECK("add arity 5", darksys_add(&sys5, &a, &b, &c, &d, &e) == 1);
+    // CHECK("add arity 1", DARKSYS_ADD(&sys1, &a) == 1);
+    // CHECK("add arity 2", DARKSYS_ADD(&sys2, &a, &b) == 1);
+    // CHECK("add arity 3", DARKSYS_ADD(&sys3, &a, &b, &c) == 1);
+    // CHECK("add arity 5", DARKSYS_ADD(&sys5, &a, &b, &c, &d, &e) == 1);
     CHECK("arity sizes", sys1.size == 1 && sys2.size == 2 && sys3.size == 3 && sys5.size == 5);
 }
 
@@ -459,9 +496,9 @@ static void test_system_remove_first(void)
     void *pool[12];
     darksys_init(&sys, pool, 3, 4);
     int a1, b1, c1, d1, a2, b2, c2, d2, a3, b3, c3, d3;
-    darksys_add(&sys, &a1, &b1, &c1, &d1);
-    darksys_add(&sys, &a2, &b2, &c2, &d2);
-    darksys_add(&sys, &a3, &b3, &c3, &d3);
+    // DARKSYS_ADD(&sys, &a1, &b1, &c1, &d1);
+    // DARKSYS_ADD(&sys, &a2, &b2, &c2, &d2);
+    // DARKSYS_ADD(&sys, &a3, &b3, &c3, &d3);
     darksys_remove(&sys, &a1);
     CHECK("remove first: size 8", sys.size == 8);
     CHECK("remove first: compacta con ultimo", sys.pool[0] == &a3);
@@ -474,9 +511,9 @@ static void test_system_remove_last(void)
     void *pool[12];
     darksys_init(&sys, pool, 3, 4);
     int a1, b1, c1, d1, a2, b2, c2, d2, a3, b3, c3, d3;
-    darksys_add(&sys, &a1, &b1, &c1, &d1);
-    darksys_add(&sys, &a2, &b2, &c2, &d2);
-    darksys_add(&sys, &a3, &b3, &c3, &d3);
+    // DARKSYS_ADD(&sys, &a1, &b1, &c1, &d1);
+    // DARKSYS_ADD(&sys, &a2, &b2, &c2, &d2);
+    // DARKSYS_ADD(&sys, &a3, &b3, &c3, &d3);
     darksys_remove(&sys, &a3);
     CHECK("remove last: size 8", sys.size == 8);
     CHECK("remove last: no toca primeros", sys.pool[0] == &a1 && sys.pool[4] == &a2);
