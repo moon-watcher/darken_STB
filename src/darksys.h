@@ -1,12 +1,13 @@
 /**
  * darksys.h
  *
+ * darksys-1.0.0_dev
+ * 
  * System: Flat packed pool of data pointers.
  *
  * Each item/entity occupies `params` consecutive pointers:
  *
  *     params = 2
- *
  *     [A.a, A.b] [B.a, B.b] [C.a, C.b]...
  *
  * `capacity` is expressed in GROUPS/items.
