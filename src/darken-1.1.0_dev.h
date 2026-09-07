@@ -188,11 +188,11 @@ void darken_entity_delete(darken_entity);
 #endif
 
 // Dynamic allocation: use with malloc/calloc or custom allocator
-// darken m = DARKEN_POOL_ALLOC(MEM_alloc, 5, sizeof(struct MyComponent));
-// darken_init(&m);
-// ...
-// free(m.pool);
-// free(m.storage);
+//     darken m = DARKEN_POOL_ALLOC(MEM_alloc, 5, sizeof(struct MyComponent));
+//     darken_init(&m);
+//     ...
+//     free(m.pool);
+//     free(m.storage);
 #define DARKEN_POOL_ALLOC(ALLOC, CAPACITY, PAYLOAD)                                 \
     {                                                                               \
         .pool = (darken_entity *)(ALLOC)((CAPACITY) * sizeof(darken_entity)),       \
@@ -202,9 +202,9 @@ void darken_entity_delete(darken_entity);
     }
 
 // Static allocation with automatic storage duration (stack or global)
-// DARKEN_POOL_DECLARE(storage, 5, sizeof(struct MyComponent));
-// darken m = DARKEN_POOL_BIND(storage);
-// darken_init(&m);
+//     DARKEN_POOL_DECLARE(storage, 5, sizeof(struct MyComponent));
+//     darken m = DARKEN_POOL_BIND(storage);
+//     darken_init(&m);
 #define DARKEN_POOL_DECLARE(NAME, CAPACITY, PAYLOAD)                                           \
     struct                                                                                     \
     {                                                                                          \
@@ -312,27 +312,27 @@ static inline void _darken_swap(darken_entity pool[], uint16_t i, uint16_t j)
 // USAGE EXAMPLES:
 //
 // DYNAMIC:
-// darken m = DARKEN_POOL_ALLOC(MEM_alloc, 5, sizeof(struct MyComponent));
-// darken_init(&m);
-// ...
-// free(m.pool);
-// free(m.storage);
+//     darken m = DARKEN_POOL_ALLOC(MEM_alloc, 5, sizeof(struct MyComponent));
+//     darken_init(&m);
+//     ...
+//     free(m.pool);
+//     free(m.storage);
 //
 // STATIC (Runtime binding):
 // Runtime: locals, reassignment, any context
-// DARKEN_POOL_DECLARE(storage, 5, sizeof(struct MyComponent));
-// darken m = DARKEN_POOL_BIND(storage);
-// darken_init(&m);
+//     DARKEN_POOL_DECLARE(storage, 5, sizeof(struct MyComponent));
+//     darken m = DARKEN_POOL_BIND(storage);
+//     darken_init(&m);
 //
 // STATIC (Compile-time initialization):
 // Static/global initialization: compile-time constants
-// DARKEN_POOL_DECLARE(storage, 5, sizeof(struct MyComponent));
-// darken m = DARKEN_POOL_INIT(storage);
+//     DARKEN_POOL_DECLARE(storage, 5, sizeof(struct MyComponent));
+//     darken m = DARKEN_POOL_INIT(storage);
 //
-// void init_test_manager() {
-//     darken_init(&m);
-//     ...
-// }
+//     void init_test_manager() {
+//         darken_init(&m);
+//         ...
+//     }
 void darken_init(darken *ctx)
 {
     ctx->size = 0;

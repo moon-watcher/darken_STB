@@ -20,10 +20,10 @@
 typedef struct
 {
     void **pool;
-    uint16_t capacity; // Number of groups/items the pool can contain.
-    uint16_t size;     // Number of pointers currently stored.
-    uint16_t params;   // Number of pointers associated with each group.
-    uint16_t limit;    // Maximum number of pointers.
+    uint16_t capacity; // Number of groups/items the pool can contain
+    uint16_t size;     // Number of pointers currently stored
+    uint16_t params;   // Number of pointers associated with each group
+    uint16_t limit;    // Maximum number of pointers
 } darksys;
 
 /* ============================================================================
@@ -31,8 +31,6 @@ typedef struct
  * ========================================================================== */
 
 // Dynamic allocation
-//
-// Example:
 //     darksys m = DARKSYS_POOL_ALLOC(MEM_alloc, 5, 2);
 //     DARKSYS_ADD(&m, a);
 //     DARKSYS_ADD(&m, b);
@@ -46,9 +44,7 @@ typedef struct
         .limit = (CAPACITY) * (PARAMS),                                   \
     }
 
-// Static allocation.
-//
-// Example:
+// Static allocation
 //     DARKSYS_POOL_DECLARE(storage, 5, 2);
 //     darksys m = DARKSYS_POOL_BIND(storage);
 #define DARKSYS_POOL_DECLARE(NAME, CAPACITY, PARAMS) \
@@ -62,7 +58,7 @@ typedef struct
         .params = (PARAMS),                          \
     }
 
-// Static/global initialization.
+// Static/global initialization
 #define DARKSYS_POOL_INIT(STORAGE, CAPACITY, PARAMS) \
     {                                                \
         .pool = (STORAGE).pool,                      \
@@ -72,7 +68,7 @@ typedef struct
         .limit = (CAPACITY) * (PARAMS),              \
     }
 
-// Runtime binding.
+// Runtime binding
 #define DARKSYS_POOL_BIND(NAME)                   \
     {                                             \
         .pool = (NAME).pool,                      \
