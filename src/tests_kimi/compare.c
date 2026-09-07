@@ -6,8 +6,8 @@
 
 #include <genesis.h>
 #include "../darken-1.1.0_dev.h"
-#include "../_bbb.h" /* renombrado desde bbb2.h para claridad */
-#include "../_ccc.h" /* renombrado desde bbb2.h para claridad */
+#include "../../_/_bbb.h" /* renombrado desde bbb2.h para claridad */
+#include "../../_/_ccc.h" /* renombrado desde bbb2.h para claridad */
 
 /* ============================================================================
  * CONFIGURACION
