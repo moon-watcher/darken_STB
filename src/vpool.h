@@ -4,13 +4,12 @@
 
 typedef struct
 {
-    void *value;
-    uint16_t handle;
-} VpoolItem;
+    struct VpoolItem
+    {
+        void *value;
+        uint16_t handle;
+    } *pool;
 
-typedef struct
-{
-    VpoolItem *pool;
     uint16_t *lookup;
     uint16_t capacity;
     uint16_t count;
@@ -21,17 +20,17 @@ typedef struct
  * PUBLIC API
  * ============================================================================ */
 
-#define VPOOL_ALLOC(ALLOC, CAPACITY)                      \
-    {                                                     \
-        .pool = (ALLOC)((CAPACITY) * sizeof(VpoolItem)),  \
-        .lookup = (ALLOC)((CAPACITY) * sizeof(uint16_t)), \
-        .capacity = (CAPACITY),                           \
-        .count = 0,                                       \
-        .next = 0,                                        \
+#define VPOOL_ALLOC(ALLOC, CAPACITY)                            \
+    {                                                           \
+        .pool = (ALLOC)((CAPACITY) * sizeof(struct VpoolItem)), \
+        .lookup = (ALLOC)((CAPACITY) * sizeof(uint16_t)),       \
+        .capacity = (CAPACITY),                                 \
+        .count = 0,                                             \
+        .next = 0,                                              \
     }
 
-#define VPOOL_DECLARE(NAME, CAPACITY)  \
-    VpoolItem NAME##_pool[(CAPACITY)]; \
+#define VPOOL_DECLARE(NAME, CAPACITY)         \
+    struct VpoolItem NAME##_pool[(CAPACITY)]; \
     uint16_t NAME##_lookup[(CAPACITY)]
 
 #define VPOOL_BIND(NAME)                                            \

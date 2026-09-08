@@ -2,8 +2,6 @@
 
 #include <stdint.h>
 
-typedef void (*dpool_copy)(void *, const void *, uint16_t);
-
 typedef struct
 {
     char *pool;
@@ -12,10 +10,10 @@ typedef struct
     uint16_t capacity;
     uint16_t size;
     uint16_t count;
-    uint16_t next_handle;
+    uint16_t next;
     uint16_t free_head;
     uint16_t free_count;
-    dpool_copy copy;
+    void (*copy)();
 } dpool;
 
 /* ============================================================================
@@ -38,7 +36,7 @@ typedef struct
         .capacity = (CAPACITY),                            \
         .size = (SIZE),                                    \
         .count = 0,                                        \
-        .next_handle = 0,                                  \
+        .next = 0,                                         \
         .free_head = 0,                                    \
         .free_count = 0,                                   \
         .copy = (COPY),                                    \
@@ -57,7 +55,7 @@ typedef struct
         .capacity = sizeof(NAME) / sizeof((NAME)[0]), \
         .size = sizeof((NAME)[0]),                    \
         .count = 0,                                   \
-        .next_handle = 0,                             \
+        .next = 0,                                    \
         .free_head = 0,                               \
         .free_count = 0,                              \
         .copy = (COPY),                               \
@@ -90,13 +88,13 @@ int16_t dpool_alloc(dpool *p)
     }
     else
     {
-        if (p->next_handle >= p->capacity)
+        if (p->next >= p->capacity)
         {
             --p->count;
             return -1;
         }
 
-        handle = p->next_handle++;
+        handle = p->next++;
     }
 
     p->handles[slot] = handle;
@@ -107,7 +105,7 @@ int16_t dpool_alloc(dpool *p)
 
 void *dpool_data(dpool *p, uint16_t handle)
 {
-    if (handle >= p->next_handle)
+    if (handle >= p->next)
         return 0;
 
     uint16_t slot = p->lookup[handle];
@@ -123,7 +121,7 @@ void *dpool_data(dpool *p, uint16_t handle)
 
 int16_t dpool_remove(dpool *p, uint16_t handle)
 {
-    if (handle >= p->next_handle)
+    if (handle >= p->next)
         return -1;
 
     uint16_t slot = p->lookup[handle];
@@ -157,7 +155,7 @@ int16_t dpool_remove(dpool *p, uint16_t handle)
 void dpool_clear(dpool *p)
 {
     p->count = 0;
-    p->next_handle = 0;
+    p->next = 0;
     p->free_head = 0;
     p->free_count = 0;
 }
