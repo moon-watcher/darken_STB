@@ -3,53 +3,34 @@
 #include <stdint.h>
 
 /*
- * ============================================================================
- * SMap_t - Slot Map
- * ============================================================================
+ * SMap - Slot Map
  *
  * Stores pointers associated with stable handles.
  *
  * The handle does NOT directly identify the physical slot of an element.
  * It is used as an index into "lookup" to obtain the element's current slot.
  *
- *     handle
- *        |
- *        v
- *     lookup[handle]
- *        |
- *        v
- *      slot
- *        |
- *        v
- *     pool[slot].value
+ *    handle -> lookup[handle] -> slot -> pool[slot].value
  *
  * This allows the pool to remain compact by using swap-remove when elements
  * are deleted, while keeping the handles of the remaining elements stable.
  *
  * Example:
- *
  *     int16_t f = SMap_add(&pool, &entity);
- *
  *     Entity *entity = SMap_data(&pool, f);
- *
  *     SMap_remove(&pool, c);
- *
  *     entity = SMap_data(&pool, f);
  *
  * Even if the element associated with "f" has moved to a different physical
  * slot, SMap_data() will still return the same element.
  *
  * IMPORTANT:
- *
  *     count    = number of active elements.
  *     capacity = maximum number of elements.
  *     next     = next handle to be assigned.
  *
  * The physical slot is found through:
- *
  *     lookup[handle]
- *
- * ============================================================================
  */
 
 typedef struct
