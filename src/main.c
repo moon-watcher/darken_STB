@@ -3,11 +3,12 @@
 #define DARKEN_IMPLEMENTATION
 #define BBB_IMPLEMENTATION
 #define CCC_IMPLEMENTATION
-#define DARKSYS_IMPLEMENTATION
 
 // #include "darken-1.1.0_dev.h"
 // #include "_bbb.h"
 // #include "_ccc.h"
+
+#define DARKSYS_IMPLEMENTATION
 #include "darksys.h"
 
 #define DSMAP_IMPLEMENTATION
@@ -21,20 +22,21 @@
 // #include "tests/darken/examples.h"
 // #include "tests/darksys/ds.h"
 // #include "tests/darksys/tests.h"
+#include "tests/darksys/tests2.h"
 // #include "tests_kimi/bench.h"
 // #include "tests_kimi/compare.h"
 // #include "tests_kimi/examples.h"
 
 int main(void)
 {
-    vsmap_run_tests();
-    dsmap_run_tests();
+    // vsmap_run_tests();
+    // dsmap_run_tests();
 
     // bench_darksys();
     // test_darksys();
-    BLASTEM_PROFIL_START
-    darksys_run_benchmarks();
-    BLASTEM_PROFIL_END
+    // BLASTEM_PROFIL_START
+    // darksys_run_benchmarks();
+    // BLASTEM_PROFIL_END
 
     BLASTEM_PROFIL_START
     darksys_run_tests();

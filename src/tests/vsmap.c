@@ -31,14 +31,7 @@ static void test_vsmap_bind(void)
     vsmap_DECLARE(storage, 6);
     vsmap_t pool = vsmap_BIND(storage);
 
-    Entity entities[6] = {
-        {0},
-        {1},
-        {2},
-        {3},
-        {4},
-        {5},
-    };
+    Entity entities[6] = { {0}, {1}, {2}, {3}, {4}, {5}, };
 
     int a = vsmap_add(&pool, &entities[0]);
     int b = vsmap_add(&pool, &entities[1]);
@@ -51,18 +44,12 @@ static void test_vsmap_bind(void)
 
     vsmap_dump(&pool);
 
-    if (vsmap_data(&pool, a) != &entities[0])
-        kprintf("FAIL a");
-    if (vsmap_data(&pool, b) != &entities[1])
-        kprintf("FAIL b");
-    if (vsmap_data(&pool, c) != &entities[2])
-        kprintf("FAIL c");
-    if (vsmap_data(&pool, d) != &entities[3])
-        kprintf("FAIL d");
-    if (vsmap_data(&pool, e) != &entities[4])
-        kprintf("FAIL e");
-    if (vsmap_data(&pool, f) != &entities[5])
-        kprintf("FAIL f");
+    if (vsmap_data(&pool, a) != &entities[0]) kprintf("FAIL a");
+    if (vsmap_data(&pool, b) != &entities[1]) kprintf("FAIL b");
+    if (vsmap_data(&pool, c) != &entities[2]) kprintf("FAIL c");
+    if (vsmap_data(&pool, d) != &entities[3]) kprintf("FAIL d");
+    if (vsmap_data(&pool, e) != &entities[4]) kprintf("FAIL e");
+    if (vsmap_data(&pool, f) != &entities[5]) kprintf("FAIL f");
 
     /*
      * Remove c
@@ -74,30 +61,22 @@ static void test_vsmap_bind(void)
      */
 
     Entity *entity;
-    entity = vsmap_data(&pool, f);
-    kprintf(" -> %d", entity->id);
+    entity = vsmap_data(&pool, f); kprintf(" -> %d", entity->id);
 
     vsmap_remove(&pool, c);
 
-    entity = vsmap_data(&pool, f);
-    kprintf(" -> %d", entity->id);
+    entity = vsmap_data(&pool, f); kprintf(" -> %d", entity->id);
 
     kprintf("vsmap_t BIND: remove c");
 
     vsmap_dump(&pool);
 
-    if (vsmap_data(&pool, a) != &entities[0])
-        kprintf("FAIL c remove: a");
-    if (vsmap_data(&pool, b) != &entities[1])
-        kprintf("FAIL c remove: b");
-    if (vsmap_data(&pool, c) != NULL)
-        kprintf("FAIL c remove: c still valid");
-    if (vsmap_data(&pool, d) != &entities[3])
-        kprintf("FAIL c remove: d");
-    if (vsmap_data(&pool, e) != &entities[4])
-        kprintf("FAIL c remove: e");
-    if (vsmap_data(&pool, f) != &entities[5])
-        kprintf("FAIL c remove: f");
+    if (vsmap_data(&pool, a) != &entities[0]) kprintf("FAIL c remove: a");
+    if (vsmap_data(&pool, b) != &entities[1]) kprintf("FAIL c remove: b");
+    if (vsmap_data(&pool, c) != NULL) kprintf("FAIL c remove: c still valid");
+    if (vsmap_data(&pool, d) != &entities[3]) kprintf("FAIL c remove: d");
+    if (vsmap_data(&pool, e) != &entities[4]) kprintf("FAIL c remove: e");
+    if (vsmap_data(&pool, f) != &entities[5]) kprintf("FAIL c remove: f");
 
     /*
      * f debe seguir apuntando a entity 5 aunque su slot físico haya cambiado.
@@ -119,16 +98,11 @@ static void test_vsmap_bind(void)
 
     vsmap_dump(&pool);
 
-    if (vsmap_data(&pool, a) != NULL)
-        kprintf("FAIL a remove: a still valid");
-    if (vsmap_data(&pool, b) != &entities[1])
-        kprintf("FAIL a remove: b");
-    if (vsmap_data(&pool, d) != &entities[3])
-        kprintf("FAIL a remove: d");
-    if (vsmap_data(&pool, e) != &entities[4])
-        kprintf("FAIL a remove: e");
-    if (vsmap_data(&pool, f) != &entities[5])
-        kprintf("FAIL a remove: f");
+    if (vsmap_data(&pool, a) != NULL) kprintf("FAIL a remove: a still valid");
+    if (vsmap_data(&pool, b) != &entities[1]) kprintf("FAIL a remove: b");
+    if (vsmap_data(&pool, d) != &entities[3]) kprintf("FAIL a remove: d");
+    if (vsmap_data(&pool, e) != &entities[4]) kprintf("FAIL a remove: e");
+    if (vsmap_data(&pool, f) != &entities[5]) kprintf("FAIL a remove: f");
 
     /*
      * Remove e
@@ -140,14 +114,10 @@ static void test_vsmap_bind(void)
 
     vsmap_dump(&pool);
 
-    if (vsmap_data(&pool, b) != &entities[1])
-        kprintf("FAIL e remove: b");
-    if (vsmap_data(&pool, d) != &entities[3])
-        kprintf("FAIL e remove: d");
-    if (vsmap_data(&pool, e) != NULL)
-        kprintf("FAIL e remove: e still valid");
-    if (vsmap_data(&pool, f) != &entities[5])
-        kprintf("FAIL e remove: f");
+    if (vsmap_data(&pool, b) != &entities[1]) kprintf("FAIL e remove: b");
+    if (vsmap_data(&pool, d) != &entities[3]) kprintf("FAIL e remove: d");
+    if (vsmap_data(&pool, e) != NULL) kprintf("FAIL e remove: e still valid");
+    if (vsmap_data(&pool, f) != &entities[5]) kprintf("FAIL e remove: f");
 
     /*
      * Remove f
@@ -159,12 +129,9 @@ static void test_vsmap_bind(void)
 
     vsmap_dump(&pool);
 
-    if (vsmap_data(&pool, b) != &entities[1])
-        kprintf("FAIL f remove: b");
-    if (vsmap_data(&pool, d) != &entities[3])
-        kprintf("FAIL f remove: d");
-    if (vsmap_data(&pool, f) != NULL)
-        kprintf("FAIL f remove: f still valid");
+    if (vsmap_data(&pool, b) != &entities[1]) kprintf("FAIL f remove: b");
+    if (vsmap_data(&pool, d) != &entities[3]) kprintf("FAIL f remove: d");
+    if (vsmap_data(&pool, f) != NULL) kprintf("FAIL f remove: f still valid");
 
     /*
      * Remove d
@@ -176,12 +143,9 @@ static void test_vsmap_bind(void)
 
     vsmap_dump(&pool);
 
-    if (pool.count != 1)
-        kprintf("FAIL final count");
-    if (vsmap_data(&pool, b) != &entities[1])
-        kprintf("FAIL final: b");
-    if (vsmap_data(&pool, d) != NULL)
-        kprintf("FAIL final: d still valid");
+    if (pool.count != 1) kprintf("FAIL final count");
+    if (vsmap_data(&pool, b) != &entities[1]) kprintf("FAIL final: b");
+    if (vsmap_data(&pool, d) != NULL) kprintf("FAIL final: d still valid");
 
     /*
      * Remove b
@@ -193,10 +157,8 @@ static void test_vsmap_bind(void)
 
     vsmap_dump(&pool);
 
-    if (pool.count != 0)
-        kprintf("FAIL empty count");
-    if (vsmap_data(&pool, b) != NULL)
-        kprintf("FAIL final: b still valid");
+    if (pool.count != 0) kprintf("FAIL empty count");
+    if (vsmap_data(&pool, b) != NULL) kprintf("FAIL final: b still valid");
 
     kprintf("vsmap_t BIND: OK");
 }
@@ -205,14 +167,7 @@ static void test_vsmap_alloc(void)
 {
     vsmap_t pool = vsmap_ALLOC(MEM_alloc, 6);
 
-    Entity entities[6] = {
-        {0},
-        {1},
-        {2},
-        {3},
-        {4},
-        {5},
-    };
+    Entity entities[6] = { {0}, {1}, {2}, {3}, {4}, {5}, };
 
     int a = vsmap_add(&pool, &entities[0]);
     int b = vsmap_add(&pool, &entities[1]);
@@ -225,23 +180,15 @@ static void test_vsmap_alloc(void)
 
     vsmap_dump(&pool);
 
-    if (pool.capacity != 6)
-        kprintf("FAIL capacity");
-    if (pool.count != 6)
-        kprintf("FAIL count");
+    if (pool.capacity != 6) kprintf("FAIL capacity");
+    if (pool.count != 6) kprintf("FAIL count");
 
-    if (vsmap_data(&pool, a) != &entities[0])
-        kprintf("FAIL a");
-    if (vsmap_data(&pool, b) != &entities[1])
-        kprintf("FAIL b");
-    if (vsmap_data(&pool, c) != &entities[2])
-        kprintf("FAIL c");
-    if (vsmap_data(&pool, d) != &entities[3])
-        kprintf("FAIL d");
-    if (vsmap_data(&pool, e) != &entities[4])
-        kprintf("FAIL e");
-    if (vsmap_data(&pool, f) != &entities[5])
-        kprintf("FAIL f");
+    if (vsmap_data(&pool, a) != &entities[0]) kprintf("FAIL a");
+    if (vsmap_data(&pool, b) != &entities[1]) kprintf("FAIL b");
+    if (vsmap_data(&pool, c) != &entities[2]) kprintf("FAIL c");
+    if (vsmap_data(&pool, d) != &entities[3]) kprintf("FAIL d");
+    if (vsmap_data(&pool, e) != &entities[4]) kprintf("FAIL e");
+    if (vsmap_data(&pool, f) != &entities[5]) kprintf("FAIL f");
 
     /*
      * Remove c
@@ -256,18 +203,12 @@ static void test_vsmap_alloc(void)
 
     vsmap_dump(&pool);
 
-    if (vsmap_data(&pool, a) != &entities[0])
-        kprintf("FAIL c remove: a");
-    if (vsmap_data(&pool, b) != &entities[1])
-        kprintf("FAIL c remove: b");
-    if (vsmap_data(&pool, c) != NULL)
-        kprintf("FAIL c remove: c still valid");
-    if (vsmap_data(&pool, d) != &entities[3])
-        kprintf("FAIL c remove: d");
-    if (vsmap_data(&pool, e) != &entities[4])
-        kprintf("FAIL c remove: e");
-    if (vsmap_data(&pool, f) != &entities[5])
-        kprintf("FAIL c remove: f");
+    if (vsmap_data(&pool, a) != &entities[0]) kprintf("FAIL c remove: a");
+    if (vsmap_data(&pool, b) != &entities[1]) kprintf("FAIL c remove: b");
+    if (vsmap_data(&pool, c) != NULL) kprintf("FAIL c remove: c still valid");
+    if (vsmap_data(&pool, d) != &entities[3]) kprintf("FAIL c remove: d");
+    if (vsmap_data(&pool, e) != &entities[4]) kprintf("FAIL c remove: e");
+    if (vsmap_data(&pool, f) != &entities[5]) kprintf("FAIL c remove: f");
 
     Entity *entity;
 
@@ -284,18 +225,12 @@ static void test_vsmap_alloc(void)
 
     vsmap_dump(&pool);
 
-    if (vsmap_data(&pool, a) != &entities[0])
-        kprintf("FAIL e remove: a");
-    if (vsmap_data(&pool, b) != &entities[1])
-        kprintf("FAIL e remove: b");
-    if (vsmap_data(&pool, c) != NULL)
-        kprintf("FAIL e remove: c still valid");
-    if (vsmap_data(&pool, d) != &entities[3])
-        kprintf("FAIL e remove: d");
-    if (vsmap_data(&pool, e) != NULL)
-        kprintf("FAIL e remove: e still valid");
-    if (vsmap_data(&pool, f) != &entities[5])
-        kprintf("FAIL e remove: f");
+    if (vsmap_data(&pool, a) != &entities[0]) kprintf("FAIL e remove: a");
+    if (vsmap_data(&pool, b) != &entities[1]) kprintf("FAIL e remove: b");
+    if (vsmap_data(&pool, c) != NULL) kprintf("FAIL e remove: c still valid");
+    if (vsmap_data(&pool, d) != &entities[3]) kprintf("FAIL e remove: d");
+    if (vsmap_data(&pool, e) != NULL) kprintf("FAIL e remove: e still valid");
+    if (vsmap_data(&pool, f) != &entities[5]) kprintf("FAIL e remove: f");
 
     /*
      * Remove a
@@ -307,14 +242,10 @@ static void test_vsmap_alloc(void)
 
     vsmap_dump(&pool);
 
-    if (vsmap_data(&pool, a) != NULL)
-        kprintf("FAIL a remove: a still valid");
-    if (vsmap_data(&pool, b) != &entities[1])
-        kprintf("FAIL a remove: b");
-    if (vsmap_data(&pool, d) != &entities[3])
-        kprintf("FAIL a remove: d");
-    if (vsmap_data(&pool, f) != &entities[5])
-        kprintf("FAIL a remove: f");
+    if (vsmap_data(&pool, a) != NULL) kprintf("FAIL a remove: a still valid");
+    if (vsmap_data(&pool, b) != &entities[1]) kprintf("FAIL a remove: b");
+    if (vsmap_data(&pool, d) != &entities[3]) kprintf("FAIL a remove: d");
+    if (vsmap_data(&pool, f) != &entities[5]) kprintf("FAIL a remove: f");
 
     /*
      * Remove b
@@ -326,12 +257,9 @@ static void test_vsmap_alloc(void)
 
     vsmap_dump(&pool);
 
-    if (vsmap_data(&pool, b) != NULL)
-        kprintf("FAIL b remove: b still valid");
-    if (vsmap_data(&pool, d) != &entities[3])
-        kprintf("FAIL b remove: d");
-    if (vsmap_data(&pool, f) != &entities[5])
-        kprintf("FAIL b remove: f");
+    if (vsmap_data(&pool, b) != NULL) kprintf("FAIL b remove: b still valid");
+    if (vsmap_data(&pool, d) != &entities[3]) kprintf("FAIL b remove: d");
+    if (vsmap_data(&pool, f) != &entities[5]) kprintf("FAIL b remove: f");
 
     /*
      * Remove d
@@ -343,10 +271,8 @@ static void test_vsmap_alloc(void)
 
     vsmap_dump(&pool);
 
-    if (vsmap_data(&pool, d) != NULL)
-        kprintf("FAIL d remove: d still valid");
-    if (vsmap_data(&pool, f) != &entities[5])
-        kprintf("FAIL d remove: f");
+    if (vsmap_data(&pool, d) != NULL) kprintf("FAIL d remove: d still valid");
+    if (vsmap_data(&pool, f) != &entities[5]) kprintf("FAIL d remove: f");
 
     /*
      * Remove f
@@ -358,10 +284,8 @@ static void test_vsmap_alloc(void)
 
     vsmap_dump(&pool);
 
-    if (pool.count != 0)
-        kprintf("FAIL final count");
-    if (vsmap_data(&pool, f) != NULL)
-        kprintf("FAIL f still valid");
+    if (pool.count != 0) kprintf("FAIL final count");
+    if (vsmap_data(&pool, f) != NULL) kprintf("FAIL f still valid");
 
     /*
      * Clear
@@ -373,8 +297,7 @@ static void test_vsmap_alloc(void)
 
     vsmap_dump(&pool);
 
-    if (pool.count != 0)
-        kprintf("FAIL clear");
+    if (pool.count != 0) kprintf("FAIL clear");
 
     MEM_free(pool.lookup);
     MEM_free(pool.pool);
@@ -386,42 +309,30 @@ static void test_vsmap_invalid(void)
 {
     vsmap_t pool = vsmap_ALLOC(MEM_alloc, 2);
 
-    Entity entities[3] = {
-        {0},
-        {1},
-        {2},
-    };
+    Entity entities[3] = { {0}, {1}, {2}, };
 
     kprintf("vsmap_t: invalid / capacity");
 
     vsmap_dump(&pool);
 
-    if (vsmap_data(&pool, 0) != NULL)
-        kprintf("FAIL empty data");
-    if (vsmap_remove(&pool, 0) != -1)
-        kprintf("FAIL empty remove");
+    if (vsmap_data(&pool, 0) != NULL) kprintf("FAIL empty data");
+    if (vsmap_remove(&pool, 0) != -1) kprintf("FAIL empty remove");
 
     int a = vsmap_add(&pool, &entities[0]);
     int b = vsmap_add(&pool, &entities[1]);
 
-    if (a != 0)
-        kprintf("FAIL first handle");
-    if (b != 1)
-        kprintf("FAIL second handle");
+    if (a != 0) kprintf("FAIL first handle");
+    if (b != 1) kprintf("FAIL second handle");
 
     kprintf("vsmap_t: full");
 
     vsmap_dump(&pool);
 
-    if (vsmap_add(&pool, &entities[2]) != -1)
-        kprintf("FAIL full pool");
-    if (pool.count != 2)
-        kprintf("FAIL full count");
+    if (vsmap_add(&pool, &entities[2]) != -1) kprintf("FAIL full pool");
+    if (pool.count != 2) kprintf("FAIL full count");
 
-    if (vsmap_data(&pool, 2) != NULL)
-        kprintf("FAIL invalid data");
-    if (vsmap_remove(&pool, 2) != -1)
-        kprintf("FAIL invalid remove");
+    if (vsmap_data(&pool, 2) != NULL) kprintf("FAIL invalid data");
+    if (vsmap_remove(&pool, 2) != -1) kprintf("FAIL invalid remove");
 
     vsmap_remove(&pool, a);
 
@@ -429,10 +340,8 @@ static void test_vsmap_invalid(void)
 
     vsmap_dump(&pool);
 
-    if (vsmap_data(&pool, a) != NULL)
-        kprintf("FAIL removed a");
-    if (vsmap_data(&pool, b) != &entities[1])
-        kprintf("FAIL b after a remove");
+    if (vsmap_data(&pool, a) != NULL) kprintf("FAIL removed a");
+    if (vsmap_data(&pool, b) != &entities[1]) kprintf("FAIL b after a remove");
 
     MEM_free(pool.lookup);
     MEM_free(pool.pool);

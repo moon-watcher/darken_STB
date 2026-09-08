@@ -142,7 +142,7 @@ static u16 test_clear(void)
     return ok;
 }
 
-u16 darksys_run_tests(void)
+u16 darksys_run_tests0(void)
 {
     u16 passed = 0;
 
