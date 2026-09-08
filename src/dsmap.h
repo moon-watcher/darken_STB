@@ -14,21 +14,21 @@ typedef struct
     uint16_t free_head;
     uint16_t free_count;
     void (*copy)();
-} dpool;
+} dsmap_t;
 
 /* ============================================================================
  * PUBLIC API
  * ============================================================================ */
 
 // Dynamic allocation:
-//     dpool pool = DPOOL_ALLOC(MEM_alloc, 100, sizeof(Entity), memcpy);
-//     int16_t handle = dpool_alloc(&pool);
-//     Entity *entity = dpool_data(&pool, handle);
-//     dpool_remove(&pool, handle);
+//     dsmap pool = DSMAP_ALLOC(MEM_alloc, 100, sizeof(Entity), memcpy);
+//     int16_t handle = dsmap_alloc(&pool);
+//     Entity *entity = dsmap_data(&pool, handle);
+//     dsmap_remove(&pool, handle);
 //     MEM_free(pool.pool);
 //     MEM_free(pool.lookup);
 //     MEM_free(pool.handles);
-#define DPOOL_ALLOC(ALLOC, CAPACITY, SIZE, COPY)      \
+#define DSMAP_ALLOC(ALLOC, CAPACITY, SIZE, COPY)           \
     {                                                      \
         .pool = (ALLOC)((CAPACITY) * (SIZE)),              \
         .lookup = (ALLOC)((CAPACITY) * sizeof(uint16_t)),  \
@@ -46,8 +46,8 @@ typedef struct
 //     Entity storage[100];
 //     uint16_t lookup[100];
 //     uint16_t handles[100];
-//     dpool pool = DPOOL_BIND(storage, lookup, handles, memcpy);
-#define DPOOL_BIND(NAME, LOOKUP, HANDLES, COPY)  \
+//     dsmap pool = DSMAP_BIND(storage, lookup, handles, memcpy);
+#define DSMAP_BIND(NAME, LOOKUP, HANDLES, COPY)       \
     {                                                 \
         .pool = (char *)(NAME),                       \
         .lookup = (LOOKUP),                           \
@@ -61,18 +61,18 @@ typedef struct
         .copy = (COPY),                               \
     }
 
-int16_t dpool_alloc(dpool *);
-void *dpool_data(dpool *, uint16_t);
-int16_t dpool_remove(dpool *, uint16_t);
-void dpool_clear(dpool *);
+int16_t dsmap_alloc(dsmap_t *);
+void *dsmap_data(dsmap_t *, uint16_t);
+int16_t dsmap_remove(dsmap_t *, uint16_t);
+void dsmap_clear(dsmap_t *);
 
 /* ============================================================================
  * IMPLEMENTATION
  * ============================================================================ */
 
-#ifdef DPOOL_IMPLEMENTATION
+#ifdef DSMAP_IMPLEMENTATION
 
-int16_t dpool_alloc(dpool *p)
+int16_t dsmap_alloc(dsmap_t *p)
 {
     if (p->count >= p->capacity)
         return -1;
@@ -103,7 +103,7 @@ int16_t dpool_alloc(dpool *p)
     return handle;
 }
 
-void *dpool_data(dpool *p, uint16_t handle)
+void *dsmap_data(dsmap_t *p, uint16_t handle)
 {
     if (handle >= p->next)
         return 0;
@@ -119,7 +119,7 @@ void *dpool_data(dpool *p, uint16_t handle)
     return p->pool + (slot * p->size);
 }
 
-int16_t dpool_remove(dpool *p, uint16_t handle)
+int16_t dsmap_remove(dsmap_t *p, uint16_t handle)
 {
     if (handle >= p->next)
         return -1;
@@ -152,7 +152,7 @@ int16_t dpool_remove(dpool *p, uint16_t handle)
     return p->count;
 }
 
-void dpool_clear(dpool *p)
+void dsmap_clear(dsmap_t *p)
 {
     p->count = 0;
     p->next = 0;
@@ -160,4 +160,4 @@ void dpool_clear(dpool *p)
     p->free_count = 0;
 }
 
-#endif // DPOOL_IMPLEMENTATION
+#endif // DSMAP_IMPLEMENTATION

@@ -10,11 +10,11 @@
 // #include "_ccc.h"
 #include "darksys.h"
 
-#define DPOOL_IMPLEMENTATION
-#include "dpool.h"
+#define DSMAP_IMPLEMENTATION
+#include "dsmap.h"
 
-#define SMAP_IMPLEMENTATION
-#include "SMap.h"
+#define VSMAP_IMPLEMENTATION
+#include "vsmap.h"
 
 
 
@@ -31,8 +31,8 @@
 
 int main(void)
 {
-    smap_run_tests();
-    dpool_run_tests();
+    vsmap_run_tests();
+    dsmap_run_tests();
 
     // bench_darksys();
     // test_darksys();
