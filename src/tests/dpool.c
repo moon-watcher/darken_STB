@@ -46,7 +46,7 @@ static void test_stable_handle(void)
     uint16_t lookup[4];
     uint16_t handles[4];
 
-    dpool pool = DPOOL_POOL_BIND(storage, lookup, handles, memcpy);
+    dpool pool = DPOOL_BIND(storage, lookup, handles, memcpy);
 
     int16_t a = dpool_alloc(&pool);
     int16_t b = dpool_alloc(&pool);
@@ -79,7 +79,7 @@ static void test_remove_swap(void)
     uint16_t lookup[4];
     uint16_t handles[4];
 
-    dpool pool = DPOOL_POOL_BIND(storage, lookup, handles, memcpy);
+    dpool pool = DPOOL_BIND(storage, lookup, handles, memcpy);
 
     int16_t a = dpool_alloc(&pool);
     int16_t b = dpool_alloc(&pool);
@@ -123,7 +123,7 @@ static void test_handle_reuse(void)
     uint16_t lookup[4];
     uint16_t handles[4];
 
-    dpool pool = DPOOL_POOL_BIND(storage, lookup, handles, memcpy);
+    dpool pool = DPOOL_BIND(storage, lookup, handles, memcpy);
 
     int16_t a = dpool_alloc(&pool);
     int16_t b = dpool_alloc(&pool);
@@ -144,7 +144,7 @@ static void test_dynamic(void)
 {
     kprintf("TEST: dynamic");
 
-    dpool pool = DPOOL_POOL_ALLOC(MEM_alloc, 4, sizeof(Entity), memcpy);
+    dpool pool = DPOOL_ALLOC(MEM_alloc, 4, sizeof(Entity), memcpy);
 
     Entity *a = dpool_data(&pool, dpool_alloc(&pool));
     Entity *b = dpool_data(&pool, dpool_alloc(&pool));
@@ -183,7 +183,7 @@ static void test_full(void)
     uint16_t lookup[4];
     uint16_t handles[4];
 
-    dpool pool = DPOOL_POOL_BIND(storage, lookup, handles, memcpy);
+    dpool pool = DPOOL_BIND(storage, lookup, handles, memcpy);
 
     int16_t a = dpool_alloc(&pool);
     int16_t b = dpool_alloc(&pool);

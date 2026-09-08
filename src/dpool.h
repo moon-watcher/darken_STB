@@ -21,14 +21,14 @@ typedef struct
  * ============================================================================ */
 
 // Dynamic allocation:
-//     dpool pool = DPOOL_POOL_ALLOC(MEM_alloc, 100, sizeof(Entity), memcpy);
+//     dpool pool = DPOOL_ALLOC(MEM_alloc, 100, sizeof(Entity), memcpy);
 //     int16_t handle = dpool_alloc(&pool);
 //     Entity *entity = dpool_data(&pool, handle);
 //     dpool_remove(&pool, handle);
 //     MEM_free(pool.pool);
 //     MEM_free(pool.lookup);
 //     MEM_free(pool.handles);
-#define DPOOL_POOL_ALLOC(ALLOC, CAPACITY, SIZE, COPY)      \
+#define DPOOL_ALLOC(ALLOC, CAPACITY, SIZE, COPY)      \
     {                                                      \
         .pool = (ALLOC)((CAPACITY) * (SIZE)),              \
         .lookup = (ALLOC)((CAPACITY) * sizeof(uint16_t)),  \
@@ -46,8 +46,8 @@ typedef struct
 //     Entity storage[100];
 //     uint16_t lookup[100];
 //     uint16_t handles[100];
-//     dpool pool = DPOOL_POOL_BIND(storage, lookup, handles, memcpy);
-#define DPOOL_POOL_BIND(NAME, LOOKUP, HANDLES, COPY)  \
+//     dpool pool = DPOOL_BIND(storage, lookup, handles, memcpy);
+#define DPOOL_BIND(NAME, LOOKUP, HANDLES, COPY)  \
     {                                                 \
         .pool = (char *)(NAME),                       \
         .lookup = (LOOKUP),                           \
