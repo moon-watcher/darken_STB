@@ -173,19 +173,20 @@ uint16_t darksys_remove(darksys *s, uint16_t slot)
     if (slot >= s->count)
         return 0;
 
-    uint16_t last = (uint16_t)(s->count - 1u);
+    uint16_t last = s->count - 1;
+    uint16_t params = s->params;
 
     if (slot != last)
     {
-        uint16_t dst = (uint16_t)(slot * s->params);
-        uint16_t src = (uint16_t)(last * s->params);
+        uint16_t dst = slot * params;
+        uint16_t src = last * params;
 
-        for (uint16_t i = 0; i < s->params; ++i)
+        for (uint16_t i = 0; i < params; ++i)
             s->pool[dst + i] = s->pool[src + i];
     }
 
     --s->count;
-    s->size -= s->params;
+    s->size -= params;
 
     return 1;
 }

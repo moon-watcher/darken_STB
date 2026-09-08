@@ -9,7 +9,16 @@
 // #include "_bbb.h"
 // #include "_ccc.h"
 #include "darksys.h"
-#define DARKSYS_IMPLEMENTATION
+
+#define DPOOL_IMPLEMENTATION
+#include "dpool.h"
+
+#define VPOOL_IMPLEMENTATION
+#include "vpool.h"
+
+
+
+
 
 // #include "tests/darken/benchmarks.h"
 // #include "tests/darken/tests.h"
@@ -22,10 +31,18 @@
 
 int main(void)
 {
+    vpool_run_tests();
+    dpool_run_tests();
+
     // bench_darksys();
     // test_darksys();
+    BLASTEM_PROFIL_START
     darksys_run_benchmarks();
+    BLASTEM_PROFIL_END
+    
+    BLASTEM_PROFIL_START
     darksys_run_tests();
+    BLASTEM_PROFIL_END
 
     
     // kimi_compare();
