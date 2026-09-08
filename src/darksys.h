@@ -64,13 +64,10 @@ typedef struct
  * ============================================================================ */
 
 // Dynamic allocation:
-//
 //     darksys system = DARKSYS_POOL_ALLOC(MEM_alloc, 100, 3);
-//
 //     int16_t handle = DARKSYS_ADD(&system, entity, position, velocity);
-//
 //     void **data = darksys_data(&system, handle);
-//
+//     ...
 //     MEM_free(system.pool);
 //     MEM_free(system.lookup);
 //     MEM_free(system.handles);
@@ -90,7 +87,6 @@ typedef struct
     }
 
 // Static allocation:
-//
 //     DARKSYS_POOL_DECLARE(storage, 100, 3);
 //     darksys system = DARKSYS_POOL_BIND(storage);
 #define DARKSYS_POOL_DECLARE(NAME, CAPACITY, PARAMS) \
@@ -138,81 +134,43 @@ typedef struct
         .free_count = 0,                          \
     }
 
-/*
- * Adds one group of pointers.
- *
- * The number of arguments must match `params`.
- *
- *     int16_t handle = DARKSYS_ADD(&system, A);
- *     int16_t handle = DARKSYS_ADD(&system, A, B, C);
- *
- * Returns:
- *
- *     >= 0 : stable handle.
- *     -1   : invalid number of parameters.
- *     -1   : pool full.
- */
-#define DARKSYS_ADD(SYSTEM, ...)                                                \
-    ({                                                                          \
-        darksys *_s = (SYSTEM);                                                 \
-        int16_t _handle = -1;                                                   \
-        if (_DARKSYS_NARGS(__VA_ARGS__) == _s->params)                          \
-        {                                                                       \
-            _handle = darksys_add(_s);                                          \
-            if (_handle >= 0)                                                   \
-            {                                                                   \
-                _DARKSYS_WRITE_N(_DARKSYS_NARGS(__VA_ARGS__), _s, __VA_ARGS__); \
-                _s->size += _s->params;                                         \
-            }                                                                   \
-        }                                                                       \
-        _handle;                                                                \
-    })
+// Adds one group of pointers.
+//
+// The number of arguments must match `params`.
+//     int16_t handle = DARKSYS_ADD(&system, A);
+//     int16_t handle = DARKSYS_ADD(&system, A, B, C);
+//
+// Returns:
+//     >= 0 : stable handle.
+//     -3   : invalid number of parameters.
+//     -2   :
+//     -1   : pool full.
+#define DARKSYS_ADD(SYSTEM, ...) ({                                         \
+    darksys *_s = (SYSTEM);                                                 \
+    int16_t _handle = -3;                                                   \
+    if (_DARKSYS_NARGS(__VA_ARGS__) == _s->params)                          \
+    {                                                                       \
+        _handle = darksys_add(_s);                                          \
+        if (_handle >= 0)                                                   \
+        {                                                                   \
+            _DARKSYS_WRITE_N(_DARKSYS_NARGS(__VA_ARGS__), _s, __VA_ARGS__); \
+            _s->size += _s->params;                                         \
+        }                                                                   \
+    }                                                                       \
+    _handle;                                                                \
+})
 
-/*
- * Returns the group of pointers associated with a handle.
- *
- * For params = 3:
- *
- *     void **data = darksys_data(&system, handle);
- *
- *     data[0];
- *     data[1];
- *     data[2];
- *
- * Returns 0 for an invalid or inactive handle.
- */
 void **darksys_data(darksys *, uint16_t);
-
-/*
- * Removes a group using its stable handle.
- *
- * If the removed group is not the last active group, the last group is moved
- * into the removed slot.
- *
- * The moved group keeps its handle.
- *
- * Returns:
- *
- *     >= 0 : new group count.
- *     -1   : invalid or inactive handle.
- */
 int16_t darksys_remove(darksys *, uint16_t);
-
-/*
- * Clears the system.
- */
 void darksys_clear(darksys *);
-
-/*
- * Reserves one physical slot and returns its stable handle.
- */
 int16_t darksys_add(darksys *);
 
-/* ============================================================================
- * FOREACH
- * ============================================================================ */
+#define DARKSYS_FOREACH(SYSTEM, ...) \
+    _DARKSYS_FOREACH_DISPATCH(_DARKSYS_FOREACH_NARGS(__VA_ARGS__), SYSTEM, __VA_ARGS__)
 
-#define DARKSYS_FOREACH(SYSTEM, ...) _DARKSYS_FOREACH_DISPATCH(_DARKSYS_FOREACH_NARGS(__VA_ARGS__), SYSTEM, __VA_ARGS__)
+/* ============================================================================
+ * PRIVATE
+ * ============================================================================ */
 
 #define _DARKSYS_FOREACH_DISPATCH(N, SYSTEM, ...) _DARKSYS_FOREACH_DISPATCH_I(N, SYSTEM, __VA_ARGS__)
 #define _DARKSYS_FOREACH_DISPATCH_I(N, SYSTEM, ...) _DARKSYS_FOREACH_##N(SYSTEM, __VA_ARGS__)
@@ -241,10 +199,6 @@ int16_t darksys_add(darksys *);
             --_count;                  \
         }                              \
     } while (0)
-
-/* ============================================================================
- * PRIVATE
- * ============================================================================ */
 
 #define _DARKSYS_NARGS(...) _DARKSYS_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1)
 #define _DARKSYS_NARGS_I(_1, _2, _3, _4, _5, N, ...) N
@@ -296,7 +250,7 @@ int16_t darksys_add(darksys *s)
         if (s->next >= s->capacity)
         {
             --s->count;
-            return -1;
+            return -2;
         }
 
         handle = s->next++;
@@ -332,10 +286,10 @@ int16_t darksys_remove(darksys *s, uint16_t handle)
     uint16_t slot = s->lookup[handle];
 
     if (slot >= s->count)
-        return -1;
+        return -2;
 
     if (s->handles[slot] != handle)
-        return -1;
+        return -3;
 
     --s->count;
 
