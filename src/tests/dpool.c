@@ -18,11 +18,12 @@ static void dpool_dump(dpool *pool)
 
     for (uint16_t i = 0; i < pool->count; ++i)
     {
-        Entity *entity = dpool_data(pool, pool->handles[i]);
+        uint16_t handle = pool->handles[i];
+        Entity *entity = dpool_data(pool, handle);
 
         kprintf("  [%d] handle=%d id=%d",
                 i,
-                pool->handles[i],
+                handle,
                 entity->id);
     }
 }
@@ -42,10 +43,10 @@ static void test_stable_handle(void)
         {40},
     };
 
-    DPOOL_POOL_BIND(storage, memcpy);
+    uint16_t lookup[4];
+    uint16_t handles[4];
 
-    dpool pool;
-    DPOOL_POOL_INIT(pool, storage, memcpy);
+    dpool pool = DPOOL_POOL_BIND(storage, lookup, handles, memcpy);
 
     int16_t a = dpool_alloc(&pool);
     int16_t b = dpool_alloc(&pool);
@@ -75,10 +76,10 @@ static void test_remove_swap(void)
         {40},
     };
 
-    DPOOL_POOL_BIND(storage, memcpy);
+    uint16_t lookup[4];
+    uint16_t handles[4];
 
-    dpool pool;
-    DPOOL_POOL_INIT(pool, storage, memcpy);
+    dpool pool = DPOOL_POOL_BIND(storage, lookup, handles, memcpy);
 
     int16_t a = dpool_alloc(&pool);
     int16_t b = dpool_alloc(&pool);
@@ -98,14 +99,19 @@ static void test_remove_swap(void)
     entity = dpool_data(&pool, c);
     kprintf("c -> %d", entity->id);
 
-    kprintf("b -> %x", (unsigned int)dpool_data(&pool, b));
+    entity = dpool_data(&pool, b);
+
+    if (entity == 0)
+        kprintf("b -> NULL");
+    else
+        kprintf("b -> %d", entity->id);
 
     dpool_dump(&pool);
 }
 
-static void test_remove_last(void)
+static void test_handle_reuse(void)
 {
-    kprintf("TEST: remove last");
+    kprintf("TEST: handle reuse");
 
     Entity storage[4] = {
         {10},
@@ -114,31 +120,58 @@ static void test_remove_last(void)
         {40},
     };
 
-    DPOOL_POOL_BIND(storage, memcpy);
+    uint16_t lookup[4];
+    uint16_t handles[4];
 
-    dpool pool;
-    DPOOL_POOL_INIT(pool, storage, memcpy);
+    dpool pool = DPOOL_POOL_BIND(storage, lookup, handles, memcpy);
 
     int16_t a = dpool_alloc(&pool);
     int16_t b = dpool_alloc(&pool);
     int16_t c = dpool_alloc(&pool);
 
-    dpool_remove(&pool, c);
+    kprintf("a=%d b=%d c=%d", a, b, c);
+
+    dpool_remove(&pool, b);
+
+    int16_t d = dpool_alloc(&pool);
+
+    kprintf("d=%d reused=%d", d, b);
+
+    dpool_dump(&pool);
+}
+
+static void test_dynamic(void)
+{
+    kprintf("TEST: dynamic");
+
+    dpool pool = DPOOL_POOL_ALLOC(MEM_alloc, 4, sizeof(Entity), memcpy);
+
+    Entity *a = dpool_data(&pool, dpool_alloc(&pool));
+    Entity *b = dpool_data(&pool, dpool_alloc(&pool));
+    int16_t c = dpool_alloc(&pool);
+
+    a->id = 10;
+    b->id = 20;
 
     Entity *entity;
 
-    entity = dpool_data(&pool, a);
-    kprintf("a -> %d", entity->id);
+    entity = dpool_data(&pool, c);
+    entity->id = 30;
 
-    entity = dpool_data(&pool, b);
-    kprintf("b -> %d", entity->id);
+    kprintf("a -> %d", a->id);
+    kprintf("b -> %d", b->id);
+    kprintf("c -> %d", entity->id);
 
-    kprintf("c -> %x", (unsigned int)dpool_data(&pool, c));
+    dpool_remove(&pool, c);
+
+    MEM_free(pool.pool);
+    MEM_free(pool.lookup);
+    MEM_free(pool.handles);
 }
 
-static void test_clear(void)
+static void test_full(void)
 {
-    kprintf("TEST: clear");
+    kprintf("TEST: full");
 
     Entity storage[4] = {
         {10},
@@ -147,21 +180,21 @@ static void test_clear(void)
         {40},
     };
 
-    DPOOL_POOL_BIND(storage, memcpy);
+    uint16_t lookup[4];
+    uint16_t handles[4];
 
-    dpool pool;
-    DPOOL_POOL_INIT(pool, storage, memcpy);
+    dpool pool = DPOOL_POOL_BIND(storage, lookup, handles, memcpy);
 
     int16_t a = dpool_alloc(&pool);
     int16_t b = dpool_alloc(&pool);
+    int16_t c = dpool_alloc(&pool);
+    int16_t d = dpool_alloc(&pool);
+    int16_t e = dpool_alloc(&pool);
+
+    kprintf("a=%d b=%d c=%d d=%d e=%d", a, b, c, d, e);
+    kprintf("count=%d", pool.count);
 
     dpool_dump(&pool);
-
-    dpool_clear(&pool);
-
-    kprintf("count=%d", pool.count);
-    kprintf("a -> %x", (unsigned int)dpool_data(&pool, a));
-    kprintf("b -> %x", (unsigned int)dpool_data(&pool, b));
 }
 
 /* ============================================================================
@@ -176,8 +209,9 @@ void dpool_run_tests(void)
 
     test_stable_handle();
     test_remove_swap();
-    test_remove_last();
-    test_clear();
+    test_handle_reuse();
+    test_dynamic();
+    test_full();
 
     kprintf("================================");
 }

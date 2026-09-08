@@ -2,6 +2,8 @@
 
 #include <stdint.h>
 
+typedef void (*dpool_copy)(void *, const void *, uint16_t);
+
 typedef struct
 {
     char *pool;
@@ -11,7 +13,9 @@ typedef struct
     uint16_t size;
     uint16_t count;
     uint16_t next_handle;
-    void *(*copy)();
+    uint16_t free_head;
+    uint16_t free_count;
+    dpool_copy copy;
 } dpool;
 
 /* ============================================================================
@@ -26,7 +30,7 @@ typedef struct
 //     MEM_free(pool.pool);
 //     MEM_free(pool.lookup);
 //     MEM_free(pool.handles);
-#define DPOOL_POOL_ALLOC(ALLOC, CAPACITY, SIZE, COPY)      \
+#define DPOOL_POOL_ALLOC(ALLOC, CAPACITY, SIZE, COPY)       \
     {                                                      \
         .pool = (ALLOC)((CAPACITY) * (SIZE)),              \
         .lookup = (ALLOC)((CAPACITY) * sizeof(uint16_t)),  \
@@ -35,29 +39,28 @@ typedef struct
         .size = (SIZE),                                    \
         .count = 0,                                        \
         .next_handle = 0,                                  \
+        .free_head = 0,                                    \
+        .free_count = 0,                                   \
         .copy = (COPY),                                    \
     }
 
 // Static allocation:
-//     Entity storage[4];
-//     DPOOL_POOL_BIND(storage, memcpy);
-//     dpool pool;
-//     DPOOL_POOL_INIT(pool, storage, memcpy);
-#define DPOOL_POOL_BIND(NAME, COPY)                           \
-    uint16_t NAME##_lookup[sizeof(NAME) / sizeof((NAME)[0])]; \
-    uint16_t NAME##_handles[sizeof(NAME) / sizeof((NAME)[0])]
-
-#define DPOOL_POOL_INIT(POOL, NAME, COPY)             \
-    (POOL) = (dpool)                                  \
-    {                                                 \
-        .pool = (char *)(NAME),                       \
-        .lookup = (NAME##_lookup),                    \
-        .handles = (NAME##_handles),                  \
-        .capacity = sizeof(NAME) / sizeof((NAME)[0]), \
-        .size = sizeof((NAME)[0]),                    \
-        .count = 0,                                   \
-        .next_handle = 0,                             \
-        .copy = (COPY),                               \
+//     Entity storage[100];
+//     uint16_t lookup[100];
+//     uint16_t handles[100];
+//     dpool pool = DPOOL_POOL_BIND(storage, lookup, handles, memcpy);
+#define DPOOL_POOL_BIND(NAME, LOOKUP, HANDLES, COPY)       \
+    {                                                      \
+        .pool = (char *)(NAME),                            \
+        .lookup = (LOOKUP),                                \
+        .handles = (HANDLES),                              \
+        .capacity = sizeof(NAME) / sizeof((NAME)[0]),      \
+        .size = sizeof((NAME)[0]),                         \
+        .count = 0,                                        \
+        .next_handle = 0,                                  \
+        .free_head = 0,                                    \
+        .free_count = 0,                                   \
+        .copy = (COPY),                                    \
     }
 
 int16_t dpool_alloc(dpool *);
@@ -76,8 +79,25 @@ int16_t dpool_alloc(dpool *p)
     if (p->count >= p->capacity)
         return -1;
 
-    uint16_t handle = p->next_handle++;
+    uint16_t handle;
     uint16_t slot = p->count++;
+
+    if (p->free_count)
+    {
+        handle = p->free_head;
+        p->free_head = p->lookup[handle];
+        --p->free_count;
+    }
+    else
+    {
+        if (p->next_handle >= p->capacity)
+        {
+            --p->count;
+            return -1;
+        }
+
+        handle = p->next_handle++;
+    }
 
     p->handles[slot] = handle;
     p->lookup[handle] = slot;
@@ -88,15 +108,15 @@ int16_t dpool_alloc(dpool *p)
 void *dpool_data(dpool *p, uint16_t handle)
 {
     if (handle >= p->next_handle)
-        return NULL;
+        return 0;
 
     uint16_t slot = p->lookup[handle];
 
     if (slot >= p->count)
-        return NULL;
+        return 0;
 
     if (p->handles[slot] != handle)
-        return NULL;
+        return 0;
 
     return p->pool + (slot * p->size);
 }
@@ -127,6 +147,10 @@ int16_t dpool_remove(dpool *p, uint16_t handle)
         p->lookup[p->handles[slot]] = slot;
     }
 
+    p->lookup[handle] = p->free_head;
+    p->free_head = handle;
+    ++p->free_count;
+
     return p->count;
 }
 
@@ -134,6 +158,8 @@ void dpool_clear(dpool *p)
 {
     p->count = 0;
     p->next_handle = 0;
+    p->free_head = 0;
+    p->free_count = 0;
 }
 
 #endif // DPOOL_IMPLEMENTATION
