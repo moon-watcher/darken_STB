@@ -13,8 +13,8 @@
 #define DPOOL_IMPLEMENTATION
 #include "dpool.h"
 
-#define VPOOL_IMPLEMENTATION
-#include "vpool.h"
+#define SMAP_IMPLEMENTATION
+#include "SMap.h"
 
 
 
@@ -31,7 +31,7 @@
 
 int main(void)
 {
-    vpool_run_tests();
+    smap_run_tests();
     dpool_run_tests();
 
     // bench_darksys();
@@ -39,7 +39,7 @@ int main(void)
     BLASTEM_PROFIL_START
     darksys_run_benchmarks();
     BLASTEM_PROFIL_END
-    
+
     BLASTEM_PROFIL_START
     darksys_run_tests();
     BLASTEM_PROFIL_END
