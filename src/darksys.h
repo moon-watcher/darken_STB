@@ -33,14 +33,14 @@
  *
  * IMPORTANT:
  *
- *     capacity   = maximum number of groups.
- *     size       = number of active pointers.
- *     params     = number of pointers per group.
- *     limit      = maximum number of pointers.
- *     count      = number of active groups.
- *     next       = next handle to assign.
- *     free_head  = first released handle.
- *     free_count = number of released handles.
+ *     capacity   = maximum number of groups
+ *     size       = number of active pointers
+ *     params     = number of pointers per group
+ *     limit      = maximum number of pointers
+ *     count      = number of active groups
+ *     next       = next handle to assign
+ *     free_head  = first released handle
+ *     free_count = number of released handles
  */
 
 typedef struct
@@ -49,14 +49,14 @@ typedef struct
     uint16_t *lookup;
     uint16_t *handles;
 
-    uint16_t capacity;   // Maximum number of groups.
-    uint16_t size;       // Number of active pointers.
-    uint16_t params;     // Number of pointers per group.
-    uint16_t limit;      // Maximum number of pointers.
-    uint16_t count;      // Number of active groups.
-    uint16_t next;       // Next handle to assign.
-    uint16_t free_head;  // First released handle.
-    uint16_t free_count; // Number of released handles.
+    uint16_t capacity;   // Maximum number of groups
+    uint16_t size;       // Number of active pointers
+    uint16_t params;     // Number of pointers per group
+    uint16_t limit;      // Maximum number of pointers
+    uint16_t count;      // Number of active groups
+    uint16_t next;       // Next handle to assign
+    uint16_t free_head;  // First released handle
+    uint16_t free_count; // Number of released handles
 } darksys;
 
 /* ============================================================================
@@ -102,7 +102,7 @@ typedef struct
         .params = (PARAMS),                          \
     }
 
-// Static/global initialization.
+// Static/global initialization
 #define DARKSYS_POOL_INIT(STORAGE, CAPACITY, PARAMS) \
     {                                                \
         .pool = (STORAGE).pool,                      \
@@ -118,7 +118,7 @@ typedef struct
         .free_count = 0,                             \
     }
 
-// Runtime binding.
+// Runtime binding
 #define DARKSYS_POOL_BIND(NAME)                   \
     {                                             \
         .pool = (NAME).pool,                      \
@@ -134,30 +134,26 @@ typedef struct
         .free_count = 0,                          \
     }
 
-// Adds one group of pointers.
+// Adds one group of pointers
 //
-// The number of arguments must match `params`.
+// The number of arguments must match `params`
 //     int16_t handle = DARKSYS_ADD(&system, A);
 //     int16_t handle = DARKSYS_ADD(&system, A, B, C);
 //
 // Returns:
-//     >= 0 : stable handle.
-//     -3   : invalid number of parameters.
-//     -2   :
-//     -1   : pool full.
-#define DARKSYS_ADD(SYSTEM, ...) ({                                         \
-    darksys *_s = (SYSTEM);                                                 \
-    int16_t _handle = -3;                                                   \
-    if (_DARKSYS_NARGS(__VA_ARGS__) == _s->params)                          \
-    {                                                                       \
-        _handle = darksys_add(_s);                                          \
-        if (_handle >= 0)                                                   \
-        {                                                                   \
-            _DARKSYS_WRITE_N(_DARKSYS_NARGS(__VA_ARGS__), _s, __VA_ARGS__); \
-            _s->size += _s->params;                                         \
-        }                                                                   \
-    }                                                                       \
-    _handle;                                                                \
+//     >= 0 : stable handle
+//     -3   : invalid number of parameters
+//     -2   : no handles available
+//     -1   : pool full
+#define DARKSYS_ADD(SYSTEM, ...) ({                                                    \
+    darksys *_s = (SYSTEM);                                                            \
+    int16_t _handle = -3;                                                              \
+    if (_DARKSYS_NARGS(__VA_ARGS__) == _s->params && (_handle = darksys_add(_s)) >= 0) \
+    {                                                                                  \
+        _DARKSYS_WRITE_N(_DARKSYS_NARGS(__VA_ARGS__), _s, __VA_ARGS__);                \
+        _s->size += _s->params;                                                        \
+    }                                                                                  \
+    _handle;                                                                           \
 })
 
 void **darksys_data(darksys *, uint16_t);
@@ -278,6 +274,10 @@ void **darksys_data(darksys *s, uint16_t handle)
     return s->pool + (slot * s->params);
 }
 
+// Returns:
+//     -1 : handle is outside the range of assigned handles
+//     -2 : handle points to an inactive slot
+//     -3 : corrupted lookup / handle does not match the slot
 int16_t darksys_remove(darksys *s, uint16_t handle)
 {
     if (handle >= s->next)
@@ -301,8 +301,10 @@ int16_t darksys_remove(darksys *s, uint16_t handle)
         for (uint16_t i = 0; i < s->params; ++i)
             s->pool[dst + i] = s->pool[src + i];
 
-        s->handles[slot] = s->handles[s->count];
-        s->lookup[s->handles[slot]] = slot;
+        uint16_t moved = s->handles[s->count];
+
+        s->handles[slot] = moved;
+        s->lookup[moved] = slot;
     }
 
     s->size -= s->params;
