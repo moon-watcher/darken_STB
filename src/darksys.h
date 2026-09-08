@@ -60,8 +60,8 @@ typedef struct
         uint16_t params;                             \
         void *pool[(CAPACITY) * (PARAMS)];           \
     } NAME = {                                       \
-        .capacity = (CAPACITY),                     \
-        .params = (PARAMS),                         \
+        .capacity = (CAPACITY),                      \
+        .params = (PARAMS),                          \
     }
 
 // Static/global initialization
@@ -91,11 +91,11 @@ typedef struct
 //     uint16_t slot = DARKSYS_ADD(&system, A, B, C);
 //
 // Returns:
-//     0 .. capacity - 1 : slot
-//     -1                : pool full
-#define DARKSYS_ADD(SYSTEM, ...) ({                                             \
-    darksys *s = (SYSTEM);                                                      \
-    (s->count < s->capacity) ? _DARKSYS_WRITE(s, __VA_ARGS__), s->count++ : -1; \
+//     [0 .. capacity) : slot
+//     -1              : pool full
+#define DARKSYS_ADD(SYSTEM, ...) ({                                                       \
+    darksys *s = (SYSTEM);                                                                \
+    s->count < s->capacity ? (_DARKSYS_WRITE(s, __VA_ARGS__), s->count++) : (uint16_t)-1; \
 })
 
 #define DARKSYS_FOREACH(SYSTEM, ...) _DARKSYS_FOREACH_DISPATCH(_DARKSYS_FOREACH_NARGS(__VA_ARGS__), SYSTEM, __VA_ARGS__)
@@ -115,23 +115,23 @@ void darksys_clear(darksys *);
 #define _DARKSYS_WRITE_N_I(N, SYSTEM, ...) _DARKSYS_WRITE_##N(SYSTEM, __VA_ARGS__)
 
 #define _DARKSYS_WRITE_1(SYSTEM, A) \
-    (SYSTEM)->pool[(SYSTEM)->size++] = (A)
+    ((SYSTEM)->pool[(SYSTEM)->size++] = (A))
 
 #define _DARKSYS_WRITE_2(SYSTEM, A, B) \
-    _DARKSYS_WRITE_1(SYSTEM, A);       \
-    _DARKSYS_WRITE_1(SYSTEM, B)
+    (_DARKSYS_WRITE_1(SYSTEM, A),      \
+     _DARKSYS_WRITE_1(SYSTEM, B))
 
 #define _DARKSYS_WRITE_3(SYSTEM, A, B, C) \
-    _DARKSYS_WRITE_2(SYSTEM, A, B);       \
-    _DARKSYS_WRITE_1(SYSTEM, C)
+    (_DARKSYS_WRITE_2(SYSTEM, A, B),      \
+     _DARKSYS_WRITE_1(SYSTEM, C))
 
 #define _DARKSYS_WRITE_4(SYSTEM, A, B, C, D) \
-    _DARKSYS_WRITE_3(SYSTEM, A, B, C);       \
-    _DARKSYS_WRITE_1(SYSTEM, D)
+    (_DARKSYS_WRITE_3(SYSTEM, A, B, C),      \
+     _DARKSYS_WRITE_1(SYSTEM, D))
 
 #define _DARKSYS_WRITE_5(SYSTEM, A, B, C, D, E) \
-    _DARKSYS_WRITE_4(SYSTEM, A, B, C, D);       \
-    _DARKSYS_WRITE_1(SYSTEM, E)
+    (_DARKSYS_WRITE_4(SYSTEM, A, B, C, D),      \
+     _DARKSYS_WRITE_1(SYSTEM, E))
 
 #define _DARKSYS_FOREACH_DISPATCH(N, ...) _DARKSYS_FOREACH_DISPATCH_I(N, __VA_ARGS__)
 #define _DARKSYS_FOREACH_DISPATCH_I(N, ...) _DARKSYS_FOREACH_##N(__VA_ARGS__)

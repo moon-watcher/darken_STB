@@ -12,10 +12,11 @@ static u16 test_add(void)
 
     u16 ok = 1;
 
-    ok &= DARKSYS_ADD(&system, a);
-    ok &= DARKSYS_ADD(&system, b);
+    ok &= DARKSYS_ADD(&system, a) == 0;
+    ok &= DARKSYS_ADD(&system, b) == 0;
 
     ok &= system.size == 2;
+    ok &= system.count == 1;
     ok &= system.limit == 8;
 
     MEM_free(system.pool);
@@ -33,12 +34,13 @@ static u16 test_add_limit(void)
 
     u16 ok = 1;
 
-    ok &= DARKSYS_ADD(&system, a);
-    ok &= DARKSYS_ADD(&system, b);
+    ok &= DARKSYS_ADD(&system, a) == 0;
+    ok &= DARKSYS_ADD(&system, b) == 0;
 
-    ok &= !DARKSYS_ADD(&system, c);
+    ok &= DARKSYS_ADD(&system, c) == (u16)-1;
 
     ok &= system.size == 2;
+    ok &= system.count == 1;
 
     MEM_free(system.pool);
 
@@ -54,16 +56,18 @@ static u16 test_foreach(void)
     void *c = (void *) 3;
     void *d = (void *) 4;
 
-    DARKSYS_ADD(&system, a);
-    DARKSYS_ADD(&system, b);
-    DARKSYS_ADD(&system, c);
-    DARKSYS_ADD(&system, d);
+    u16 ok = 1;
+
+    ok &= DARKSYS_ADD(&system, a) == 0;
+    ok &= DARKSYS_ADD(&system, b) == 0;
+    ok &= DARKSYS_ADD(&system, c) == 1;
+    ok &= DARKSYS_ADD(&system, d) == 1;
 
     void *x;
     void *y;
 
     u16 count = 0;
-    u16 ok = 1;
+    
 
     DARKSYS_FOREACH(&system, x, y,
     {
@@ -77,6 +81,8 @@ static u16 test_foreach(void)
     });
 
     ok &= count == 2;
+    ok &= system.size == 4;
+    ok &= system.count == 2;
 
     MEM_free(system.pool);
 
@@ -92,15 +98,18 @@ static u16 test_remove(void)
     void *c = (void *) 3;
     void *d = (void *) 4;
 
-    DARKSYS_ADD(&system, a);
+    u16 slot_a = DARKSYS_ADD(&system, a);
+
     DARKSYS_ADD(&system, b);
     DARKSYS_ADD(&system, c);
     DARKSYS_ADD(&system, d);
 
     u16 ok = 1;
 
-    ok &= darksys_remove(&system, a);
+    ok &= slot_a == 0;
+    ok &= darksys_remove(&system, slot_a);
     ok &= system.size == 2;
+    ok &= system.count == 1;
 
     void *x;
     void *y;
@@ -126,6 +135,7 @@ static u16 test_clear(void)
     darksys_clear(&system);
 
     u16 ok = system.size == 0;
+    ok &= system.count == 0;
 
     MEM_free(system.pool);
 
