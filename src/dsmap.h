@@ -2,17 +2,71 @@
 
 #include <stdint.h>
 
+/*
+ * dsmap - Data Slot Map
+ * ============================================================================
+ *
+ * Stores fixed-size data directly inside a contiguous memory pool and assigns
+ * a stable handle to each active element.
+ *
+ * The handle does NOT identify the physical slot directly.
+ * The slot is resolved through the lookup table:
+ *
+ *     handle -> lookup[handle] -> slot -> pool[slot]
+ *
+ * This separation allows the pool to stay compact by moving the last active
+ * element into the slot of a removed element.
+ *
+ * The moved element keeps its handle, so its handle remains valid even though
+ * its physical slot changes.
+ *
+ * Example:
+ *     int16_t f = dsmap_alloc(&pool);
+ *     Entity *entity = dsmap_data(&pool, f);
+ *     entity->id = 5;
+ *     dsmap_remove(&pool, c);
+ *     entity = dsmap_data(&pool, f);
+ *
+ * "f" still refers to the same element even if that element was moved to a
+ * different physical slot by dsmap_remove().
+ *
+ *
+ * INTERNAL STORAGE
+ *     pool:       Raw contiguous storage containing the actual elements.
+ *     lookup:     Maps a handle to the current physical slot:
+ *         lookup[handle] = slot
+ *
+ *     handles:    Stores the handle associated with each physical slot:
+ *         handles[slot] = handle
+ *
+ *         This is used to verify that lookup[handle] still refers to the
+ *         expected element.
+ *
+ *     free_head:  First handle in the free-handle chain.
+ *     free_count: Number of handles currently available for reuse.
+ *
+ *
+ * STATE
+ *     capacity: Maximum number of elements.
+ *     size:     Size of each element in bytes.
+ *     count:    Number of currently active elements.
+ *     next:     Next handle to allocate when there are no reusable handles.
+ */
+
 typedef struct
 {
     char *pool;
-    uint16_t *lookup;
-    uint16_t *handles;
-    uint16_t capacity;
-    uint16_t size;
-    uint16_t count;
-    uint16_t next;
-    uint16_t free_head;
-    uint16_t free_count;
+
+    uint16_t *lookup;  // lookup[handle] returns the current physical slot of the element.
+    uint16_t *handles; // handles[slot] stores the handle currently assigned to that slot.
+
+    uint16_t capacity;   // Maximum number of elements the pool can contain.
+    uint16_t size;       // Size of each element in bytes.
+    uint16_t count;      // Number of currently active elements.
+    uint16_t next;       // Next handle to be assigned.
+    uint16_t free_head;  // First handle available for reuse.
+    uint16_t free_count; // Number of handles available for reuse.
+
     void (*copy)();
 } dsmap_t;
 
@@ -20,11 +74,17 @@ typedef struct
  * PUBLIC API
  * ============================================================================ */
 
-// Dynamic allocation:
+// Creates a dsmap_t using dynamically allocated memory.
+//     ALLOC    = memory allocation function.
+//     CAPACITY = maximum number of elements.
+//     SIZE     = size of each element in bytes.
+//     COPY     = function used to copy elements during remove.
+//
+// Example:
 //     dsmap_t pool = DSMAP_ALLOC(MEM_alloc, 100, sizeof(Entity), memcpy);
 //     int16_t handle = dsmap_alloc(&pool);
 //     Entity *entity = dsmap_data(&pool, handle);
-//     dsmap_remove(&pool, handle);
+//     ...
 //     MEM_free(pool.pool);
 //     MEM_free(pool.lookup);
 //     MEM_free(pool.handles);
@@ -42,10 +102,13 @@ typedef struct
         .copy = (COPY),                                    \
     }
 
-// Static allocation:
-//     Entity storage[100];
-//     uint16_t lookup[100];
-//     uint16_t handles[100];
+// Creates a dsmap_t using externally provided static storage.
+//     NAME    = data storage.
+//     LOOKUP  = handle-to-slot lookup storage.
+//     HANDLES = slot-to-handle storage.
+//     COPY    = function used to copy elements during remove.
+//
+// Example:
 //     dsmap_t pool = DSMAP_BIND(storage, lookup, handles, memcpy);
 #define DSMAP_BIND(NAME, LOOKUP, HANDLES, COPY)       \
     {                                                 \
@@ -91,7 +154,7 @@ int16_t dsmap_alloc(dsmap_t *p)
         if (p->next >= p->capacity)
         {
             --p->count;
-            return -1;
+            return -2;
         }
 
         handle = p->next++;
@@ -110,10 +173,7 @@ void *dsmap_data(dsmap_t *p, uint16_t handle)
 
     uint16_t slot = p->lookup[handle];
 
-    if (slot >= p->count)
-        return 0;
-
-    if (p->handles[slot] != handle)
+    if (slot >= p->count || p->handles[slot] != handle)
         return 0;
 
     return p->pool + (slot * p->size);
@@ -127,10 +187,10 @@ int16_t dsmap_remove(dsmap_t *p, uint16_t handle)
     uint16_t slot = p->lookup[handle];
 
     if (slot >= p->count)
-        return -1;
+        return -2;
 
     if (p->handles[slot] != handle)
-        return -1;
+        return -3;
 
     --p->count;
 

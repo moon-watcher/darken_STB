@@ -3,8 +3,9 @@
 #include <stdint.h>
 
 /*
- * SMap - Slot Map
- *
+ * vsmap - Pointer Slot Map
+ * ============================================================================
+ * 
  * Stores pointers associated with stable handles.
  *
  * The handle does NOT directly identify the physical slot of an element.
