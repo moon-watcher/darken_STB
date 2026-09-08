@@ -21,7 +21,7 @@ typedef struct
  * ============================================================================ */
 
 // Dynamic allocation:
-//     dsmap pool = DSMAP_ALLOC(MEM_alloc, 100, sizeof(Entity), memcpy);
+//     dsmap_t pool = DSMAP_ALLOC(MEM_alloc, 100, sizeof(Entity), memcpy);
 //     int16_t handle = dsmap_alloc(&pool);
 //     Entity *entity = dsmap_data(&pool, handle);
 //     dsmap_remove(&pool, handle);
@@ -46,7 +46,7 @@ typedef struct
 //     Entity storage[100];
 //     uint16_t lookup[100];
 //     uint16_t handles[100];
-//     dsmap pool = DSMAP_BIND(storage, lookup, handles, memcpy);
+//     dsmap_t pool = DSMAP_BIND(storage, lookup, handles, memcpy);
 #define DSMAP_BIND(NAME, LOOKUP, HANDLES, COPY)       \
     {                                                 \
         .pool = (char *)(NAME),                       \

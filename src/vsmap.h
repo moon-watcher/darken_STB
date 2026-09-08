@@ -65,7 +65,7 @@ typedef struct
 //     ...
 //     MEM_free(pool.pool);
 //     MEM_free(pool.lookup);
-#define vsmap_ALLOC(ALLOC, CAPACITY)                          \
+#define vsmap_ALLOC(ALLOC, CAPACITY)                         \
     {                                                        \
         .pool = (ALLOC)((CAPACITY) * sizeof(struct SMItem)), \
         .lookup = (ALLOC)((CAPACITY) * sizeof(uint16_t)),    \
@@ -81,7 +81,7 @@ typedef struct
 //  Example:
 //      vsmap_DECLARE(storage, 100);
 //      vsmap_t pool = vsmap_BIND(storage);
-#define vsmap_DECLARE(NAME, CAPACITY)       \
+#define vsmap_DECLARE(NAME, CAPACITY)      \
     struct SMItem NAME##_pool[(CAPACITY)]; \
     uint16_t NAME##_lookup[(CAPACITY)]
 
@@ -90,7 +90,7 @@ typedef struct
 //  Example:
 //      vsmap_DECLARE(storage, 100);
 //      vsmap_t pool = vsmap_BIND(storage);
-#define vsmap_BIND(NAME)                                             \
+#define vsmap_BIND(NAME)                                            \
     {                                                               \
         .pool = (NAME##_pool),                                      \
         .lookup = (NAME##_lookup),                                  \

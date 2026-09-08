@@ -16,10 +16,6 @@
 #define VSMAP_IMPLEMENTATION
 #include "vsmap.h"
 
-
-
-
-
 // #include "tests/darken/benchmarks.h"
 // #include "tests/darken/tests.h"
 // #include "tests/darken/examples.h"
@@ -44,7 +40,6 @@ int main(void)
     darksys_run_tests();
     BLASTEM_PROFIL_END
 
-    
     // kimi_compare();
     // kimi_benchmarks();
 
@@ -56,7 +51,7 @@ int main(void)
     BLASTEM_PROFIL_END
 
     //
-    
+
     BLASTEM_PROFIL_START
     // darken_run_usage_example();
     // darken_run_all_tests();
