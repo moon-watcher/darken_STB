@@ -30,7 +30,7 @@ typedef struct
 //     MEM_free(pool.pool);
 //     MEM_free(pool.lookup);
 //     MEM_free(pool.handles);
-#define DPOOL_POOL_ALLOC(ALLOC, CAPACITY, SIZE, COPY)       \
+#define DPOOL_POOL_ALLOC(ALLOC, CAPACITY, SIZE, COPY)      \
     {                                                      \
         .pool = (ALLOC)((CAPACITY) * (SIZE)),              \
         .lookup = (ALLOC)((CAPACITY) * sizeof(uint16_t)),  \
@@ -49,18 +49,18 @@ typedef struct
 //     uint16_t lookup[100];
 //     uint16_t handles[100];
 //     dpool pool = DPOOL_POOL_BIND(storage, lookup, handles, memcpy);
-#define DPOOL_POOL_BIND(NAME, LOOKUP, HANDLES, COPY)       \
-    {                                                      \
-        .pool = (char *)(NAME),                            \
-        .lookup = (LOOKUP),                                \
-        .handles = (HANDLES),                              \
-        .capacity = sizeof(NAME) / sizeof((NAME)[0]),      \
-        .size = sizeof((NAME)[0]),                         \
-        .count = 0,                                        \
-        .next_handle = 0,                                  \
-        .free_head = 0,                                    \
-        .free_count = 0,                                   \
-        .copy = (COPY),                                    \
+#define DPOOL_POOL_BIND(NAME, LOOKUP, HANDLES, COPY)  \
+    {                                                 \
+        .pool = (char *)(NAME),                       \
+        .lookup = (LOOKUP),                           \
+        .handles = (HANDLES),                         \
+        .capacity = sizeof(NAME) / sizeof((NAME)[0]), \
+        .size = sizeof((NAME)[0]),                    \
+        .count = 0,                                   \
+        .next_handle = 0,                             \
+        .free_head = 0,                               \
+        .free_count = 0,                              \
+        .copy = (COPY),                               \
     }
 
 int16_t dpool_alloc(dpool *);
