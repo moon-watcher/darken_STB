@@ -325,7 +325,7 @@ static void test_vsmap_invalid(void)
     vsmap_dump(&pool);
 
     if (vsmap_data(&pool, 0) != NULL) kprintf("FAIL empty data");
-    if (vsmap_remove(&pool, 0) != -1) kprintf("FAIL empty remove");
+    if (vsmap_remove(&pool, 0) != NULL) kprintf("FAIL empty remove");
 
     int a = vsmap_add(&pool, &entities[0]);
     int b = vsmap_add(&pool, &entities[1]);
@@ -337,11 +337,10 @@ static void test_vsmap_invalid(void)
 
     vsmap_dump(&pool);
 
-    if (vsmap_add(&pool, &entities[2]) != -1) kprintf("FAIL full pool");
+    if (vsmap_add(&pool, &entities[2]) != VSMAP_INVALID_HANDLE) kprintf("FAIL full pool");
     if (pool.count != 2) kprintf("FAIL full count");
-
     if (vsmap_data(&pool, 2) != NULL) kprintf("FAIL invalid data");
-    if (vsmap_remove(&pool, 2) != -1) kprintf("FAIL invalid remove");
+    if (vsmap_remove(&pool, 2) != NULL) kprintf("FAIL invalid remove");
 
     vsmap_remove(&pool, a);
 
