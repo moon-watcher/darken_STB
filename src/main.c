@@ -39,8 +39,12 @@ int main(void)
     // BLASTEM_PROFIL_END
 
     BLASTEM_PROFIL_START
-    darksys_run_tests();
+    vsmap_run_tests();
     BLASTEM_PROFIL_END
+
+    // BLASTEM_PROFIL_START
+    // darksys_run_tests();
+    // BLASTEM_PROFIL_END
 
     // kimi_compare();
     // kimi_benchmarks();

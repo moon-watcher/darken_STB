@@ -13,6 +13,7 @@ typedef struct
 
 static void vsmap_dump(vsmap_t *pool)
 {
+    return ;
     kprintf("vsmap_t DUMP: count=%d capacity=%d", pool->count, pool->capacity);
 
     for (uint16_t i = 0; i < pool->count; ++i)
@@ -26,10 +27,10 @@ static void vsmap_dump(vsmap_t *pool)
  * TESTS
  * ============================================================================ */
 
-static void test_vsmap_bind(void)
+static void test_VSMAP_BIND(void)
 {
-    vsmap_DECLARE(storage, 6);
-    vsmap_t pool = vsmap_BIND(storage);
+    VSMAP_DECLARE(storage, 6);
+    vsmap_t pool = VSMAP_BIND(storage);
 
     Entity entities[6] = { {0}, {1}, {2}, {3}, {4}, {5}, };
 
@@ -163,9 +164,9 @@ static void test_vsmap_bind(void)
     kprintf("vsmap_t BIND: OK");
 }
 
-static void test_vsmap_alloc(void)
+static void test_VSMAP_ALLOC(void)
 {
-    vsmap_t pool = vsmap_ALLOC(MEM_alloc, 6);
+    vsmap_t pool = VSMAP_ALLOC(MEM_alloc, 6);
 
     Entity entities[6] = { {0}, {1}, {2}, {3}, {4}, {5}, };
 
@@ -307,7 +308,7 @@ static void test_vsmap_alloc(void)
 
 static void test_vsmap_invalid(void)
 {
-    vsmap_t pool = vsmap_ALLOC(MEM_alloc, 2);
+    vsmap_t pool = VSMAP_ALLOC(MEM_alloc, 2);
 
     Entity entities[3] = { {0}, {1}, {2}, };
 
@@ -359,8 +360,8 @@ void vsmap_run_tests(void)
     kprintf("vsmap_t TESTS");
     kprintf("--------------------------------");
 
-    test_vsmap_bind();
-    test_vsmap_alloc();
+    test_VSMAP_BIND();
+    test_VSMAP_ALLOC();
     test_vsmap_invalid();
 
     kprintf("--------------------------------");

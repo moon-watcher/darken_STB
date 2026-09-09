@@ -2,169 +2,240 @@
 
 #include <stdint.h>
 
-/*
- * vsmap - Pointer Slot Map
- * ============================================================================
- * 
- * Stores pointers associated with stable handles.
- *
- * The handle does NOT directly identify the physical slot of an element.
- * It is used as an index into "lookup" to obtain the element's current slot.
- *
- *    handle -> lookup[handle] -> slot -> pool[slot].value
- *
- * This allows the pool to remain compact by using swap-remove when elements
- * are deleted, while keeping the handles of the remaining elements stable.
- *
- * Example:
- *     int16_t f = vsmap_add(&pool, &entity);
- *     Entity *entity = vsmap_data(&pool, f);
- *     vsmap_remove(&pool, c);
- *     entity = vsmap_data(&pool, f);
- *
- * Even if the element associated with "f" has moved to a different physical
- * slot, vsmap_data() will still return the same element.
- *
- * IMPORTANT:
- *     count    = number of active elements.
- *     capacity = maximum number of elements.
- *     next     = next handle to be assigned.
- *
- * The physical slot is found through:
- *     lookup[handle]
- */
+#define VSMAP_INVALID_HANDLE 0xFFFF
 
 typedef struct
 {
-    // value  = pointer to the stored object.
-    // handle = handle associated with this element.
-    //
-    // The handle is also stored in the element so we can verify that
-    // lookup[handle] still points to the correct element.
-    struct SMItem
+    struct vsmap_item_t
     {
         void *value;
         uint16_t handle;
-    } *pool;
+    } *pool; // Pool denso de elementos activos.
 
-    uint16_t *lookup;  // lookup[handle] returns the physical slot of the element.
-    uint16_t capacity; // Maximum number of elements the pool can contain.
-    uint16_t count;    // Number of currently active elements.
-    uint16_t next;     // Next handle to be assigned.
+    uint16_t *lookup;
+    uint16_t capacity; // Número máximo de elementos.
+    uint16_t count;    // Número de elementos activos.
+    uint16_t free_head;
+
 } vsmap_t;
 
+/*
+ * Reserva dinámicamente pool y lookup.
+ *
+ * Ejemplo:
+ *
+ *     vsmap_t map = VSMAP_ALLOC(malloc, 100);
+ *
+ * La liberación es responsabilidad del usuario:
+ *
+ *     free(map.pool);
+ *     free(map.lookup);
+ *
+ * CAPACITY debe ser <= 65534.
+ */
+#define VSMAP_ALLOC(ALLOC, CAPACITY)                                                    \
+    {                                                                                   \
+        .pool = (struct vsmap_item_t *)ALLOC((CAPACITY) * sizeof(struct vsmap_item_t)), \
+        .lookup = (uint16_t *)ALLOC((CAPACITY) * sizeof(uint16_t)),                     \
+        .capacity = (CAPACITY),                                                         \
+        .count = 0,                                                                     \
+        .free_head = VSMAP_INVALID_HANDLE,                                              \
+    }
+
+/*
+ * Declara almacenamiento estático.
+ *
+ * Ejemplo:
+ *
+ *     VSMAP_DECLARE(entities, 100);
+ *     vsmap_t map = VSMAP_BIND(entities);
+ */
+#define VSMAP_DECLARE(NAME, CAPACITY)          \
+    struct vsmap_item_t NAME##_pool[CAPACITY]; \
+    uint16_t NAME##_lookup[CAPACITY]
+
+/*
+ * Une el almacenamiento declarado mediante VSMAP_DECLARE()
+ * a un vsmap_t.
+ */
+#define VSMAP_BIND(NAME)                                          \
+    {                                                             \
+        .pool = NAME##_pool,                                      \
+        .lookup = NAME##_lookup,                                  \
+        .capacity = sizeof(NAME##_pool) / sizeof(NAME##_pool[0]), \
+        .count = 0,                                               \
+        .free_head = VSMAP_INVALID_HANDLE,                        \
+    }
+
 /* ============================================================================
- * PUBLIC API
- * ============================================================================ */
+ * API
+ * ========================================================================== */
 
-// Creates an vsmap_t using dynamically allocated memory.
-//     ALLOC    = memory allocation function.
-//     CAPACITY = maximum number of elements.
-//
-// Example:
-//     vsmap_t pool = vsmap_ALLOC(MEM_alloc, 100);
-//     ...
-//     MEM_free(pool.pool);
-//     MEM_free(pool.lookup);
-#define vsmap_ALLOC(ALLOC, CAPACITY)                         \
-    {                                                        \
-        .pool = (ALLOC)((CAPACITY) * sizeof(struct SMItem)), \
-        .lookup = (ALLOC)((CAPACITY) * sizeof(uint16_t)),    \
-        .capacity = (CAPACITY),                              \
-        .count = 0,                                          \
-        .next = 0,                                           \
-    }
-
-//  Statically allocates the storage required by an vsmap_t.
-//      NAME     = storage name.
-//      CAPACITY = maximum number of elements.
-//
-//  Example:
-//      vsmap_DECLARE(storage, 100);
-//      vsmap_t pool = vsmap_BIND(storage);
-#define vsmap_DECLARE(NAME, CAPACITY)      \
-    struct SMItem NAME##_pool[(CAPACITY)]; \
-    uint16_t NAME##_lookup[(CAPACITY)]
-
-//  Binds an vsmap_t to storage declared with vsmap_DECLARE().
-//
-//  Example:
-//      vsmap_DECLARE(storage, 100);
-//      vsmap_t pool = vsmap_BIND(storage);
-#define vsmap_BIND(NAME)                                            \
-    {                                                               \
-        .pool = (NAME##_pool),                                      \
-        .lookup = (NAME##_lookup),                                  \
-        .capacity = sizeof(NAME##_pool) / sizeof((NAME##_pool)[0]), \
-        .count = 0,                                                 \
-        .next = 0,                                                  \
-    }
-
-int16_t vsmap_add(vsmap_t *, void *);
+uint16_t vsmap_add(vsmap_t *, void *);
 void *vsmap_data(vsmap_t *, uint16_t);
+int16_t vsmap_valid(vsmap_t *, uint16_t);
 int16_t vsmap_remove(vsmap_t *, uint16_t);
 void vsmap_reset(vsmap_t *);
 
+//
+// Itera sobre todos los punteros activos.
+// ITEM debe ser una variable ya declarada.
+//
+// Ejemplo:
+//     void *item;
+//     VSMAP_FOREACH(&map, item,
+//     {
+//         Entity *entity = item;
+//         ...
+//     });
+//
+// NO eliminar elementos dentro de CODE.
+//
+#define VSMAP_FOREACH(MAP, ITEM, CODE)               \
+    do                                               \
+    {                                                \
+        vsmap_t *_map = (MAP);                       \
+        uint16_t _i;                                 \
+                                                     \
+        for (_i = 0; _map && _i < _map->count; ++_i) \
+        {                                            \
+            ITEM = _map->pool[_i].value;             \
+            CODE;                                    \
+        }                                            \
+    } while (0)
+
 /* ============================================================================
  * IMPLEMENTATION
- * ============================================================================ */
+ * ========================================================================== */
 
 #ifdef VSMAP_IMPLEMENTATION
 
-int16_t vsmap_add(vsmap_t *p, void *value)
+static void _vsmap_build_free_list(vsmap_t *map)
 {
-    if (p->count >= p->capacity)
-        return -1;
+    if (map->capacity == 0)
+    {
+        map->free_head = VSMAP_INVALID_HANDLE;
+        return;
+    }
 
-    uint16_t handle = p->next++;
-    uint16_t slot = p->count++;
+    for (uint16_t i = 0; i < map->capacity - 1; ++i)
+        map->lookup[i] = i + 1;
 
-    p->pool[slot].value = value;
-    p->pool[slot].handle = handle;
-    p->lookup[handle] = slot;
+    map->lookup[map->capacity - 1] = VSMAP_INVALID_HANDLE;
+
+    map->free_head = 0;
+}
+
+static void _vsmap_init_free_list(vsmap_t *map)
+{
+    if (map->free_head != VSMAP_INVALID_HANDLE)
+        return;
+
+    if (map->count >= map->capacity)
+        return;
+
+    _vsmap_build_free_list(map);
+}
+
+uint16_t vsmap_add(vsmap_t *map, void *value)
+{
+    if (map->capacity >= VSMAP_INVALID_HANDLE)
+        return VSMAP_INVALID_HANDLE;
+
+    if (map->count >= map->capacity)
+        return VSMAP_INVALID_HANDLE;
+
+    _vsmap_init_free_list(map);
+
+    if (map->free_head == VSMAP_INVALID_HANDLE)
+        return VSMAP_INVALID_HANDLE;
+
+    uint16_t handle = map->free_head;
+
+    map->free_head = map->lookup[handle];
+
+    uint16_t slot = map->count++;
+
+    map->pool[slot].value = value;
+    map->pool[slot].handle = handle;
+    map->lookup[handle] = slot;
 
     return handle;
 }
 
-void *vsmap_data(vsmap_t *p, uint16_t handle)
+void *vsmap_data(vsmap_t *map, uint16_t handle)
 {
-    if (handle >= p->next)
+    if (handle == VSMAP_INVALID_HANDLE)
         return 0;
 
-    uint16_t slot = p->lookup[handle];
-
-    if (slot >= p->count || p->pool[slot].handle != handle)
+    if (handle >= map->capacity)
         return 0;
 
-    return p->pool[slot].value;
+    uint16_t slot = map->lookup[handle];
+
+    if (slot >= map->count)
+        return 0;
+
+    if (map->pool[slot].handle != handle)
+        return 0;
+
+    return map->pool[slot].value;
 }
 
-int16_t vsmap_remove(vsmap_t *p, uint16_t handle)
+int16_t vsmap_valid(vsmap_t *map, uint16_t handle)
 {
-    if (handle >= p->next)
+    if (handle == VSMAP_INVALID_HANDLE)
         return -1;
 
-    uint16_t slot = p->lookup[handle];
-
-    if (slot >= p->count)
+    if (handle >= map->capacity)
         return -2;
 
-    if (p->pool[slot].handle != handle)
+    uint16_t slot = map->lookup[handle];
+
+    if (slot >= map->count)
         return -3;
 
-    if (slot != --p->count)
-    {
-        p->pool[slot] = p->pool[p->count];
-        p->lookup[p->pool[slot].handle] = slot;
-    }
+    if (map->pool[slot].handle != handle)
+        return -4;
 
-    return p->count;
+    return 1;
 }
 
-void vsmap_reset(vsmap_t *p)
+int16_t vsmap_remove(vsmap_t *map, uint16_t handle)
 {
-    p->count = 0;
-    p->next = 0;
+    if (handle == VSMAP_INVALID_HANDLE)
+        return -1;
+
+    if (handle >= map->capacity)
+        return -2;
+
+    uint16_t slot = map->lookup[handle];
+
+    if (slot >= map->count)
+        return -3;
+
+    if (map->pool[slot].handle != handle)
+        return -4;
+
+    uint16_t last = map->count - 1;
+
+    if (slot != last)
+    {
+        map->pool[slot] = map->pool[last];
+        map->lookup[map->pool[slot].handle] = slot;
+    }
+
+    map->count = last;
+    map->lookup[handle] = map->free_head;
+    map->free_head = handle;
+
+    return slot;
+}
+
+void vsmap_reset(vsmap_t *map)
+{
+    map->count = 0;
+    _vsmap_build_free_list(map);
 }
 
 #endif // VSMAP_IMPLEMENTATION
