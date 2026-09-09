@@ -7,21 +7,24 @@ typedef struct
     uint16_t id;
 } Entity;
 
+
 /* ============================================================================
  * TEST HELPERS
  * ============================================================================ */
 
 static void vsmap_dump(vsmap_t *pool)
 {
-    return ;
+    return;
+
     kprintf("vsmap_t DUMP: count=%d capacity=%d", pool->count, pool->capacity);
 
     for (uint16_t i = 0; i < pool->count; ++i)
     {
-        Entity *entity = vsmap_data(pool, pool->pool[i].handle);
-        kprintf("  [%d] handle=%d ptr=%x id=%d", i, pool->pool[i].handle, entity, entity->id);
+        Entity *entity = vsmap_data(pool, pool->pool[i].index);
+        kprintf("  [%d] index=%d ptr=%x id=%d", i, pool->pool[i].index, entity, entity->id);
     }
 }
+
 
 /* ============================================================================
  * TESTS
@@ -31,6 +34,7 @@ static void test_VSMAP_BIND(void)
 {
     VSMAP_DECLARE(storage, 6);
     vsmap_t pool = VSMAP_BIND(storage);
+    vsmap_init(&pool);
 
     Entity entities[6] = { {0}, {1}, {2}, {3}, {4}, {5}, };
 
@@ -164,9 +168,11 @@ static void test_VSMAP_BIND(void)
     kprintf("vsmap_t BIND: OK");
 }
 
+
 static void test_VSMAP_ALLOC(void)
 {
     vsmap_t pool = VSMAP_ALLOC(MEM_alloc, 6);
+    vsmap_init(&pool);
 
     Entity entities[6] = { {0}, {1}, {2}, {3}, {4}, {5}, };
 
@@ -292,7 +298,7 @@ static void test_VSMAP_ALLOC(void)
      * Clear
      */
 
-    vsmap_reset(&pool);
+    vsmap_init(&pool);
 
     kprintf("vsmap_t ALLOC: clear");
 
@@ -306,9 +312,11 @@ static void test_VSMAP_ALLOC(void)
     kprintf("vsmap_t ALLOC: OK");
 }
 
+
 static void test_vsmap_invalid(void)
 {
     vsmap_t pool = VSMAP_ALLOC(MEM_alloc, 2);
+    vsmap_init(&pool);
 
     Entity entities[3] = { {0}, {1}, {2}, };
 
@@ -349,6 +357,7 @@ static void test_vsmap_invalid(void)
 
     kprintf("vsmap_t: invalid / capacity OK");
 }
+
 
 /* ============================================================================
  * RUN

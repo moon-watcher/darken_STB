@@ -29,8 +29,12 @@
 
 int main(void)
 {
-    // vsmap_run_tests();
+    BLASTEM_PROFIL_START
+    vsmap_run_tests();
+    BLASTEM_PROFIL_END
+    // BLASTEM_PROFIL_START
     // dsmap_run_tests();
+    // BLASTEM_PROFIL_END
 
     // bench_darksys();
     // test_darksys();
@@ -38,9 +42,6 @@ int main(void)
     // darksys_run_benchmarks();
     // BLASTEM_PROFIL_END
 
-    BLASTEM_PROFIL_START
-    vsmap_run_tests();
-    BLASTEM_PROFIL_END
 
     // BLASTEM_PROFIL_START
     // darksys_run_tests();
