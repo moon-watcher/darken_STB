@@ -8,11 +8,11 @@
 // #include "_bbb.h"
 // #include "_ccc.h"
 
-#define DARKSYS_IMPLEMENTATION
-#include "darksys.h"
 
-#define DSMAP_IMPLEMENTATION
-#include "dsmap.h"
+// #include "darksys.h"
+
+
+// #include "dsmap.h"
 
 
 
@@ -21,7 +21,7 @@
 // #include "tests/darken/examples.h"
 // #include "tests/darksys/ds.h"
 // #include "tests/darksys/tests.h"
-#include "tests/darksys/tests2.h"
+// #include "tests/darksys/tests2.h"
 // #include "tests_kimi/bench.h"
 // #include "tests_kimi/compare.h"
 // #include "tests_kimi/examples.h"
@@ -31,9 +31,9 @@ int main(void)
     BLASTEM_PROFIL_START
     vsmap_run_tests();
     BLASTEM_PROFIL_END
-    // BLASTEM_PROFIL_START
-    // dsmap_run_tests();
-    // BLASTEM_PROFIL_END
+    BLASTEM_PROFIL_START
+    dsmap_run_tests();
+    BLASTEM_PROFIL_END
 
     // bench_darksys();
     // test_darksys();

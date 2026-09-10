@@ -68,23 +68,24 @@
 
 #include <stdint.h>
 
-typedef uint16_t vsmap_handle;
-
-#define VSMAP_INVALID_HANDLE ((vsmap_handle)0xFFFFu)
+typedef uint16_t vsmap_handle_t;
 
 typedef struct
 {
-    struct vsmap_item
-    {
-        void *value;    // caller's pointer; opaque to us
-        uint16_t index; // which `lookup` slot this pool entry currently represents
-    } *pool;            // pool[0, count) — live elements, no gaps
+    void *value;    // caller's pointer; opaque to us
+    uint16_t index; // which `lookup` slot this pool entry currently represents
+} vsmap_item_t;
 
+typedef struct
+{
+    vsmap_item_t *pool; // pool[0, count) — live elements, no gaps
     uint16_t *lookup;   // see the big comment above: dense position, or free-list link
     uint16_t capacity;  // must be <= 0xFFFE
     uint16_t free_head; // head of the free list, or VSMAP_INVALID_HANDLE if empty
     uint16_t count;
 } vsmap_t;
+
+#define VSMAP_INVALID_HANDLE ((vsmap_handle_t)0xFFFFu)
 
 /* ============================================================================
  * PUBLIC API — all static inline, always available, nothing to compile separately
@@ -97,11 +98,11 @@ typedef struct
 //     ...
 //     free(map.pool);
 //     free(map.lookup);
-#define VSMAP_ALLOC(ALLOC, CAPACITY)                                                  \
-    {                                                                                 \
-        .pool = (struct vsmap_item *)(ALLOC)((CAPACITY) * sizeof(struct vsmap_item)), \
-        .lookup = (uint16_t *)(ALLOC)((CAPACITY) * sizeof(uint16_t)),                 \
-        .capacity = (CAPACITY),                                                       \
+#define VSMAP_ALLOC(ALLOC, CAPACITY)                                        \
+    {                                                                       \
+        .pool = (vsmap_item_t *)(ALLOC)((CAPACITY) * sizeof(vsmap_item_t)), \
+        .lookup = (uint16_t *)(ALLOC)((CAPACITY) * sizeof(uint16_t)),       \
+        .capacity = (CAPACITY),                                             \
     }
 
 // Static allocation with automatic storage duration (stack or global).
@@ -109,14 +110,14 @@ typedef struct
 //     VSMAP_DECLARE(storage, 100);
 //     vsmap_t map = VSMAP_BIND(storage);
 //     vsmap_init(&map);
-#define VSMAP_DECLARE(NAME, CAPACITY)       \
-    struct                                  \
-    {                                       \
-        uint16_t capacity;                  \
-        struct vsmap_item pool[(CAPACITY)]; \
-        uint16_t lookup[(CAPACITY)];        \
-    } NAME = {                              \
-        .capacity = (CAPACITY),             \
+#define VSMAP_DECLARE(NAME, CAPACITY)  \
+    struct                             \
+    {                                  \
+        uint16_t capacity;             \
+        vsmap_item_t pool[(CAPACITY)]; \
+        uint16_t lookup[(CAPACITY)];   \
+    } NAME = {                         \
+        .capacity = (CAPACITY),        \
     }
 
 // Static/global initialization: compile-time constants.
@@ -139,21 +140,23 @@ typedef struct
 // handle from inside CODE — same swap-with-last compaction trick as darken.h's
 // DARKEN_FOREACH, and safe for the exact same reason: whatever gets swapped into the slot
 // you just vacated was already visited, or is about to be).
-// Bound to `_item` (a `struct vsmap_item *`) inside CODE; `_item->value` is your pointer.
-#define VSMAP_FOREACH(MAP, CODE)                           \
-    do                                                     \
-    {                                                      \
-        uint16_t _index = (MAP)->count;                    \
-        if (_index)                                        \
-        {                                                  \
-            struct vsmap_item *_pool = (MAP)->pool;        \
-            while (_index--)                               \
-            {                                              \
-                struct vsmap_item *_item = &_pool[_index]; \
-                CODE;                                      \
-            }                                              \
-        }                                                  \
+// Bound to `_item` (a `vsmap_item_t *`) inside CODE; `_item->value` is your pointer.
+#define VSMAP_FOREACH(MAP, CODE)                      \
+    do                                                \
+    {                                                 \
+        uint16_t _index = (MAP)->count;               \
+        if (_index)                                   \
+        {                                             \
+            vsmap_item_t *_pool = (MAP)->pool;        \
+            while (_index--)                          \
+            {                                         \
+                vsmap_item_t *_item = &_pool[_index]; \
+                CODE;                                 \
+            }                                         \
+        }                                             \
     } while (0)
+
+#define VSMAP_ITEM_t(MAP, H) (MAP)->pool[(MAP)->lookup[H]]
 
 // Must be called once after ALLOC/BIND, before the first vsmap_add(). Also  doubles as a
 // full reset: call it again any time to drop every element and start over (every handle
@@ -162,17 +165,21 @@ typedef struct
 static inline void vsmap_init(vsmap_t *map)
 {
     map->count = 0;
-    map->free_head = map->capacity ? 0 : VSMAP_INVALID_HANDLE;
-
-    for (uint16_t i = 0; i < map->capacity; i++)
-        map->lookup[i] = i + 1; // chain every slot into the free list...
+    map->free_head = VSMAP_INVALID_HANDLE;
 
     if (map->capacity)
+    {
+        map->free_head = 0;
+
+        for (uint16_t i = 0; i < map->capacity; i++)
+            map->lookup[i] = i + 1; // chain every slot into the free list...
+
         map->lookup[map->capacity - 1] = VSMAP_INVALID_HANDLE; // ...terminated here
+    }
 }
 
 // Adds `value`, returns its handle, or VSMAP_INVALID_HANDLE if the pool is full.
-static inline vsmap_handle vsmap_add(vsmap_t *map, void *value)
+static inline vsmap_handle_t vsmap_add(vsmap_t *map, void *value)
 {
     if (map->count >= map->capacity || map->free_head == VSMAP_INVALID_HANDLE)
         return VSMAP_INVALID_HANDLE;
@@ -189,7 +196,7 @@ static inline vsmap_handle vsmap_add(vsmap_t *map, void *value)
 }
 
 // True if `handle` currently refers to a live element.
-static inline uint16_t vsmap_valid(vsmap_t *map, vsmap_handle h)
+static inline uint16_t vsmap_valid(vsmap_t *map, vsmap_handle_t h)
 {
     if (h >= map->capacity)
         return 0;
@@ -205,14 +212,14 @@ static inline uint16_t vsmap_valid(vsmap_t *map, vsmap_handle h)
 // NOTE: this is ambiguous if you legitimately store NULL as a value — use vsmap_valid()
 // when you need to tell "invalid handle" apart from "valid handle whose value happens
 // to be NULL".
-static inline void *vsmap_data(vsmap_t *map, vsmap_handle h)
+static inline void *vsmap_data(vsmap_t *map, vsmap_handle_t h)
 {
-    return vsmap_valid(map, h) ? map->pool[map->lookup[h]].value : 0;
+    return vsmap_valid(map, h) ? VSMAP_ITEM_t(map, h).value : 0;
 }
 
 // Removes `handle` if valid and returns the value it held, or NULL (and does nothing)
 // if the handle was already invalid.
-static inline void *vsmap_remove(vsmap_t *map, vsmap_handle h)
+static inline uint16_t vsmap_remove(vsmap_t *map, vsmap_handle_t h)
 {
     if (!vsmap_valid(map, h))
         return 0;
@@ -230,5 +237,5 @@ static inline void *vsmap_remove(vsmap_t *map, vsmap_handle h)
     map->lookup[h] = map->free_head; // push back onto the free list
     map->free_head = h;
 
-    return value;
+    return 1;
 }
