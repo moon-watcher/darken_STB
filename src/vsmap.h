@@ -219,7 +219,7 @@ static inline void *vsmap_data(vsmap_t *map, vsmap_handle_t h)
 
 // Removes `handle` if valid and returns the value it held, or NULL (and does nothing)
 // if the handle was already invalid.
-static inline uint16_t vsmap_remove(vsmap_t *map, vsmap_handle_t h)
+static inline void *vsmap_remove(vsmap_t *map, vsmap_handle_t h)
 {
     if (!vsmap_valid(map, h))
         return 0;
@@ -237,5 +237,5 @@ static inline uint16_t vsmap_remove(vsmap_t *map, vsmap_handle_t h)
     map->lookup[h] = map->free_head; // push back onto the free list
     map->free_head = h;
 
-    return 1;
+    return value;
 }
