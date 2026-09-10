@@ -40,13 +40,12 @@
  *
  * Two parallel, capacity-sized arrays back this:
  *
- *     pool[0, count) — the live elements themselves, packed with no gaps: {value, index}.
- *                      Iterate this directly (or with VSMAP_FOREACH) to visit every live
- *                      value.
- *     lookup[index]  — while `index` is ALIVE: which position in `pool` currently holds
- *                      it.
- *                      while `index` is FREE: the next free index, so the free list is
- *                      threaded through this same array at zero extra memory cost.
+ *   pool[0, count) — the live elements themselves, packed with no gaps: {value, index}.
+ *                    Iterate this directly (or with VSMAP_FOREACH) to visit every live
+ *                    value.
+ *   lookup[index]  — while `index` is ALIVE: which position in `pool` currently holds it.
+ *                    while `index` is FREE: the next free index, so the free list is
+ *                    threaded through this same array at zero extra memory cost.
  *
  * Removing an element swaps the last live entry in `pool` into the vacated slot, fixes
  * up `lookup[]` for whichever element just moved, and pushes the freed index back onto
@@ -138,9 +137,8 @@ typedef struct
 
 // Visits every live value, from last to first (safe to vsmap_remove() the current ITEM's
 // handle from inside CODE — same swap-with-last compaction trick as darken.h's
-// DARKEN_FOREACH, and safe for the exact same reason:
-// whatever gets swapped into the slot you just vacated was already visited, or is about
-// to be).
+// DARKEN_FOREACH, and safe for the exact same reason: whatever gets swapped into the slot
+// you just vacated was already visited, or is about to be).
 // Bound to `_item` (a `struct vsmap_item *`) inside CODE; `_item->value` is your pointer.
 #define VSMAP_FOREACH(MAP, CODE)                           \
     do                                                     \
@@ -190,25 +188,6 @@ static inline vsmap_handle vsmap_add(vsmap_t *map, void *value)
     return index;
 }
 
-// Returns the value for `handle`, or NULL if it's not currently valid.
-// NOTE: this is ambiguous if you legitimately store NULL as a value — use vsmap_valid()
-// when you need to tell "invalid handle" apart from "valid handle whose value happens
-// to be NULL".
-static inline void *vsmap_data(vsmap_t *map, vsmap_handle h)
-{
-    if (h >= map->capacity)
-        return 0;
-
-    uint16_t slot = map->lookup[h];
-    if (slot >= map->count)
-        return 0;
-
-    if (map->pool[slot].index != h)
-        return 0;
-
-    return map->pool[slot].value;
-}
-
 // True if `handle` currently refers to a live element.
 static inline uint16_t vsmap_valid(vsmap_t *map, vsmap_handle h)
 {
@@ -222,20 +201,23 @@ static inline uint16_t vsmap_valid(vsmap_t *map, vsmap_handle h)
     return map->pool[slot].index == h;
 }
 
+// Returns the value for `handle`, or NULL if it's not currently valid.
+// NOTE: this is ambiguous if you legitimately store NULL as a value — use vsmap_valid()
+// when you need to tell "invalid handle" apart from "valid handle whose value happens
+// to be NULL".
+static inline void *vsmap_data(vsmap_t *map, vsmap_handle h)
+{
+    return vsmap_valid(map, h) ? map->pool[map->lookup[h]].value : 0;
+}
+
 // Removes `handle` if valid and returns the value it held, or NULL (and does nothing)
 // if the handle was already invalid.
 static inline void *vsmap_remove(vsmap_t *map, vsmap_handle h)
 {
-    if (h >= map->capacity)
+    if (!vsmap_valid(map, h))
         return 0;
 
     uint16_t slot = map->lookup[h];
-    if (slot >= map->count)
-        return 0;
-
-    if (map->pool[slot].index != h)
-        return 0;
-
     void *value = map->pool[slot].value;
 
     uint16_t last = --map->count;
