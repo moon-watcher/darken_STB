@@ -97,10 +97,7 @@ static inline void *dsmap2_data(dsmap2_t *map, dsmap2_handle_t handle)
 
 static inline dsmap2_handle_t dsmap2_alloc(dsmap2_t *map)
 {
-    if (map->count >= map->capacity)
-        return DSMAP2_INVALID_HANDLE;
-
-    if (map->free_head == DSMAP2_INVALID_HANDLE)
+    if (map->count >= map->capacity || map->free_head == DSMAP2_INVALID_HANDLE)
         return DSMAP2_INVALID_HANDLE;
 
     dsmap2_handle_t handle = map->free_head;
@@ -132,11 +129,6 @@ static inline void *dsmap2_remove(dsmap2_t *map, dsmap2_handle_t handle)
     map->free_head = handle;
 
     return map->pool + ((uint32_t)handle * map->size);
-}
-
-static inline dsmap2_handle_t dsmap2_active(dsmap2_t *map, uint16_t index)
-{
-    return map->active[index];
 }
 
 /*

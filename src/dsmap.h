@@ -102,18 +102,10 @@ static inline uint16_t dsmap_valid(dsmap_t *map, dsmap_handle_t handle)
 
 static inline void *dsmap_data(dsmap_t *map, dsmap_handle_t handle)
 {
-    if (handle >= map->capacity)
+    if (!dsmap_valid(map, handle))
         return 0;
 
-    uint16_t slot = map->lookup[handle];
-
-    if (slot >= map->count)
-        return 0;
-
-    if (map->handles[slot] != handle)
-        return 0;
-
-    return map->pool + ((uint32_t)slot * map->size);
+    return map->pool + ((uint32_t)map->lookup[handle] * map->size);
 }
 
 static inline dsmap_handle_t dsmap_alloc(dsmap_t *map)
@@ -134,7 +126,7 @@ static inline dsmap_handle_t dsmap_alloc(dsmap_t *map)
 
 static inline void *dsmap_remove(dsmap_t *map, dsmap_handle_t handle)
 {
-    if (handle >= map->capacity)
+    if (!dsmap_valid(map, handle))
         return 0;
 
     uint16_t slot = map->lookup[handle];
