@@ -1,12 +1,11 @@
 #include <genesis.h>
 
-
-void bench_dsmap_compare(void);
+void test_dsmap2(void);
 
 
 int main(void)
 {
-    bench_dsmap_compare();
+    test_dsmap2();
 
     while (1)
     {

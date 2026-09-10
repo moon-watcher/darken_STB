@@ -45,7 +45,7 @@ static void test_stable_handle(void)
     uint16_t lookup[4];
     uint16_t handles[4];
 
-    dsmap_t pool = DSMAP_BIND(storage, lookup, handles, memcpy);
+    dsmap_t pool = DSMAP_BIND(storage, lookup, handles);
 
     int16_t a = dsmap_alloc(&pool);
     int16_t b = dsmap_alloc(&pool);
@@ -78,7 +78,7 @@ static void test_remove_swap(void)
     uint16_t lookup[4];
     uint16_t handles[4];
 
-    dsmap_t pool = DSMAP_BIND(storage, lookup, handles, memcpy);
+    dsmap_t pool = DSMAP_BIND(storage, lookup, handles);
 
     int16_t a = dsmap_alloc(&pool);
     int16_t b = dsmap_alloc(&pool);
@@ -121,7 +121,7 @@ static void test_handle_reuse(void)
     uint16_t lookup[4];
     uint16_t handles[4];
 
-    dsmap_t pool = DSMAP_BIND(storage, lookup, handles, memcpy);
+    dsmap_t pool = DSMAP_BIND(storage, lookup, handles);
 
     int16_t a = dsmap_alloc(&pool);
     int16_t b = dsmap_alloc(&pool);
@@ -142,7 +142,7 @@ static void test_dynamic(void)
 {
     kprintf("TEST: dynamic");
 
-    dsmap_t pool = DSMAP_ALLOC(MEM_alloc, 4, sizeof(Entity), memcpy);
+    dsmap_t pool = DSMAP_ALLOC(MEM_alloc, 4, sizeof(Entity));
 
     Entity *a = dsmap_data(&pool, dsmap_alloc(&pool));
     Entity *b = dsmap_data(&pool, dsmap_alloc(&pool));
@@ -181,7 +181,7 @@ static void test_full(void)
     uint16_t lookup[4];
     uint16_t handles[4];
 
-    dsmap_t pool = DSMAP_BIND(storage, lookup, handles, memcpy);
+    dsmap_t pool = DSMAP_BIND(storage, lookup, handles);
 
     int16_t a = dsmap_alloc(&pool);
     int16_t b = dsmap_alloc(&pool);

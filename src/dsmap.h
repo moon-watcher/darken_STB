@@ -4,6 +4,8 @@
 
 typedef uint16_t dsmap_handle_t;
 
+#define DSMAP_INVALID_HANDLE ((dsmap_handle_t)0xFFFFu)
+
 typedef struct
 {
     char *pool;
@@ -15,53 +17,75 @@ typedef struct
     uint16_t count;
     uint16_t free_head;
 
-    void (*copy)();
 } dsmap_t;
-
-#define DSMAP_INVALID_HANDLE ((dsmap_handle_t)0xFFFFu)
-
-#define DSMAP_ALLOC(ALLOC, CAPACITY, SIZE, COPY)                       \
-    {                                                                  \
-        .pool = (char *)(ALLOC)((CAPACITY) * (SIZE)),                  \
-        .lookup = (uint16_t *)(ALLOC)((CAPACITY) * sizeof(uint16_t)),  \
-        .handles = (uint16_t *)(ALLOC)((CAPACITY) * sizeof(uint16_t)), \
-        .capacity = (CAPACITY),                                        \
-        .size = (SIZE),                                                \
-        .copy = (COPY),                                                \
-    }
 
 #define DSMAP_DECLARE(NAME, CAPACITY, TYPE) \
     struct                                  \
     {                                       \
-        uint16_t capacity;                  \
         TYPE pool[(CAPACITY)];              \
         uint16_t lookup[(CAPACITY)];        \
         uint16_t handles[(CAPACITY)];       \
-    } NAME = {                              \
-        .capacity = (CAPACITY),             \
-    }
+    } NAME
 
-#define DSMAP_INIT(STORAGE, TYPE, COPY)                                     \
+#define DSMAP_INIT(STORAGE, TYPE)                                           \
     {                                                                       \
         .pool = (char *)(STORAGE).pool,                                     \
         .lookup = (STORAGE).lookup,                                         \
         .handles = (STORAGE).handles,                                       \
         .capacity = sizeof((STORAGE).lookup) / sizeof((STORAGE).lookup[0]), \
         .size = sizeof(TYPE),                                               \
-        .copy = (COPY),                                                     \
+        .count = 0,                                                         \
+        .free_head = DSMAP_INVALID_HANDLE,                                  \
     }
 
-#define DSMAP_BIND(NAME, LOOKUP, HANDLES, COPY)       \
-    {                                                 \
-        .pool = (char *)(NAME),                       \
-        .lookup = (LOOKUP),                           \
-        .handles = (HANDLES),                         \
-        .capacity = sizeof(NAME) / sizeof((NAME)[0]), \
-        .size = sizeof((NAME)[0]),                    \
-        .count = 0,                                   \
-        .free_head = 0,                               \
-        .copy = (COPY),                               \
+#define DSMAP_ALLOC(ALLOC, CAPACITY, SIZE)                             \
+    {                                                                  \
+        .pool = (char *)(ALLOC)((CAPACITY) * (SIZE)),                  \
+        .lookup = (uint16_t *)(ALLOC)((CAPACITY) * sizeof(uint16_t)),  \
+        .handles = (uint16_t *)(ALLOC)((CAPACITY) * sizeof(uint16_t)), \
+        .capacity = (CAPACITY),                                        \
+        .size = (SIZE),                                                \
+        .count = 0,                                                    \
+        .free_head = DSMAP_INVALID_HANDLE,                             \
     }
+
+#define DSMAP_BIND(NAME, LOOKUP, HANDLES)                 \
+    {                                                     \
+        .pool = (char *)(NAME),                           \
+        .lookup = (LOOKUP),                               \
+        .handles = (HANDLES),                             \
+        .capacity = sizeof(LOOKUP) / sizeof((LOOKUP)[0]), \
+        .size = sizeof((NAME)[0]),                        \
+        .count = 0,                                       \
+        .free_head = DSMAP_INVALID_HANDLE,                \
+    }
+
+static inline void dsmap_swap(char *a, char *b, uint16_t size)
+{
+    while (size--)
+    {
+        char temp = *a;
+
+        *a++ = *b;
+        *b++ = temp;
+    }
+}
+
+static inline void dsmap_init(dsmap_t *map)
+{
+    map->count = 0;
+    map->free_head = DSMAP_INVALID_HANDLE;
+
+    if (!map->capacity)
+        return;
+
+    map->free_head = 0;
+
+    for (uint16_t i = 0; i < map->capacity; i++)
+        map->lookup[i] = i + 1;
+
+    map->lookup[map->capacity - 1] = DSMAP_INVALID_HANDLE;
+}
 
 static inline uint16_t dsmap_valid(dsmap_t *map, dsmap_handle_t handle)
 {
@@ -78,23 +102,18 @@ static inline uint16_t dsmap_valid(dsmap_t *map, dsmap_handle_t handle)
 
 static inline void *dsmap_data(dsmap_t *map, dsmap_handle_t handle)
 {
-    return dsmap_valid(map, handle) ? map->pool + ((uint32_t)map->lookup[handle] * map->size) : 0;
-}
+    if (handle >= map->capacity)
+        return 0;
 
-static inline void dsmap_init(dsmap_t *map)
-{
-    map->count = 0;
-    map->free_head = DSMAP_INVALID_HANDLE;
+    uint16_t slot = map->lookup[handle];
 
-    if (map->capacity)
-    {
-        map->free_head = 0;
+    if (slot >= map->count)
+        return 0;
 
-        for (uint16_t i = 0; i < map->capacity; i++)
-            map->lookup[i] = i + 1;
+    if (map->handles[slot] != handle)
+        return 0;
 
-        map->lookup[map->capacity - 1] = DSMAP_INVALID_HANDLE;
-    }
+    return map->pool + ((uint32_t)slot * map->size);
 }
 
 static inline dsmap_handle_t dsmap_alloc(dsmap_t *map)
@@ -103,38 +122,48 @@ static inline dsmap_handle_t dsmap_alloc(dsmap_t *map)
         return DSMAP_INVALID_HANDLE;
 
     dsmap_handle_t handle = map->free_head;
-
     map->free_head = map->lookup[handle];
 
-    uint16_t slot = map->count++;
-
-    map->handles[slot] = handle;
+    uint16_t slot = map->count;
+    map->count = slot + 1;
     map->lookup[handle] = slot;
+    map->handles[slot] = handle;
 
     return handle;
 }
 
-static inline uint16_t dsmap_remove(dsmap_t *map, dsmap_handle_t handle)
+static inline void *dsmap_remove(dsmap_t *map, dsmap_handle_t handle)
 {
-    if (!dsmap_valid(map, handle))
+    if (handle >= map->capacity)
         return 0;
 
     uint16_t slot = map->lookup[handle];
-    uint16_t last = --map->count;
+
+    if (slot >= map->count)
+        return 0;
+
+    if (map->handles[slot] != handle)
+        return 0;
+
+    uint16_t last = map->count - 1;
+
+    map->count = last;
 
     if (slot != last)
     {
-        void *to = map->pool + ((uint32_t)slot * map->size);
-        void *from = map->pool + ((uint32_t)last * map->size);
+        char *data = map->pool + ((uint32_t)slot * map->size);
+        char *last_data = map->pool + ((uint32_t)last * map->size);
 
-        map->copy(to, from, map->size);
+        dsmap_handle_t moved_handle = map->handles[last];
 
-        map->handles[slot] = map->handles[last];
-        map->lookup[map->handles[slot]] = slot;
+        dsmap_swap(data, last_data, map->size);
+
+        map->handles[slot] = moved_handle;
+        map->lookup[moved_handle] = slot;
     }
 
     map->lookup[handle] = map->free_head;
     map->free_head = handle;
 
-    return 1;
+    return map->pool + ((uint32_t)last * map->size);
 }
