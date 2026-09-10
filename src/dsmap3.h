@@ -4,6 +4,18 @@
 
 // #define DSMAP3_STABLE
 
+/**
+ * DSMAP3_STABLE:
+ * Use when objects must never move and removals are frequent.
+ * The object stays at pool[handle], while handles[] keeps iteration dense.
+ *
+ * Default mode:
+ * Use when objects are updated/iterated frequently.
+ * The pool stays physically dense, giving faster sequential iteration.
+ *
+ * Stable mode makes remove() much cheaper, but iteration is slower.
+ */
+
 typedef uint16_t dsmap3_handle_t;
 
 #define DSMAP3_INVALID_HANDLE ((dsmap3_handle_t)0xFFFFu)
