@@ -14,6 +14,8 @@ typedef struct
 
 static void dsmap_dump(dsmap_t *pool)
 {
+    return;
+
     kprintf("DSMAP DUMP: count=%d capacity=%d", pool->count, pool->capacity);
 
     for (uint16_t i = 0; i < pool->count; ++i)
@@ -21,10 +23,7 @@ static void dsmap_dump(dsmap_t *pool)
         uint16_t handle = pool->handles[i];
         Entity *entity = dsmap_data(pool, handle);
 
-        kprintf("  [%d] handle=%d id=%d",
-                i,
-                handle,
-                entity->id);
+        kprintf("  [%d] handle=%d id=%d", i, handle, entity->id);
     }
 }
 
@@ -86,7 +85,6 @@ static void test_remove_swap(void)
     int16_t c = dsmap_alloc(&pool);
 
     dsmap_dump(&pool);
-
     dsmap_remove(&pool, b);
 
     kprintf("after remove b=%d", b);

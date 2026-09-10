@@ -97,10 +97,10 @@ static inline void dsmap_init(dsmap_t *map)
     }
 }
 
-static inline int16_t dsmap_alloc(dsmap_t *map)
+static inline dsmap_handle_t dsmap_alloc(dsmap_t *map)
 {
     if (map->count >= map->capacity || map->free_head == DSMAP_INVALID_HANDLE)
-        return -1;
+        return DSMAP_INVALID_HANDLE;
 
     dsmap_handle_t handle = map->free_head;
 

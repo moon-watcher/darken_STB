@@ -156,7 +156,7 @@ typedef struct
         }                                             \
     } while (0)
 
-#define VSMAP_ITEM_t(MAP, H) (MAP)->pool[(MAP)->lookup[H]]
+#define VSMAP_ITEM(MAP, H) (MAP)->pool[(MAP)->lookup[H]]
 
 // Must be called once after ALLOC/BIND, before the first vsmap_add(). Also  doubles as a
 // full reset: call it again any time to drop every element and start over (every handle
@@ -214,7 +214,7 @@ static inline uint16_t vsmap_valid(vsmap_t *map, vsmap_handle_t h)
 // to be NULL".
 static inline void *vsmap_data(vsmap_t *map, vsmap_handle_t h)
 {
-    return vsmap_valid(map, h) ? VSMAP_ITEM_t(map, h).value : 0;
+    return vsmap_valid(map, h) ? VSMAP_ITEM(map, h).value : 0;
 }
 
 // Removes `handle` if valid and returns the value it held, or NULL (and does nothing)
