@@ -14,8 +14,7 @@
 #define DSMAP_IMPLEMENTATION
 #include "dsmap.h"
 
-#define VSMAP_IMPLEMENTATION
-#include "vsmap.h"
+
 
 // #include "tests/darken/benchmarks.h"
 // #include "tests/darken/tests.h"
