@@ -425,20 +425,16 @@ bench_dsmap3_iteration(void)
 
     BLASTEM_PROFIL_START;
 
-    for (uint16_t n = 0;
-         n < BENCH_ITERATIONS;
-         n++)
+    for (uint16_t n = 0; n < BENCH_ITERATIONS; n++)
     {
-        for (uint16_t i = 0;
-             i < map.count;
-             i++)
-        {
-            Entity *entity =
-                (Entity *)(
-                    map.pool +
-                    ((uint32_t)i * map.size)
-                );
-
+        // for (uint16_t i = 0; i < map.count; i++) {
+        //     Entity *entity =(Entity *)(map.pool +((uint32_t)i * map.size));
+        //     sum += entity->x;
+        // }
+    
+        for (uint16_t i = 0; i < map.count; i++){
+            dsmap3_handle_t handle = map.handles[i];
+            Entity *entity =(Entity *)(map.pool +((uint32_t)handle * map.size));
             sum += entity->x;
         }
     }
