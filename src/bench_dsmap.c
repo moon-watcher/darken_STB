@@ -1,7 +1,8 @@
 #include <genesis.h>
 
 #include "dsmap.h"
-#include "dsmap2.h"
+#define DSMAP3_STABLE
+#include "dsmap3.h"
 
 
 /* ================================================================
@@ -9,7 +10,7 @@
  * ================================================================ */
 
 #define BENCH_CAPACITY    256
-#define BENCH_ITERATIONS  10000
+#define BENCH_ITERATIONS  1000
 
 
 /* ================================================================
@@ -36,8 +37,8 @@ DSMAP_DECLARE(
     Entity
 );
 
-DSMAP2_DECLARE(
-    storage_dsmap2,
+DSMAP3_DECLARE(
+    storage_dsmap3,
     BENCH_CAPACITY,
     Entity
 );
@@ -69,18 +70,15 @@ bench_prepare_dsmap(dsmap_t *map)
 
 
 /* ================================================================
- * PREPARE DSMAP2
+ * PREPARE DSMAP3
  * ================================================================ */
 
 static void
-bench_prepare_dsmap2(dsmap2_t *map)
+bench_prepare_dsmap3(dsmap3_t *map)
 {
-    *map = (dsmap2_t)DSMAP2_INIT(
-        storage_dsmap2,
-        Entity
-    );
+    *map = (dsmap3_t)DSMAP3_INIT(storage_dsmap3);
 
-    dsmap2_init(map);
+    dsmap3_init(map);
 }
 
 
@@ -110,21 +108,21 @@ bench_fill_dsmap(dsmap_t *map)
 
 
 /* ================================================================
- * FILL DSMAP2
+ * FILL DSMAP3
  * ================================================================ */
 
 static void
-bench_fill_dsmap2(dsmap2_t *map)
+bench_fill_dsmap3(dsmap3_t *map)
 {
     for (uint16_t i = 0; i < BENCH_CAPACITY; i++)
     {
-        dsmap2_handle_t handle =
-            dsmap2_alloc(map);
+        dsmap3_handle_t handle =
+            dsmap3_alloc(map);
 
         handles[i] = handle;
 
         Entity *entity =
-            dsmap2_data(map, handle);
+            dsmap3_data(map, handle);
 
         entity->x = i;
         entity->y = i + 1;
@@ -172,11 +170,11 @@ bench_dsmap_alloc(void)
 
 
 static void
-bench_dsmap2_alloc(void)
+bench_dsmap3_alloc(void)
 {
-    dsmap2_t map;
+    dsmap3_t map;
 
-    bench_prepare_dsmap2(&map);
+    bench_prepare_dsmap3(&map);
 
     uint32_t sum = 0;
 
@@ -185,8 +183,8 @@ bench_dsmap2_alloc(void)
 
     for (uint16_t i = 0; i < BENCH_CAPACITY; i++)
     {
-        dsmap2_handle_t handle =
-            dsmap2_alloc(&map);
+        dsmap3_handle_t handle =
+            dsmap3_alloc(&map);
 
         sum += handle;
     }
@@ -242,12 +240,12 @@ bench_dsmap_valid(void)
 
 
 static void
-bench_dsmap2_valid(void)
+bench_dsmap3_valid(void)
 {
-    dsmap2_t map;
+    dsmap3_t map;
 
-    bench_prepare_dsmap2(&map);
-    bench_fill_dsmap2(&map);
+    bench_prepare_dsmap3(&map);
+    bench_fill_dsmap3(&map);
 
     uint32_t sum = 0;
 
@@ -262,7 +260,7 @@ bench_dsmap2_valid(void)
              i < BENCH_CAPACITY;
              i++)
         {
-            sum += dsmap2_valid(
+            sum += dsmap3_valid(
                 &map,
                 handles[i]
             );
@@ -321,12 +319,12 @@ bench_dsmap_data(void)
 
 
 static void
-bench_dsmap2_data(void)
+bench_dsmap3_data(void)
 {
-    dsmap2_t map;
+    dsmap3_t map;
 
-    bench_prepare_dsmap2(&map);
-    bench_fill_dsmap2(&map);
+    bench_prepare_dsmap3(&map);
+    bench_fill_dsmap3(&map);
 
     uint32_t sum = 0;
 
@@ -342,7 +340,7 @@ bench_dsmap2_data(void)
              i++)
         {
             Entity *entity =
-                dsmap2_data(
+                dsmap3_data(
                     &map,
                     handles[i]
                 );
@@ -369,7 +367,7 @@ bench_dsmap2_data(void)
  *     ...
  *
  *
- * DSMAP2:
+ * DSMAP3:
  *
  *     active[0] -> pool[handle]
  *     active[1] -> pool[handle]
@@ -415,12 +413,12 @@ bench_dsmap_iteration(void)
 
 
 static void
-bench_dsmap2_iteration(void)
+bench_dsmap3_iteration(void)
 {
-    dsmap2_t map;
+    dsmap3_t map;
 
-    bench_prepare_dsmap2(&map);
-    bench_fill_dsmap2(&map);
+    bench_prepare_dsmap3(&map);
+    bench_fill_dsmap3(&map);
 
     uint32_t sum = 0;
 
@@ -435,13 +433,10 @@ bench_dsmap2_iteration(void)
              i < map.count;
              i++)
         {
-            dsmap2_handle_t handle =
-                map.active[i];
-
             Entity *entity =
                 (Entity *)(
                     map.pool +
-                    ((uint32_t)handle * map.size)
+                    ((uint32_t)i * map.size)
                 );
 
             sum += entity->x;
@@ -497,12 +492,12 @@ bench_dsmap_remove(void)
 
 
 static void
-bench_dsmap2_remove(void)
+bench_dsmap3_remove(void)
 {
-    dsmap2_t map;
+    dsmap3_t map;
 
-    bench_prepare_dsmap2(&map);
-    bench_fill_dsmap2(&map);
+    bench_prepare_dsmap3(&map);
+    bench_fill_dsmap3(&map);
 
 
     BLASTEM_PROFIL_START;
@@ -515,7 +510,7 @@ bench_dsmap2_remove(void)
             (uint16_t)((i * 37u) &
                        (BENCH_CAPACITY - 1));
 
-        dsmap2_remove(
+        dsmap3_remove(
             &map,
             handles[index]
         );
@@ -571,15 +566,15 @@ bench_dsmap_remove_alloc(void)
 
 
 static void
-bench_dsmap2_remove_alloc(void)
+bench_dsmap3_remove_alloc(void)
 {
-    dsmap2_t map;
+    dsmap3_t map;
 
-    bench_prepare_dsmap2(&map);
-    bench_fill_dsmap2(&map);
+    bench_prepare_dsmap3(&map);
+    bench_fill_dsmap3(&map);
 
 
-    dsmap2_handle_t handle =
+    dsmap3_handle_t handle =
         handles[0];
 
 
@@ -589,13 +584,13 @@ bench_dsmap2_remove_alloc(void)
          i < BENCH_ITERATIONS;
          i++)
     {
-        dsmap2_remove(
+        dsmap3_remove(
             &map,
             handle
         );
 
         handle =
-            dsmap2_alloc(&map);
+            dsmap3_alloc(&map);
     }
 
     BLASTEM_PROFIL_END;
@@ -610,7 +605,7 @@ void
 bench_dsmap_compare(void)
 {
     kprintf(
-        "=== DSMAP VS DSMAP2 ==="
+        "=== DSMAP VS DSMAP3 ==="
     );
 
     kprintf(
@@ -632,10 +627,10 @@ bench_dsmap_compare(void)
     bench_dsmap_alloc();
 
     kprintf(
-        "--- ALLOC DSMAP2 ---"
+        "--- ALLOC DSMAP3 ---"
     );
 
-    bench_dsmap2_alloc();
+    bench_dsmap3_alloc();
 
 
     /* ------------------------------------------------------------
@@ -649,10 +644,10 @@ bench_dsmap_compare(void)
     bench_dsmap_valid();
 
     kprintf(
-        "--- VALID DSMAP2 ---"
+        "--- VALID DSMAP3 ---"
     );
 
-    bench_dsmap2_valid();
+    bench_dsmap3_valid();
 
 
     /* ------------------------------------------------------------
@@ -666,10 +661,10 @@ bench_dsmap_compare(void)
     bench_dsmap_data();
 
     kprintf(
-        "--- DATA DSMAP2 ---"
+        "--- DATA DSMAP3 ---"
     );
 
-    bench_dsmap2_data();
+    bench_dsmap3_data();
 
 
     /* ------------------------------------------------------------
@@ -683,10 +678,10 @@ bench_dsmap_compare(void)
     bench_dsmap_iteration();
 
     kprintf(
-        "--- ITER DSMAP2 ---"
+        "--- ITER DSMAP3 ---"
     );
 
-    bench_dsmap2_iteration();
+    bench_dsmap3_iteration();
 
 
     /* ------------------------------------------------------------
@@ -700,10 +695,10 @@ bench_dsmap_compare(void)
     bench_dsmap_remove();
 
     kprintf(
-        "--- REMOVE DSMAP2 ---"
+        "--- REMOVE DSMAP3 ---"
     );
 
-    bench_dsmap2_remove();
+    bench_dsmap3_remove();
 
 
     /* ------------------------------------------------------------
@@ -717,10 +712,10 @@ bench_dsmap_compare(void)
     bench_dsmap_remove_alloc();
 
     kprintf(
-        "--- R+A DSMAP2 ---"
+        "--- R+A DSMAP3 ---"
     );
 
-    bench_dsmap2_remove_alloc();
+    bench_dsmap3_remove_alloc();
 
 
     /*
