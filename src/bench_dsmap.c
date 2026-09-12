@@ -342,6 +342,26 @@ static void bench_dsmap_data(void)
     bench_sink = sum;
 }
 
+static void bench_dsmap_data2(void)
+{
+    dsmap_t map;
+    bench_prepare_dsmap5(&map);
+    bench_fill_dsmap5(&map);
+    uint32_t sum = 0;
+
+    BLASTEM_PROFIL_START;
+
+    for (uint16_t n = 0; n < BENCH_ITERATIONS; n++)
+        for (uint16_t i = 0; i < BENCH_CAPACITY; i++)
+        {
+            Entity *entity = DSMAP_DATA(&map, handles[i]);
+            sum += entity->x;
+        }
+
+    BLASTEM_PROFIL_END;
+    bench_sink = sum;
+}
+
 static void bench_dsmap0_iteration(void)
 {
     dsmap0_t map;
@@ -531,6 +551,7 @@ void bench_dsmap0_compare(void)
     // bench_dsmap3_data();
     // bench_dsmap4_data();
     bench_dsmap_data();
+    bench_dsmap_data2();
 
     kprintf("> ITER ---");
     bench_dsmap0_iteration();
