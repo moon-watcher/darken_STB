@@ -22,11 +22,14 @@ typedef struct
 #define DSMAP5_DECLARE(NAME, CAPACITY, TYPE) \
     struct                                   \
     {                                        \
+        uint16_t capacity;                   \
         TYPE pool[(CAPACITY)];               \
         uint16_t lookup[(CAPACITY)];         \
         uint16_t handles[(CAPACITY)];        \
         void *addr[(CAPACITY)];              \
-    } NAME
+    } NAME = {                               \
+        .capacity = (CAPACITY),              \
+    }
 
 #define DSMAP5_INIT(STORAGE)                                                \
     {                                                                       \
