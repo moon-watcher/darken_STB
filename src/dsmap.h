@@ -112,7 +112,7 @@ static inline void *dsmap_data(dsmap_t *map, dsmap_handle_t handle)
     return dsmap_valid(map, handle) ? map->pool + map->offset[handle] : 0;
 }
 
-static inline void *dsmap_remove(dsmap_t *map, dsmap_handle_t handle)
+static inline uint16_t dsmap_remove(dsmap_t *map, dsmap_handle_t handle)
 {
     if (!dsmap_valid(map, handle))
         return 0;
@@ -131,5 +131,5 @@ static inline void *dsmap_remove(dsmap_t *map, dsmap_handle_t handle)
     map->lookup[handle] = map->free_head;
     map->free_head = handle;
 
-    return map->pool + map->offset[handle];
+    return 1;
 }
