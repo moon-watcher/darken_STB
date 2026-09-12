@@ -1,0 +1,143 @@
+#pragma once
+
+#include <stdint.h>
+
+typedef uint16_t dsmap5_handle_t;
+
+#define DSMAP5_INVALID_HANDLE ((dsmap5_handle_t)0xFFFFu)
+
+typedef struct
+{
+    char *pool;
+    uint16_t *lookup;
+    uint16_t *handles;
+    void **addr;
+    uint16_t capacity;
+    uint16_t size;
+    uint16_t count;
+    uint16_t free_head;
+
+} dsmap5_t;
+
+#define DSMAP5_DECLARE(NAME, CAPACITY, TYPE) \
+    struct                                   \
+    {                                        \
+        TYPE pool[(CAPACITY)];               \
+        uint16_t lookup[(CAPACITY)];         \
+        uint16_t handles[(CAPACITY)];        \
+        void *addr[(CAPACITY)];              \
+    } NAME
+
+#define DSMAP5_INIT(STORAGE)                                                \
+    {                                                                       \
+        .pool = (char *)(STORAGE).pool,                                     \
+        .lookup = (STORAGE).lookup,                                         \
+        .handles = (STORAGE).handles,                                       \
+        .addr = (STORAGE).addr,                                             \
+        .capacity = sizeof((STORAGE).lookup) / sizeof((STORAGE).lookup[0]), \
+        .size = sizeof((STORAGE).pool[0]),                                  \
+        .count = 0,                                                         \
+        .free_head = DSMAP5_INVALID_HANDLE}
+
+#define DSMAP5_ALLOC(ALLOC, CAPACITY, SIZE)                            \
+    {                                                                  \
+        .pool = (char *)(ALLOC)((CAPACITY) * (SIZE)),                  \
+        .lookup = (uint16_t *)(ALLOC)((CAPACITY) * sizeof(uint16_t)),  \
+        .handles = (uint16_t *)(ALLOC)((CAPACITY) * sizeof(uint16_t)), \
+        .addr = (void **)(ALLOC)((CAPACITY) * sizeof(void *)),         \
+        .capacity = (CAPACITY),                                        \
+        .size = (SIZE),                                                \
+        .count = 0,                                                    \
+        .free_head = DSMAP5_INVALID_HANDLE}
+
+#define DSMAP5_BIND(NAME)               \
+    {                                   \
+        .pool = (char *)(NAME).pool,    \
+        .lookup = (NAME).lookup,        \
+        .handles = (NAME).handles,      \
+        .addr = (NAME).addr,            \
+        .capacity = (NAME).capacity,    \
+        .size = sizeof((NAME).pool[0]), \
+        .count = 0,                     \
+        .free_head = DSMAP5_INVALID_HANDLE}
+
+#define DSMAP5_FOREACH(MAP, CODE)                              \
+    do                                                         \
+    {                                                          \
+        uint16_t _index = (MAP)->count;                        \
+        while (_index--)                                       \
+        {                                                      \
+            void *_data = (MAP)->addr[(MAP)->handles[_index]]; \
+            CODE;                                              \
+        }                                                      \
+    } while (0)
+
+static inline void dsmap5_init(dsmap5_t *map)
+{
+    map->count = 0;
+    map->free_head = 0;
+
+    for (uint16_t i = 0; i < map->capacity; i++)
+    {
+        map->lookup[i] = i + 1;
+        map->addr[i] = map->pool + ((uint32_t)i * map->size);
+    }
+
+    map->lookup[map->capacity - 1] = DSMAP5_INVALID_HANDLE;
+}
+
+static inline dsmap5_handle_t dsmap5_alloc(dsmap5_t *map)
+{
+    if (map->count >= map->capacity || map->free_head == DSMAP5_INVALID_HANDLE)
+        return DSMAP5_INVALID_HANDLE;
+
+    dsmap5_handle_t handle = map->free_head;
+    map->free_head = map->lookup[handle];
+
+    uint16_t slot = map->count++;
+
+    map->lookup[handle] = slot;
+    map->handles[slot] = handle;
+
+    return handle;
+}
+
+static inline uint16_t dsmap5_valid(dsmap5_t *map, dsmap5_handle_t handle)
+{
+    if (handle >= map->capacity)
+        return 0;
+
+    uint16_t slot = map->lookup[handle];
+
+    if (slot >= map->count)
+        return 0;
+
+    return map->handles[slot] == handle;
+}
+
+static inline void *dsmap5_data(dsmap5_t *map, dsmap5_handle_t handle)
+{
+    return dsmap5_valid(map, handle) ? map->addr[handle] : 0;
+}
+
+static inline void *dsmap5_remove(dsmap5_t *map, dsmap5_handle_t handle)
+{
+    if (!dsmap5_valid(map, handle))
+        return 0;
+
+    uint16_t slot = map->lookup[handle];
+    uint16_t last = --map->count;
+
+    if (slot != last)
+    {
+        dsmap5_handle_t moved_handle = map->handles[last];
+
+        map->handles[slot] = moved_handle;
+        map->lookup[moved_handle] = slot;
+    }
+
+    map->lookup[handle] = map->free_head;
+    map->free_head = handle;
+
+    return map->addr[handle];
+}

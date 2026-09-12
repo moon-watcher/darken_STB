@@ -138,7 +138,7 @@ typedef struct
 //     free(map.pool);
 //     free(map.lookup);
 //     free(map.handles);
-#define DSMAP3_ALLOC(ALLOC, CAPACITY, SIZE)                             \
+#define DSMAP3_ALLOC(ALLOC, CAPACITY, SIZE)                            \
     {                                                                  \
         .pool = (char *)(ALLOC)((CAPACITY) * (SIZE)),                  \
         .lookup = (uint16_t *)(ALLOC)((CAPACITY) * sizeof(uint16_t)),  \
@@ -155,18 +155,18 @@ typedef struct
 //     dsmap3_t map = DSMAP3_BIND(storage);
 //     dsmap3_init(&map);
 #define DSMAP3_DECLARE(NAME, CAPACITY, TYPE) \
-    struct                                  \
-    {                                       \
-        uint16_t capacity;                  \
-        TYPE pool[(CAPACITY)];              \
-        uint16_t lookup[(CAPACITY)];        \
-        uint16_t handles[(CAPACITY)];       \
-    } NAME = {                              \
-        .capacity = (CAPACITY),             \
+    struct                                   \
+    {                                        \
+        uint16_t capacity;                   \
+        TYPE pool[(CAPACITY)];               \
+        uint16_t lookup[(CAPACITY)];         \
+        uint16_t handles[(CAPACITY)];        \
+    } NAME = {                               \
+        .capacity = (CAPACITY),              \
     }
 
 // Static/global initialization: compile-time constants.
-#define DSMAP3_INIT(STORAGE)                                                 \
+#define DSMAP3_INIT(STORAGE)                                                \
     {                                                                       \
         .pool = (char *)(STORAGE).pool,                                     \
         .lookup = (STORAGE).lookup,                                         \
@@ -176,7 +176,7 @@ typedef struct
     }
 
 // Runtime binding: locals, reassignment, any context.
-#define DSMAP3_BIND(NAME)                \
+#define DSMAP3_BIND(NAME)               \
     {                                   \
         .pool = (char *)(NAME).pool,    \
         .lookup = (NAME).lookup,        \
@@ -193,7 +193,7 @@ typedef struct
 // directly; in DSMAP3_STABLE mode `pool` may have gaps, so this walks the dense `handles[]`
 // tracking array instead and resolves each one's fixed address from its handle.
 #ifdef DSMAP3_STABLE
-#define DSMAP3_FOREACH(MAP, CODE)                                             \
+#define DSMAP3_FOREACH(MAP, CODE)                                            \
     do                                                                       \
     {                                                                        \
         uint16_t _index = (MAP)->count;                                      \
@@ -201,14 +201,14 @@ typedef struct
         {                                                                    \
             while (_index--)                                                 \
             {                                                                \
-                dsmap3_handle_t _handle = (MAP)->handles[_index];             \
+                dsmap3_handle_t _handle = (MAP)->handles[_index];            \
                 void *_data = (MAP)->pool + (uint32_t)_handle * (MAP)->size; \
                 CODE;                                                        \
             }                                                                \
         }                                                                    \
     } while (0)
 #else
-#define DSMAP3_FOREACH(MAP, CODE)                                            \
+#define DSMAP3_FOREACH(MAP, CODE)                                           \
     do                                                                      \
     {                                                                       \
         uint16_t _index = (MAP)->count;                                     \
@@ -216,7 +216,7 @@ typedef struct
         {                                                                   \
             while (_index--)                                                \
             {                                                               \
-                dsmap3_handle_t _handle = (MAP)->handles[_index];            \
+                dsmap3_handle_t _handle = (MAP)->handles[_index];           \
                 void *_data = (MAP)->pool + (uint32_t)_index * (MAP)->size; \
                 CODE;                                                       \
             }                                                               \

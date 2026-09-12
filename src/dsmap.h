@@ -93,7 +93,6 @@ static inline uint16_t dsmap_valid(dsmap_t *map, dsmap_handle_t handle)
         return 0;
 
     uint16_t slot = map->lookup[handle];
-
     if (slot >= map->count)
         return 0;
 
