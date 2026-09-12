@@ -66,7 +66,7 @@ static void bench_prepare_dsmap4(dsmap4_t *map)
 
 static void bench_prepare_dsmap5(dsmap5_t *map)
 {
-    *map = (dsmap5_t)DSMAP5_INIT(storage_dsmap5);
+    *map = DSMAP5_BIND(storage_dsmap5);
     dsmap5_init(map);
 }
 

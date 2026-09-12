@@ -16,32 +16,18 @@ typedef struct
     uint16_t size;
     uint16_t count;
     uint16_t free_head;
-
 } dsmap5_t;
 
 #define DSMAP5_DECLARE(NAME, CAPACITY, TYPE) \
     struct                                   \
     {                                        \
-        uint16_t capacity;                   \
         TYPE pool[(CAPACITY)];               \
         uint16_t lookup[(CAPACITY)];         \
         uint16_t handles[(CAPACITY)];        \
         void *addr[(CAPACITY)];              \
-    } NAME = {                               \
-        .capacity = (CAPACITY),              \
-    }
+    } NAME
 
-#define DSMAP5_INIT(STORAGE)                                                \
-    {                                                                       \
-        .pool = (char *)(STORAGE).pool,                                     \
-        .lookup = (STORAGE).lookup,                                         \
-        .handles = (STORAGE).handles,                                       \
-        .addr = (STORAGE).addr,                                             \
-        .capacity = sizeof((STORAGE).lookup) / sizeof((STORAGE).lookup[0]), \
-        .size = sizeof((STORAGE).pool[0]),                                  \
-        .count = 0,                                                         \
-        .free_head = DSMAP5_INVALID_HANDLE}
-
+// Storage dinámico.
 #define DSMAP5_ALLOC(ALLOC, CAPACITY, SIZE)                            \
     {                                                                  \
         .pool = (char *)(ALLOC)((CAPACITY) * (SIZE)),                  \
@@ -51,18 +37,21 @@ typedef struct
         .capacity = (CAPACITY),                                        \
         .size = (SIZE),                                                \
         .count = 0,                                                    \
-        .free_head = DSMAP5_INVALID_HANDLE}
+        .free_head = DSMAP5_INVALID_HANDLE,                            \
+    }
 
-#define DSMAP5_BIND(NAME)               \
-    {                                   \
-        .pool = (char *)(NAME).pool,    \
-        .lookup = (NAME).lookup,        \
-        .handles = (NAME).handles,      \
-        .addr = (NAME).addr,            \
-        .capacity = (NAME).capacity,    \
-        .size = sizeof((NAME).pool[0]), \
-        .count = 0,                     \
-        .free_head = DSMAP5_INVALID_HANDLE}
+#define DSMAP5_BIND(NAME)                                             \
+    (dsmap5_t)                                                        \
+    {                                                                 \
+        .pool = (char *)(NAME).pool,                                  \
+        .lookup = (NAME).lookup,                                      \
+        .handles = (NAME).handles,                                    \
+        .addr = (NAME).addr,                                          \
+        .capacity = sizeof((NAME).lookup) / sizeof((NAME).lookup[0]), \
+        .size = sizeof((NAME).pool[0]),                               \
+        .count = 0,                                                   \
+        .free_head = DSMAP5_INVALID_HANDLE,                           \
+    }
 
 #define DSMAP5_FOREACH(MAP, CODE)                              \
     do                                                         \
@@ -91,7 +80,7 @@ static inline void dsmap5_init(dsmap5_t *map)
 
 static inline dsmap5_handle_t dsmap5_alloc(dsmap5_t *map)
 {
-    if (map->count >= map->capacity || map->free_head == DSMAP5_INVALID_HANDLE)
+    if (map->free_head == DSMAP5_INVALID_HANDLE)
         return DSMAP5_INVALID_HANDLE;
 
     dsmap5_handle_t handle = map->free_head;
