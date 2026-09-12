@@ -52,15 +52,16 @@ typedef struct
         .free_head = DSMAP_INVALID_HANDLE,                            \
     }
 
-#define DSMAP_FOREACH(MAP, CODE)                               \
-    do                                                         \
-    {                                                          \
-        uint16_t _index = (MAP)->count;                        \
-        while (_index--)                                       \
-        {                                                      \
-            void *_data = (MAP)->addr[(MAP)->handles[_index]]; \
-            CODE;                                              \
-        }                                                      \
+#define DSMAP_FOREACH(MAP, CODE)                             \
+    do                                                       \
+    {                                                        \
+        uint16_t _index = (MAP)->count;                      \
+        while (_index--)                                     \
+        {                                                    \
+            dsmap_handle_t _handle = (MAP)->handles[_index]; \
+            void *_data = (MAP)->addr[_handle];              \
+            CODE;                                            \
+        }                                                    \
     } while (0)
 
 static inline void dsmap_init(dsmap_t *map)
