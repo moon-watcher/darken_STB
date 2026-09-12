@@ -11,7 +11,7 @@ typedef struct
     char *pool;
     uint16_t *lookup;
     uint16_t *handles;
-    void **addr;
+    uint16_t *offset;
     uint16_t capacity;
     uint16_t size;
     uint16_t count;
@@ -24,7 +24,7 @@ typedef struct
         TYPE pool[(CAPACITY)];              \
         uint16_t lookup[(CAPACITY)];        \
         uint16_t handles[(CAPACITY)];       \
-        void *addr[(CAPACITY)];             \
+        uint16_t offset[(CAPACITY)];        \
     } NAME
 
 #define DSMAP_ALLOC(ALLOC, CAPACITY, SIZE)                             \
@@ -32,7 +32,7 @@ typedef struct
         .pool = (char *)(ALLOC)((CAPACITY) * (SIZE)),                  \
         .lookup = (uint16_t *)(ALLOC)((CAPACITY) * sizeof(uint16_t)),  \
         .handles = (uint16_t *)(ALLOC)((CAPACITY) * sizeof(uint16_t)), \
-        .addr = (void **)(ALLOC)((CAPACITY) * sizeof(void *)),         \
+        .offset = (uint16_t *)(ALLOC)((CAPACITY) * sizeof(uint16_t)),  \
         .capacity = (CAPACITY),                                        \
         .size = (SIZE),                                                \
         .count = 0,                                                    \
@@ -45,23 +45,23 @@ typedef struct
         .pool = (char *)(NAME).pool,                                  \
         .lookup = (NAME).lookup,                                      \
         .handles = (NAME).handles,                                    \
-        .addr = (NAME).addr,                                          \
+        .offset = (NAME).offset,                                      \
         .capacity = sizeof((NAME).lookup) / sizeof((NAME).lookup[0]), \
         .size = sizeof((NAME).pool[0]),                               \
         .count = 0,                                                   \
         .free_head = DSMAP_INVALID_HANDLE,                            \
     }
 
-#define DSMAP_FOREACH(MAP, CODE)                             \
-    do                                                       \
-    {                                                        \
-        uint16_t _index = (MAP)->count;                      \
-        while (_index--)                                     \
-        {                                                    \
-            dsmap_handle_t _handle = (MAP)->handles[_index]; \
-            void *_data = (MAP)->addr[_handle];              \
-            CODE;                                            \
-        }                                                    \
+#define DSMAP_FOREACH(MAP, CODE)                                \
+    do                                                          \
+    {                                                           \
+        uint16_t _index = (MAP)->count;                         \
+        while (_index--)                                        \
+        {                                                       \
+            dsmap_handle_t _handle = (MAP)->handles[_index];    \
+            void *_data = (MAP)->pool + (MAP)->offset[_handle]; \
+            CODE;                                               \
+        }                                                       \
     } while (0)
 
 static inline void dsmap_init(dsmap_t *map)
@@ -72,7 +72,7 @@ static inline void dsmap_init(dsmap_t *map)
     for (uint16_t i = 0; i < map->capacity; i++)
     {
         map->lookup[i] = i + 1;
-        map->addr[i] = map->pool + ((uint32_t)i * map->size);
+        map->offset[i] = (uint16_t)((uint32_t)i * map->size);
     }
 
     map->lookup[map->capacity - 1] = DSMAP_INVALID_HANDLE;
@@ -109,7 +109,7 @@ static inline uint16_t dsmap_valid(dsmap_t *map, dsmap_handle_t handle)
 
 static inline void *dsmap_data(dsmap_t *map, dsmap_handle_t handle)
 {
-    return dsmap_valid(map, handle) ? map->addr[handle] : 0;
+    return dsmap_valid(map, handle) ? map->pool + map->offset[handle] : 0;
 }
 
 static inline void *dsmap_remove(dsmap_t *map, dsmap_handle_t handle)
@@ -131,5 +131,5 @@ static inline void *dsmap_remove(dsmap_t *map, dsmap_handle_t handle)
     map->lookup[handle] = map->free_head;
     map->free_head = handle;
 
-    return map->addr[handle];
+    return map->pool + map->offset[handle];
 }
