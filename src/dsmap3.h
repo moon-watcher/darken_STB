@@ -1,5 +1,5 @@
 /**
- * dsmap.h — stable handle -> inline data slot map (owns its storage)
+ * dsmap0.h — stable handle -> inline data slot map (owns its storage)
  *
  * dsmap-1.0.0
  *

@@ -1,7 +1,7 @@
 #include <genesis.h>
 #include <string.h>
 
-#include "../dsmap.h"
+#include "../dsmap0.h"
 
 typedef struct
 {
@@ -12,7 +12,7 @@ typedef struct
  * TEST HELPERS
  * ============================================================================ */
 
-static void dsmap_dump(dsmap_t *pool)
+static void dsmap0_dump(dsmap0_t *pool)
 {
     return;
 
@@ -21,7 +21,7 @@ static void dsmap_dump(dsmap_t *pool)
     for (uint16_t i = 0; i < pool->count; ++i)
     {
         uint16_t handle = pool->handles[i];
-        Entity *entity = dsmap_data(pool, handle);
+        Entity *entity = dsmap0_data(pool, handle);
 
         kprintf("  [%d] handle=%d id=%d", i, handle, entity->id);
     }
@@ -45,23 +45,23 @@ static void test_stable_handle(void)
     uint16_t lookup[4];
     uint16_t handles[4];
 
-    dsmap_t pool = DSMAP_BIND(storage, lookup, handles);
+    dsmap0_t pool = DSMAP0_BIND(storage, lookup, handles);
 
-    int16_t a = dsmap_alloc(&pool);
-    int16_t b = dsmap_alloc(&pool);
-    int16_t c = dsmap_alloc(&pool);
+    int16_t a = dsmap0_alloc(&pool);
+    int16_t b = dsmap0_alloc(&pool);
+    int16_t c = dsmap0_alloc(&pool);
 
     Entity *entity;
 
-    entity = dsmap_data(&pool, c);
+    entity = dsmap0_data(&pool, c);
     kprintf("before -> %d", entity->id);
 
-    dsmap_remove(&pool, a);
+    dsmap0_remove(&pool, a);
 
-    entity = dsmap_data(&pool, c);
+    entity = dsmap0_data(&pool, c);
     kprintf("after  -> %d", entity->id);
 
-    dsmap_dump(&pool);
+    dsmap0_dump(&pool);
 }
 
 static void test_remove_swap(void)
@@ -78,33 +78,33 @@ static void test_remove_swap(void)
     uint16_t lookup[4];
     uint16_t handles[4];
 
-    dsmap_t pool = DSMAP_BIND(storage, lookup, handles);
+    dsmap0_t pool = DSMAP0_BIND(storage, lookup, handles);
 
-    int16_t a = dsmap_alloc(&pool);
-    int16_t b = dsmap_alloc(&pool);
-    int16_t c = dsmap_alloc(&pool);
+    int16_t a = dsmap0_alloc(&pool);
+    int16_t b = dsmap0_alloc(&pool);
+    int16_t c = dsmap0_alloc(&pool);
 
-    dsmap_dump(&pool);
-    dsmap_remove(&pool, b);
+    dsmap0_dump(&pool);
+    dsmap0_remove(&pool, b);
 
     kprintf("after remove b=%d", b);
 
     Entity *entity;
 
-    entity = dsmap_data(&pool, a);
+    entity = dsmap0_data(&pool, a);
     kprintf("a -> %d", entity->id);
 
-    entity = dsmap_data(&pool, c);
+    entity = dsmap0_data(&pool, c);
     kprintf("c -> %d", entity->id);
 
-    entity = dsmap_data(&pool, b);
+    entity = dsmap0_data(&pool, b);
 
     if (entity == 0)
         kprintf("b -> NULL");
     else
         kprintf("b -> %d", entity->id);
 
-    dsmap_dump(&pool);
+    dsmap0_dump(&pool);
 }
 
 static void test_handle_reuse(void)
@@ -121,46 +121,46 @@ static void test_handle_reuse(void)
     uint16_t lookup[4];
     uint16_t handles[4];
 
-    dsmap_t pool = DSMAP_BIND(storage, lookup, handles);
+    dsmap0_t pool = DSMAP0_BIND(storage, lookup, handles);
 
-    int16_t a = dsmap_alloc(&pool);
-    int16_t b = dsmap_alloc(&pool);
-    int16_t c = dsmap_alloc(&pool);
+    int16_t a = dsmap0_alloc(&pool);
+    int16_t b = dsmap0_alloc(&pool);
+    int16_t c = dsmap0_alloc(&pool);
 
     kprintf("a=%d b=%d c=%d", a, b, c);
 
-    dsmap_remove(&pool, b);
+    dsmap0_remove(&pool, b);
 
-    int16_t d = dsmap_alloc(&pool);
+    int16_t d = dsmap0_alloc(&pool);
 
     kprintf("d=%d reused=%d", d, b);
 
-    dsmap_dump(&pool);
+    dsmap0_dump(&pool);
 }
 
 static void test_dynamic(void)
 {
     kprintf("TEST: dynamic");
 
-    dsmap_t pool = DSMAP_ALLOC(MEM_alloc, 4, sizeof(Entity));
+    dsmap0_t pool = DSMAP0_ALLOC(MEM_alloc, 4, sizeof(Entity));
 
-    Entity *a = dsmap_data(&pool, dsmap_alloc(&pool));
-    Entity *b = dsmap_data(&pool, dsmap_alloc(&pool));
-    int16_t c = dsmap_alloc(&pool);
+    Entity *a = dsmap0_data(&pool, dsmap0_alloc(&pool));
+    Entity *b = dsmap0_data(&pool, dsmap0_alloc(&pool));
+    int16_t c = dsmap0_alloc(&pool);
 
     a->id = 10;
     b->id = 20;
 
     Entity *entity;
 
-    entity = dsmap_data(&pool, c);
+    entity = dsmap0_data(&pool, c);
     entity->id = 30;
 
     kprintf("a -> %d", a->id);
     kprintf("b -> %d", b->id);
     kprintf("c -> %d", entity->id);
 
-    dsmap_remove(&pool, c);
+    dsmap0_remove(&pool, c);
 
     MEM_free(pool.pool);
     MEM_free(pool.lookup);
@@ -181,25 +181,25 @@ static void test_full(void)
     uint16_t lookup[4];
     uint16_t handles[4];
 
-    dsmap_t pool = DSMAP_BIND(storage, lookup, handles);
+    dsmap0_t pool = DSMAP0_BIND(storage, lookup, handles);
 
-    int16_t a = dsmap_alloc(&pool);
-    int16_t b = dsmap_alloc(&pool);
-    int16_t c = dsmap_alloc(&pool);
-    int16_t d = dsmap_alloc(&pool);
-    int16_t e = dsmap_alloc(&pool);
+    int16_t a = dsmap0_alloc(&pool);
+    int16_t b = dsmap0_alloc(&pool);
+    int16_t c = dsmap0_alloc(&pool);
+    int16_t d = dsmap0_alloc(&pool);
+    int16_t e = dsmap0_alloc(&pool);
 
     kprintf("a=%d b=%d c=%d d=%d e=%d", a, b, c, d, e);
     kprintf("count=%d", pool.count);
 
-    dsmap_dump(&pool);
+    dsmap0_dump(&pool);
 }
 
 /* ============================================================================
  * TEST RUNNER
  * ============================================================================ */
 
-void dsmap_run_tests(void)
+void dsmap0_run_tests(void)
 {
     kprintf("================================");
     kprintf("DSMAP TESTS");

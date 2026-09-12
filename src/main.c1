@@ -1,12 +1,12 @@
 #include <genesis.h>
 
-#include "dsmap.h"
-#include "dsmap_bench.h"
+#include "dsmap0.h"
+#include "dsmap0_bench.h"
 
 
 int main(bool hard)
 {
-    bench_dsmap_layout();
+    bench_dsmap0_layout();
 
     while (1)
     {

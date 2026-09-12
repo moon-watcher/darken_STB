@@ -12,7 +12,7 @@
 // #include "darksys.h"
 
 
-// #include "dsmap.h"
+// #include "dsmap0.h"
 
 
 
@@ -32,7 +32,7 @@ int main(void)
     vsmap_run_tests();
     BLASTEM_PROFIL_END
     BLASTEM_PROFIL_START
-    dsmap_run_tests();
+    dsmap0_run_tests();
     BLASTEM_PROFIL_END
 
     // bench_darksys();

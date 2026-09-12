@@ -1,7 +1,7 @@
 /* ============================================================================
- * bench.c -- tests + benchmarks para dsmap.h (v1) y dsmap3.h (v2)
+ * bench.c -- tests + benchmarks para dsmap0.h (v1) y dsmap3.h (v2)
  *
- * Requiere dsmap.h y dsmap3.h en el mismo directorio.
+ * Requiere dsmap0.h y dsmap3.h en el mismo directorio.
  *
  * Compilar dos veces para cubrir los dos modos de dsmap3:
  *     (normal)             -> dsmap3 densa
@@ -13,7 +13,7 @@
 #include <stdint.h>
 #include <genesis.h>
 
-#include "../dsmap.h"
+#include "../dsmap0.h"
 #define DSMAP3_STABLE
 #include "../dsmap3.h"
 
@@ -34,7 +34,7 @@ typedef struct { uint32_t v[16]; } elem64_t;
 static elem64_t g_v1_pool   [CAP];
 static uint16_t g_v1_lookup [CAP];
 static uint16_t g_v1_handles[CAP];
-static dsmap_t  g_v1_map;
+static dsmap0_t  g_v1_map;
 
 static void v1_bind(uint16_t size)
 {
@@ -43,7 +43,7 @@ static void v1_bind(uint16_t size)
     g_v1_map.handles   = g_v1_handles;
     g_v1_map.capacity  = CAP;
     g_v1_map.size      = size;
-    dsmap_init(&g_v1_map);
+    dsmap0_init(&g_v1_map);
 }
 
 
@@ -85,7 +85,7 @@ static void print_res(const char *tag, uint32_t ns)
 
 /* --- sumatorios usados por el bench de iteración --- */
 
-static uint32_t v1_itersum(dsmap_t *m)
+static uint32_t v1_itersum(dsmap0_t *m)
 {
     uint32_t s = 0;
     char *p = m->pool;
@@ -298,7 +298,7 @@ do {                                                                         \
  * main
  * -------------------------------------------------------------------------*/
 
-int dsmap_bench_deepseek_main(bool hardReset)
+int dsmap0_bench_deepseek_main(bool hardReset)
 {
     (void)hardReset;
 
@@ -314,8 +314,8 @@ int dsmap_bench_deepseek_main(bool hardReset)
     kprintf("=== TESTS ===");
     g_pass = 0; g_fail = 0;
 
-    DO_TESTS(v1, dsmap_t, dsmap_handle_t, DSMAP_INVALID_HANDLE,
-             v1_bind, dsmap_alloc, dsmap_data, dsmap_valid, dsmap_remove);
+    DO_TESTS(v1, dsmap0_t, dsmap0_handle_t, DSMAP0_INVALID_HANDLE,
+             v1_bind, dsmap0_alloc, dsmap0_data, dsmap0_valid, dsmap0_remove);
 
     DO_TESTS(v3, dsmap3_t, dsmap3_handle_t, DSMAP3_INVALID_HANDLE,
              v3_bind, dsmap3_alloc, dsmap3_data, dsmap3_valid, dsmap3_remove);
@@ -325,9 +325,9 @@ int dsmap_bench_deepseek_main(bool hardReset)
     /* ---------------- benchmarks ---------------- */
     kprintf("=== BENCHMARKS ===");
 
-    DO_BENCHES(v1, dsmap_t, dsmap_handle_t,
-               v1_bind, dsmap_alloc, dsmap_data, dsmap_valid,
-               dsmap_remove, v1_itersum);
+    DO_BENCHES(v1, dsmap0_t, dsmap0_handle_t,
+               v1_bind, dsmap0_alloc, dsmap0_data, dsmap0_valid,
+               dsmap0_remove, v1_itersum);
 
     DO_BENCHES(v3, dsmap3_t, dsmap3_handle_t,
                v3_bind, dsmap3_alloc, dsmap3_data, dsmap3_valid,
