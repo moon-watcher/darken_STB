@@ -27,7 +27,6 @@ typedef struct
         void *addr[(CAPACITY)];              \
     } NAME
 
-// Storage dinámico.
 #define DSMAP5_ALLOC(ALLOC, CAPACITY, SIZE)                            \
     {                                                                  \
         .pool = (char *)(ALLOC)((CAPACITY) * (SIZE)),                  \
