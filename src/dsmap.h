@@ -11,7 +11,6 @@ typedef struct
     char *pool;
     uint16_t *lookup;
     uint16_t *handles;
-    char **addr;
     uint16_t capacity;
     uint16_t size;
     uint16_t count;
@@ -24,7 +23,6 @@ typedef struct
         TYPE pool[(CAPACITY)];              \
         uint16_t lookup[(CAPACITY)];        \
         uint16_t handles[(CAPACITY)];       \
-        char *addr[(CAPACITY)];             \
     } NAME
 
 #define DSMAP_ALLOC(ALLOC, CAPACITY, SIZE)                             \
@@ -32,7 +30,6 @@ typedef struct
         .pool = (char *)(ALLOC)((CAPACITY) * (SIZE)),                  \
         .lookup = (uint16_t *)(ALLOC)((CAPACITY) * sizeof(uint16_t)),  \
         .handles = (uint16_t *)(ALLOC)((CAPACITY) * sizeof(uint16_t)), \
-        .addr = (char **)(ALLOC)((CAPACITY) * sizeof(char *)),         \
         .capacity = (CAPACITY),                                        \
         .size = (SIZE),                                                \
         .count = 0,                                                    \
@@ -45,23 +42,23 @@ typedef struct
         .pool = (char *)(NAME).pool,                                  \
         .lookup = (NAME).lookup,                                      \
         .handles = (NAME).handles,                                    \
-        .addr = (NAME).addr,                                          \
         .capacity = sizeof((NAME).lookup) / sizeof((NAME).lookup[0]), \
         .size = sizeof((NAME).pool[0]),                               \
         .count = 0,                                                   \
         .free_head = DSMAP_INVALID_HANDLE,                            \
     }
 
-#define DSMAP_DATA(MAP, HANDLE) ((MAP)->addr[(HANDLE)])
+#define DSMAP_AT(MAP, HANDLE, TYPE) \
+    ((TYPE *)((MAP)->pool + (HANDLE) * sizeof(TYPE)))
 
-#define DSMAP_FOREACH(MAP, CODE)                             \
+#define DSMAP_FOREACH(MAP, TYPE, CODE)                       \
     do                                                       \
     {                                                        \
         uint16_t _index = (MAP)->count;                      \
         while (_index--)                                     \
         {                                                    \
             dsmap_handle_t _handle = (MAP)->handles[_index]; \
-            void *_data = (MAP)->addr[_handle];              \
+            TYPE *_data = DSMAP_AT(MAP, _handle, TYPE);      \
             CODE;                                            \
         }                                                    \
     } while (0)
@@ -72,10 +69,7 @@ static inline void dsmap_init(dsmap_t *map)
     map->free_head = 0;
 
     for (uint16_t i = 0; i < map->capacity; i++)
-    {
         map->lookup[i] = i + 1;
-        map->addr[i] = map->pool + i * map->size;
-    }
 
     map->lookup[map->capacity - 1] = DSMAP_INVALID_HANDLE;
 }
@@ -107,11 +101,6 @@ static inline uint16_t dsmap_valid(dsmap_t *map, dsmap_handle_t handle)
         return 0;
 
     return map->handles[slot] == handle;
-}
-
-static inline void *dsmap_data(dsmap_t *map, dsmap_handle_t handle)
-{
-    return dsmap_valid(map, handle) ? DSMAP_DATA(map, handle) : 0;
 }
 
 static inline uint16_t dsmap_remove(dsmap_t *map, dsmap_handle_t handle)
