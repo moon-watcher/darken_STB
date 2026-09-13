@@ -140,7 +140,7 @@ typedef struct
 // handle from inside CODE — same swap-with-last compaction trick as darken.h's
 // DARKEN_FOREACH, and safe for the exact same reason: whatever gets swapped into the slot
 // you just vacated was already visited, or is about to be).
-// Bound to `_item` (a `vsmap_item_t *`) inside CODE; `_item->value` is your pointer.
+// Bound to `item` (a `vsmap_item_t *`) inside CODE; `item->value` is your pointer.
 #define VSMAP_FOREACH(MAP, CODE)                      \
     do                                                \
     {                                                 \
@@ -150,7 +150,7 @@ typedef struct
             vsmap_item_t *_pool = (MAP)->pool;        \
             while (_index--)                          \
             {                                         \
-                vsmap_item_t *_item = &_pool[_index]; \
+                vsmap_item_t *item = &_pool[_index];  \
                 CODE;                                 \
             }                                         \
         }                                             \

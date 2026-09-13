@@ -223,7 +223,7 @@ static void bench_dsmap_iteration(void)
     BLASTEM_PROFIL_START;
 
     for (uint16_t n = 0; n < BENCH_ITERATIONS; n++)
-        DSMAP_FOREACH(&map, sum += ((Entity *)_data)->x);
+        DSMAP_FOREACH(&map, sum += ((Entity *)data)->x);
 
     BLASTEM_PROFIL_END;
     bench_sink = sum;
@@ -239,7 +239,7 @@ static void bench_dsmap8_iteration(void)
     BLASTEM_PROFIL_START;
 
     for (uint16_t n = 0; n < BENCH_ITERATIONS; n++)
-        DSMAP8_FOREACH(&map, sum += ((Entity *)_data)->x);
+        DSMAP8_FOREACH(&map, sum += ((Entity *)data)->x);
 
     BLASTEM_PROFIL_END;
     bench_sink = sum;

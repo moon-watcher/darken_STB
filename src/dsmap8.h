@@ -53,21 +53,28 @@ typedef struct
         .count = 0,                                                   \
     }
 
-#define DSMAP8_DATA(MAP, HANDLE) ((void *)((MAP)->pool + (MAP)->lookup[(HANDLE)] * (MAP)->size))
+#define DSMAP8_DATA(MAP, HANDLE) ((void *)((MAP)->pool + (MAP)->lookup[(HANDLE)]))
 
-#define DSMAP8_FOREACH(MAP, CODE)                     \
-    for (uint16_t _i = 0; _i < (MAP)->count; _i++)    \
-    {                                                 \
-        void *_data = (MAP)->pool + _i * (MAP)->size; \
-        CODE;                                         \
-    }
+#define DSMAP8_FOREACH(MAP, CODE)                                         \
+    do                                                                    \
+    {                                                                     \
+        char *_p = (MAP)->pool;                                           \
+        for (uint16_t _i = 0; _i < (MAP)->count; _i++, _p += (MAP)->size) \
+        {                                                                 \
+            void *data = _p;                                              \
+            CODE;                                                         \
+        }                                                                 \
+    } while (0)
 
 static inline void dsmap8_init(dsmap8_t *map)
 {
     map->count = 0;
 
     for (uint16_t i = 0; i < map->capacity; i++)
+    {
         map->handles[i] = i;
+        map->lookup[i] = i * map->size;
+    }
 }
 
 static inline dsmap8_handle_t dsmap8_alloc(dsmap8_t *map)
@@ -76,7 +83,7 @@ static inline dsmap8_handle_t dsmap8_alloc(dsmap8_t *map)
         return DSMAP8_INVALID_HANDLE;
 
     dsmap8_handle_t handle = map->handles[map->count];
-    map->lookup[handle] = map->count++;
+    map->lookup[handle] = map->size * map->count++;
 
     return handle;
 }
@@ -86,24 +93,24 @@ static inline uint16_t dsmap8_valid(dsmap8_t *map, dsmap8_handle_t handle)
     if (handle >= map->capacity)
         return 0;
 
-    uint16_t slot = map->lookup[handle];
+    uint16_t offset = map->lookup[handle];
 
-    if (slot >= map->count)
+    if (offset >= map->count * map->size)
         return 0;
 
-    return map->handles[slot] == handle;
+    return map->handles[offset / map->size] == handle;
 }
 
 static inline void dsmap8_remove(dsmap8_t *map, dsmap8_handle_t handle)
 {
-    uint16_t slot = map->lookup[handle];
+    uint16_t slot = map->lookup[handle] / map->size;
     uint16_t last = --map->count;
 
     if (slot != last)
     {
         dsmap8_handle_t moved_handle = map->handles[last];
         map->handles[slot] = moved_handle;
-        map->lookup[moved_handle] = slot;
+        map->lookup[moved_handle] = last * map->size;
     }
 
     map->handles[last] = handle;

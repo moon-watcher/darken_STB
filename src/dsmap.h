@@ -68,7 +68,7 @@ typedef struct
 #define DSMAP_FOREACH(MAP, CODE)                   \
     for (uint16_t _i = 0; _i < (MAP)->count; _i++) \
     {                                              \
-        void *_data = (MAP)->ptrs[_i];             \
+        void *data = (MAP)->ptrs[_i];              \
         CODE;                                      \
     }
 
