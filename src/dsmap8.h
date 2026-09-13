@@ -125,8 +125,8 @@ static inline void dsmap8_remove(dsmap8_t *map, dsmap8_handle_t handle)
         map->handles[slot] = moved_handle;
         map->lookup[moved_handle] = slot;
         map->ptrs[slot] = map->ptrs[last];
+        map->ptrs[last] = map->addrs[handle];
     }
-    map->ptrs[last] = map->addrs[handle];
 
     map->handles[last] = handle;
 }
