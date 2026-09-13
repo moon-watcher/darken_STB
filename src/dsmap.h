@@ -40,18 +40,14 @@ typedef struct
         .count = 0,                                                    \
     }
 
-#define DSMAP_FREE(FREE, MAP)                             \
-    do                                                    \
-    {                                                     \
-        (FREE)((MAP)->pool);                              \
-        (FREE)((MAP)->addrs);                             \
-        (FREE)((MAP)->ptrs);                              \
-        (FREE)((MAP)->lookup);                            \
-        (FREE)((MAP)->handles);                           \
-        (MAP)->pool = 0;                                  \
-        (MAP)->addrs = (MAP)->ptrs = 0;                   \
-        (MAP)->lookup = (MAP)->handles = 0;               \
-        (MAP)->capacity = (MAP)->size = (MAP)->count = 0; \
+#define DSMAP_FREE(FREE, MAP)   \
+    do                          \
+    {                           \
+        (FREE)((MAP)->pool);    \
+        (FREE)((MAP)->addrs);   \
+        (FREE)((MAP)->ptrs);    \
+        (FREE)((MAP)->lookup);  \
+        (FREE)((MAP)->handles); \
     } while (0)
 
 #define DSMAP_BIND(NAME)                                              \
@@ -93,9 +89,7 @@ static inline dsmap_handle_t dsmap_alloc(dsmap_t *map)
         return DSMAP_INVALID_HANDLE;
 
     dsmap_handle_t handle = map->handles[map->count];
-
-    map->lookup[handle] = map->count;
-    map->count++;
+    map->lookup[handle] = map->count++;
 
     return handle;
 }
