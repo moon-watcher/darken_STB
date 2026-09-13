@@ -1,7 +1,7 @@
 #include <genesis.h>
 
-#include "dsmap.h"
-#include "dsmap8.h"
+#include "../dsmap.h"
+#include "../dsmap8.h"
 
 /* ================================================================
  * CONFIG
