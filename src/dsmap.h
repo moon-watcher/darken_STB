@@ -4,6 +4,8 @@
 
 typedef uint16_t dsmap_handle_t;
 
+#define DSMAP_INVALID_HANDLE ((dsmap_handle_t)0xFFFFu)
+
 typedef struct
 {
     char *pool;
@@ -47,19 +49,14 @@ typedef struct
         .count = 0,                                                   \
     }
 
-#define DSMAP_DATA(MAP, HANDLE) ((void *)((MAP)->ptrs[HANDLE]))
+#define DSMAP_DATA(MAP, HANDLE) ((void *)((MAP)->pool + (HANDLE) * (MAP)->size))
 
-#define DSMAP_FOREACH(MAP, CODE)                             \
-    do                                                       \
-    {                                                        \
-        uint16_t _index = (MAP)->count;                      \
-        while (_index--)                                     \
-        {                                                    \
-            dsmap_handle_t _handle = (MAP)->handles[_index]; \
-            void *_data = DSMAP_DATA(MAP, _handle);          \
-            CODE;                                            \
-        }                                                    \
-    } while (0)
+#define DSMAP_FOREACH(MAP, CODE)                   \
+    for (uint16_t _i = 0; _i < (MAP)->count; _i++) \
+    {                                              \
+        void *_data = (MAP)->ptrs[_i];             \
+        CODE;                                      \
+    }
 
 static inline void dsmap_init(dsmap_t *map)
 {
@@ -67,7 +64,7 @@ static inline void dsmap_init(dsmap_t *map)
 
     for (uint16_t i = 0; i < map->capacity; i++)
     {
-        map->ptrs[i] = map->pool + i * map->size;
+        map->ptrs[i] = DSMAP_DATA(map, i);
         map->handles[i] = i;
     }
 }
@@ -75,7 +72,7 @@ static inline void dsmap_init(dsmap_t *map)
 static inline dsmap_handle_t dsmap_alloc(dsmap_t *map)
 {
     if (map->count >= map->capacity)
-        return 0;
+        return DSMAP_INVALID_HANDLE;
 
     dsmap_handle_t handle = map->handles[map->count];
 
@@ -112,9 +109,11 @@ static inline uint16_t dsmap_remove(dsmap_t *map, dsmap_handle_t handle)
 
         map->handles[slot] = moved_handle;
         map->lookup[moved_handle] = slot;
+        map->ptrs[slot] = map->ptrs[last];
     }
 
     map->handles[last] = handle;
+    map->ptrs[last] = DSMAP_DATA(map, handle);
 
     return 1;
 }
