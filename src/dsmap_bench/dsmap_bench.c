@@ -13,9 +13,9 @@
 #include <stdint.h>
 #include <genesis.h>
 
-#include "../dsmap0.h"
+#include "../_dsmap0.h"
 #define DSMAP3_STABLE
-#include "../dsmap3.h"
+#include "../_dsmap3.h"
 
 
 /* ---------------------------------------------------------------------------

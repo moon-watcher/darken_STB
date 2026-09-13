@@ -1,7 +1,7 @@
 #include <genesis.h>
 #include <string.h>
 
-#include "../dsmap0.h"
+#include "../_dsmap0.h"
 
 typedef struct
 {
