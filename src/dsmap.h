@@ -15,7 +15,6 @@ typedef struct
     uint16_t capacity;
     uint16_t size;
     uint16_t count;
-    uint16_t free_head;
 } dsmap_t;
 
 #define DSMAP_DECLARE(NAME, CAPACITY, TYPE) \
@@ -36,7 +35,6 @@ typedef struct
         .capacity = (CAPACITY),                                        \
         .size = (SIZE),                                                \
         .count = 0,                                                    \
-        .free_head = DSMAP_INVALID_HANDLE,                             \
     }
 
 #define DSMAP_BIND(NAME)                                              \
@@ -49,7 +47,6 @@ typedef struct
         .capacity = sizeof((NAME).lookup) / sizeof((NAME).lookup[0]), \
         .size = sizeof((NAME).pool[0]),                               \
         .count = 0,                                                   \
-        .free_head = DSMAP_INVALID_HANDLE,                            \
     }
 
 #define DSMAP_DATA(MAP, HANDLE) ((void *)((MAP)->ptrs[HANDLE]))
@@ -69,29 +66,23 @@ typedef struct
 static inline void dsmap_init(dsmap_t *map)
 {
     map->count = 0;
-    map->free_head = 0;
 
     for (uint16_t i = 0; i < map->capacity; i++)
     {
         map->ptrs[i] = map->pool + i * map->size;
-        map->lookup[i] = i + 1;
+        map->handles[i] = i;
     }
-
-    map->lookup[map->capacity - 1] = DSMAP_INVALID_HANDLE;
 }
 
 static inline dsmap_handle_t dsmap_alloc(dsmap_t *map)
 {
-    if (map->free_head == DSMAP_INVALID_HANDLE)
+    if (map->count >= map->capacity)
         return DSMAP_INVALID_HANDLE;
 
-    dsmap_handle_t handle = map->free_head;
-    map->free_head = map->lookup[handle];
+    dsmap_handle_t handle = map->handles[map->count];
 
-    uint16_t slot = map->count++;
-
-    map->lookup[handle] = slot;
-    map->handles[slot] = handle;
+    map->lookup[handle] = map->count;
+    map->count++;
 
     return handle;
 }
@@ -125,8 +116,7 @@ static inline uint16_t dsmap_remove(dsmap_t *map, dsmap_handle_t handle)
         map->lookup[moved_handle] = slot;
     }
 
-    map->lookup[handle] = map->free_head;
-    map->free_head = handle;
+    map->handles[last] = handle;
 
     return 1;
 }
