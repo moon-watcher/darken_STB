@@ -179,8 +179,8 @@ static void bench_dsmap_data(void)
     for (uint16_t n = 0; n < BENCH_ITERATIONS; n++)
         for (uint16_t i = 0; i < BENCH_CAPACITY; i++)
         {
-            // Entity *entity = _dsmap_data(&map, handles[i]);
-            Entity *entity = DSMAP_AT(&map, handles[i], Entity);
+            // Entity *entity = dsmap_data(&map, handles[i]);
+            Entity *entity = DSMAP_DATA(&map, handles[i]);
             
             sum += entity->x;
         }
