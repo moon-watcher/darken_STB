@@ -4,8 +4,6 @@
 
 typedef uint16_t dsmap_handle_t;
 
-#define DSMAP_INVALID_HANDLE ((dsmap_handle_t)0xFFFFu)
-
 typedef struct
 {
     char *pool;
@@ -77,7 +75,7 @@ static inline void dsmap_init(dsmap_t *map)
 static inline dsmap_handle_t dsmap_alloc(dsmap_t *map)
 {
     if (map->count >= map->capacity)
-        return DSMAP_INVALID_HANDLE;
+        return 0;
 
     dsmap_handle_t handle = map->handles[map->count];
 
