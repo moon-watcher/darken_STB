@@ -10,6 +10,7 @@ typedef struct
 {
     char *pool;
     char **ptrs;
+    char **addrs;
     uint16_t *lookup;
     uint16_t *handles;
     uint16_t capacity;
@@ -22,6 +23,7 @@ typedef struct
     {                                       \
         TYPE pool[(CAPACITY)];              \
         char *ptrs[(CAPACITY)];             \
+        char *addrs[(CAPACITY)];            \
         uint16_t lookup[(CAPACITY)];        \
         uint16_t handles[(CAPACITY)];       \
     } NAME
@@ -30,6 +32,7 @@ typedef struct
     {                                                                  \
         .pool = (char *)(ALLOC)((CAPACITY) * (SIZE)),                  \
         .ptrs = (char **)(ALLOC)((CAPACITY) * sizeof(char *)),         \
+        .addrs = (char **)(ALLOC)((CAPACITY) * sizeof(char *)),        \
         .lookup = (uint16_t *)(ALLOC)((CAPACITY) * sizeof(uint16_t)),  \
         .handles = (uint16_t *)(ALLOC)((CAPACITY) * sizeof(uint16_t)), \
         .capacity = (CAPACITY),                                        \
@@ -37,11 +40,28 @@ typedef struct
         .count = 0,                                                    \
     }
 
+#define DSMAP_FREE(FREE, MAP)   \
+    do                          \
+    {                           \
+        (FREE)((MAP)->pool);    \
+        (FREE)((MAP)->ptrs);    \
+        (FREE)((MAP)->addrs);   \
+        (FREE)((MAP)->lookup);  \
+        (FREE)((MAP)->handles); \
+        (MAP)->pool = 0;        \
+        (MAP)->ptrs = 0;        \
+        (MAP)->addrs = 0;       \
+        (MAP)->lookup = 0;      \
+        (MAP)->handles = 0;     \
+        (MAP)->count = 0;       \
+    } while (0)
+
 #define DSMAP_BIND(NAME)                                              \
     (dsmap_t)                                                         \
     {                                                                 \
         .pool = (char *)(NAME).pool,                                  \
         .ptrs = (NAME).ptrs,                                          \
+        .addrs = (NAME).addrs,                                        \
         .lookup = (NAME).lookup,                                      \
         .handles = (NAME).handles,                                    \
         .capacity = sizeof((NAME).lookup) / sizeof((NAME).lookup[0]), \
@@ -49,7 +69,7 @@ typedef struct
         .count = 0,                                                   \
     }
 
-#define DSMAP_DATA(MAP, HANDLE) ((void *)((MAP)->pool + (HANDLE) * (MAP)->size))
+#define DSMAP_DATA(MAP, HANDLE) ((void *)((MAP)->addrs[HANDLE]))
 
 #define DSMAP_FOREACH(MAP, CODE)                   \
     for (uint16_t _i = 0; _i < (MAP)->count; _i++) \
@@ -64,7 +84,7 @@ static inline void dsmap_init(dsmap_t *map)
 
     for (uint16_t i = 0; i < map->capacity; i++)
     {
-        map->ptrs[i] = DSMAP_DATA(map, i);
+        map->addrs[i] = map->ptrs[i] = map->pool + i * map->size;
         map->handles[i] = i;
     }
 }
@@ -113,7 +133,6 @@ static inline uint16_t dsmap_remove(dsmap_t *map, dsmap_handle_t handle)
     }
 
     map->handles[last] = handle;
-    map->ptrs[last] = DSMAP_DATA(map, handle);
 
     return 1;
 }
