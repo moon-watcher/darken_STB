@@ -40,15 +40,18 @@ typedef struct
         .count = 0,                                                    \
     }
 
-#define DSMAP_FREE(FREE, MAP)                                                                                                         \
-    do                                                                                                                                \
-    {                                                                                                                                 \
-        (FREE)((MAP)->pool);                                                                                                          \
-        (FREE)((MAP)->ptrs);                                                                                                          \
-        (FREE)((MAP)->addrs);                                                                                                         \
-        (FREE)((MAP)->lookup);                                                                                                        \
-        (FREE)((MAP)->handles);                                                                                                       \
-        (MAP)->pool = (MAP)->ptrs = (MAP)->addrs = (MAP)->lookup = (MAP)->handles = (MAP)->capacity = (MAP)->size = (MAP)->count = 0; \
+#define DSMAP_FREE(FREE, MAP)                             \
+    do                                                    \
+    {                                                     \
+        (FREE)((MAP)->pool);                              \
+        (FREE)((MAP)->addrs);                             \
+        (FREE)((MAP)->ptrs);                              \
+        (FREE)((MAP)->lookup);                            \
+        (FREE)((MAP)->handles);                           \
+        (MAP)->pool = 0;                                  \
+        (MAP)->addrs = (MAP)->ptrs = 0;                   \
+        (MAP)->lookup = (MAP)->handles = 0;               \
+        (MAP)->capacity = (MAP)->size = (MAP)->count = 0; \
     } while (0)
 
 #define DSMAP_BIND(NAME)                                              \
@@ -79,7 +82,8 @@ static inline void dsmap_init(dsmap_t *map)
 
     for (uint16_t i = 0; i < map->capacity; i++)
     {
-        map->ptrs[i] = map->addrs[i] = map->pool + i * map->size;
+        map->addrs[i] = map->pool + (uint16_t)(i * map->size);
+        map->ptrs[i] = map->addrs[i];
         map->handles[i] = i;
     }
 }
@@ -112,9 +116,6 @@ static inline uint16_t dsmap_valid(dsmap_t *map, dsmap_handle_t handle)
 
 static inline uint16_t dsmap_remove(dsmap_t *map, dsmap_handle_t handle)
 {
-    if (!dsmap_valid(map, handle))
-        return 0;
-
     uint16_t slot = map->lookup[handle];
     uint16_t last = --map->count;
 
@@ -125,6 +126,7 @@ static inline uint16_t dsmap_remove(dsmap_t *map, dsmap_handle_t handle)
         map->handles[slot] = moved_handle;
         map->lookup[moved_handle] = slot;
         map->ptrs[slot] = map->ptrs[last];
+        map->ptrs[last] = map->addrs[handle];
     }
 
     map->handles[last] = handle;
