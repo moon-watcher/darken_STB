@@ -53,8 +53,7 @@ typedef struct
         .count = 0,                                                   \
     }
 
-#define DSMAP8_DATA(MAP, HANDLE) \
-    ((void *)((MAP)->pool + (MAP)->lookup[(HANDLE)] * (MAP)->size))
+#define DSMAP8_DATA(MAP, HANDLE) ((void *)((MAP)->pool + (MAP)->lookup[(HANDLE)] * (MAP)->size))
 
 #define DSMAP8_FOREACH(MAP, CODE)                     \
     for (uint16_t _i = 0; _i < (MAP)->count; _i++)    \

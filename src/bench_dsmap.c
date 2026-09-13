@@ -16,10 +16,8 @@
 
 typedef struct
 {
-    uint16_t x;
-    uint16_t y;
-    uint16_t vx;
-    uint16_t vy;
+    uint16_t x, y;
+    uint16_t vx, vy;
 
 } Entity;
 
