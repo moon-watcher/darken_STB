@@ -171,14 +171,6 @@ struct darken_entity
  * PUBLIC API
  * ============================================================================ */
 
-void darken_init(darken *);
-void darken_update(darken *);
-void darken_reset(darken *);
-
-void darken_entity_pause(darken_entity);
-void darken_entity_resume(darken_entity);
-void darken_entity_delete(darken_entity);
-
 // Sentinel return values for update() callbacks in state-machine mode.
 // Any other darken_state value returned is treated as the next update callback.
 #define DARKEN_CONTINUE ((darken_state)1)
@@ -279,21 +271,10 @@ void darken_entity_delete(darken_entity);
 #define DARKEN_COUNT_PAUSED(CTX) ((uint16_t)((CTX)->capacity - (CTX)->paused))
 
 /* ============================================================================
- * PRIVATE
+ * FUNCTIONS
  * ============================================================================ */
 
-// Single call-site helper for invoking update()/destroy(), used everywhere the engine calls into user code.
-// The argument list is fixed per mode (see the big comment above), so there is nothing to configure here.
-#ifdef DARKEN_DIRECT
-#define _DARKEN_ARGS(ENTITY) (ENTITY), (ENTITY)->data
-#else
-#define _DARKEN_ARGS(ENTITY) (ENTITY)->data
-#endif
-
-#define _DARKEN_ALIGN4(X) (((X) + 3U) & ~3U)
-#define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD))
-
-static inline void _darken_swap(darken_entity pool[], uint16_t i, uint16_t j)
+static inline void darken_swap(darken_entity pool[], uint16_t i, uint16_t j)
 {
     if (i == j)
         return;
@@ -305,7 +286,38 @@ static inline void _darken_swap(darken_entity pool[], uint16_t i, uint16_t j)
     pool[j]->slot = j;
 }
 
-#ifdef DARKEN_IMPLEMENTATION
+static inline void darken_entity_pause(darken_entity entity)
+{
+    if (!DARKEN_ENTITY_IN_ACTIVE(entity))
+        return;
+
+    darken_swap(entity->owner->pool, entity->slot, --entity->owner->size);
+    darken_swap(entity->owner->pool, entity->slot, --entity->owner->paused);
+}
+
+static inline void darken_entity_resume(darken_entity entity)
+{
+    if (!DARKEN_ENTITY_IN_PAUSED(entity))
+        return;
+
+    darken_swap(entity->owner->pool, entity->slot, entity->owner->paused++);
+    darken_swap(entity->owner->pool, entity->slot, entity->owner->size++);
+}
+
+// Note: darken_entity_delete() only calls destroy() if the entity is active.
+// If the entity is paused, it's moved to the free zone without calling destroy().
+static inline void darken_entity_delete(darken_entity entity)
+{
+    if (DARKEN_ENTITY_IN_ACTIVE(entity))
+    {
+        if (entity->destroy)
+            entity->destroy(_DARKEN_ARGS(entity));
+
+        darken_swap(entity->owner->pool, entity->slot, --entity->owner->size);
+    }
+    else if (DARKEN_ENTITY_IN_PAUSED(entity))
+        darken_swap(entity->owner->pool, entity->slot, entity->owner->paused++);
+}
 
 //
 // USAGE EXAMPLES:
@@ -332,7 +344,7 @@ static inline void _darken_swap(darken_entity pool[], uint16_t i, uint16_t j)
 //         darken_init(&m);
 //         ...
 //     }
-void darken_init(darken *ctx)
+static inline void darken_init(darken *ctx)
 {
     ctx->size = 0;
     uint16_t i = ctx->paused = ctx->capacity;
@@ -348,7 +360,7 @@ void darken_init(darken *ctx)
     }
 }
 
-void darken_update(darken *ctx)
+static inline void darken_update(darken *ctx)
 {
 #ifdef DARKEN_DIRECT
     DARKEN_FOREACH(ctx, {
@@ -378,7 +390,7 @@ void darken_update(darken *ctx)
 #endif
 }
 
-void darken_reset(darken *ctx)
+static inline void darken_reset(darken *ctx)
 {
     DARKEN_FOREACH(ctx, {
         if (_entity->destroy)
@@ -389,37 +401,17 @@ void darken_reset(darken *ctx)
     ctx->paused = ctx->capacity;
 }
 
-void darken_entity_pause(darken_entity entity)
-{
-    if (!DARKEN_ENTITY_IN_ACTIVE(entity))
-        return;
+/* ============================================================================
+ * PRIVATE
+ * ============================================================================ */
 
-    _darken_swap(entity->owner->pool, entity->slot, --entity->owner->size);
-    _darken_swap(entity->owner->pool, entity->slot, --entity->owner->paused);
-}
+// Single call-site helper for invoking update()/destroy(), used everywhere the engine calls into user code.
+// The argument list is fixed per mode (see the big comment above), so there is nothing to configure here.
+#ifdef DARKEN_DIRECT
+#define _DARKEN_ARGS(ENTITY) (ENTITY), (ENTITY)->data
+#else
+#define _DARKEN_ARGS(ENTITY) (ENTITY)->data
+#endif
 
-void darken_entity_resume(darken_entity entity)
-{
-    if (!DARKEN_ENTITY_IN_PAUSED(entity))
-        return;
-
-    _darken_swap(entity->owner->pool, entity->slot, entity->owner->paused++);
-    _darken_swap(entity->owner->pool, entity->slot, entity->owner->size++);
-}
-
-// Note: darken_entity_delete() only calls destroy() if the entity is active.
-// If the entity is paused, it's moved to the free zone without calling destroy().
-void darken_entity_delete(darken_entity entity)
-{
-    if (DARKEN_ENTITY_IN_ACTIVE(entity))
-    {
-        if (entity->destroy)
-            entity->destroy(_DARKEN_ARGS(entity));
-
-        _darken_swap(entity->owner->pool, entity->slot, --entity->owner->size);
-    }
-    else if (DARKEN_ENTITY_IN_PAUSED(entity))
-        _darken_swap(entity->owner->pool, entity->slot, entity->owner->paused++);
-}
-
-#endif // DARKEN_IMPLEMENTATION
+#define _DARKEN_ALIGN4(X) (((X) + 3U) & ~3U)
+#define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD))
