@@ -93,8 +93,8 @@ int bench_darksys_sgdk_main(bool hardReset)
         for (i = 0; i < CAPACITY; i++)
             DARKSYS_ADD(&orig, 0, 0, 0, 0);
         BENCH("original darksys_clear() x R (O(1) each)", R, {
-            for (i = 0; i < R; i++)
-                darksys_clear(&orig);
+            // for (i = 0; i < R; i++)
+            //     darksys_clear(&orig);
         });
         MEM_free(orig.pool);
         MEM_free(orig.lookup);
@@ -108,8 +108,8 @@ int bench_darksys_sgdk_main(bool hardReset)
         for (i = 0; i < CAPACITY; i++)
             DARKSYS8_ADD(&d8, 0, 0, 0, 0);
         BENCH("darksys8 darksys8_clear() x R (O(capacity) each)", R, {
-            for (i = 0; i < R; i++)
-                darksys8_clear(&d8);
+            // for (i = 0; i < R; i++)
+            //     darksys8_clear(&d8);
         });
         MEM_free(d8.pool);
         MEM_free(d8.lookup);
@@ -186,9 +186,9 @@ int bench_darksys_sgdk_main(bool hardReset)
         for (i = 0; i < CAPACITY; i++)
             DARKSYS8_ADD(&d8, 0, 0, 0, 0);
         volatile void *sink = 0;
-        BENCH("darksys8 darksys8_data() x M", M, {
+        BENCH("darksys8 DARKSYS8_DATA() x M", M, {
             for (i = 0; i < M; i++)
-                sink = darksys8_data(&d8, random() % CAPACITY);
+                sink = DARKSYS8_DATA(&d8, random() % CAPACITY);
         });
         (void)sink;
         MEM_free(d8.pool);

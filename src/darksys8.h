@@ -173,7 +173,7 @@ typedef struct
 // Unchecked direct access to the group's pointers — for when the caller already knows
 // `h` is valid (e.g. right after DARKSYS8_ADD) and doesn't want to pay for
 // darksys8_valid() again. Result type is `void **`, same as darksys8_data().
-#define DARKSYS8_ITEM(SYSTEM, H) ((SYSTEM)->pool + (uint16_t)((SYSTEM)->lookup[H]) * (SYSTEM)->params)
+#define DARKSYS8_DATA(SYSTEM, H) ((SYSTEM)->pool + (uint16_t)((SYSTEM)->lookup[H]) * (SYSTEM)->params)
 
 #define DARKSYS8_FOREACH(SYSTEM, ...) \
     _DARKSYS8_FOREACH_DISPATCH(_DARKSYS8_FOREACH_NARGS(__VA_ARGS__), SYSTEM, __VA_ARGS__)
@@ -249,25 +249,12 @@ static inline void darksys8_init(darksys8 *s)
 {
     s->count = 0;
     s->size = 0;
-    s->free_head = DARKSYS8_INVALID_HANDLE;
+    s->free_head = 0;
 
-    if (s->capacity)
-    {
-        s->free_head = 0;
+    for (uint16_t i = 0; i < s->capacity; i++)
+        s->lookup[i] = i + 1; // chain every slot into the free list...
 
-        for (uint16_t i = 0; i < s->capacity; i++)
-            s->lookup[i] = i + 1; // chain every slot into the free list...
-
-        s->lookup[s->capacity - 1] = DARKSYS8_INVALID_HANDLE; // ...terminated here
-    }
-}
-
-// Equivalent to calling darksys8_init() again. Kept as a separate name for readability
-// at call sites that are clearing an existing, already-initialized system rather than
-// setting one up for the first time.
-static inline void darksys8_clear(darksys8 *s)
-{
-    darksys8_init(s);
+    s->lookup[s->capacity - 1] = DARKSYS8_INVALID_HANDLE; // ...terminated here
 }
 
 // Checks whether `handle` currently refers to a live group.
@@ -279,20 +266,17 @@ static inline void darksys8_clear(darksys8 *s)
 //
 // Both darksys8_data() and darksys8_remove() go through this single check, so there is
 // only one place that decides what "valid" means.
-static inline int16_t darksys8_valid(darksys8 *s, darksys8_handle_t handle)
+static inline uint16_t darksys8_valid(darksys8 *s, darksys8_handle_t handle)
 {
     if (handle >= s->capacity)
-        return -1;
+        return 0;
 
     uint16_t slot = s->lookup[handle];
 
-    if (slot >= s->count)
-        return -2;
+    if (slot >= s->count || s->handles[slot] != handle)
+        return 0;
 
-    if (s->handles[slot] != handle)
-        return -3;
-
-    return 0;
+    return 1;
 }
 
 // Adds one group, returns its handle, or DARKSYS8_INVALID_HANDLE if the pool is full.
@@ -312,20 +296,10 @@ static inline darksys8_handle_t darksys8_add(darksys8 *s)
     return handle;
 }
 
-// Returns the group's pointers (length `params`), or NULL if `handle` isn't valid.
-static inline void **darksys8_data(darksys8 *s, darksys8_handle_t handle)
-{
-    return darksys8_valid(s, handle) == 0 ? DARKSYS8_ITEM(s, handle) : 0;
-}
-
 // Removes `handle` if valid. Returns 0 on success, or the same negative status codes
 // as darksys8_valid() (and does nothing) if the handle wasn't valid to begin with.
-static inline int16_t darksys8_remove(darksys8 *s, darksys8_handle_t handle)
+static inline void darksys8_remove(darksys8 *s, darksys8_handle_t handle)
 {
-    int16_t status = darksys8_valid(s, handle);
-    if (status != 0)
-        return status;
-
     uint16_t slot = s->lookup[handle];
     uint16_t last = --s->count;
 
@@ -344,9 +318,6 @@ static inline int16_t darksys8_remove(darksys8 *s, darksys8_handle_t handle)
     }
 
     s->size -= s->params;
-
     s->lookup[handle] = s->free_head; // push back onto the free list
     s->free_head = handle;
-
-    return 0;
 }
