@@ -2,9 +2,9 @@
 
 #include <stdint.h>
 
-typedef uint16_t darksys_handle_t;
+typedef uint16_t darksys_handle;
 
-#define DARKSYS_INVALID_HANDLE ((darksys_handle_t)0xFFFFu)
+#define DARKSYS_INVALID_HANDLE ((darksys_handle)0xFFFFu)
 
 typedef struct
 {
@@ -19,66 +19,9 @@ typedef struct
     uint16_t free_head;
 } darksys;
 
-static inline darksys_handle_t darksys_add(darksys *s)
-{
-    if (s->count >= s->capacity || (s->free_head == DARKSYS_INVALID_HANDLE && s->next >= s->capacity))
-        return DARKSYS_INVALID_HANDLE;
-
-    darksys_handle_t handle = s->free_head;
-
-    if (s->free_head != DARKSYS_INVALID_HANDLE)
-        s->free_head = s->lookup[handle];
-    else
-        handle = s->next++;
-
-    uint16_t slot = s->count++;
-
-    s->handles[slot] = handle;
-    s->lookup[handle] = slot;
-
-    return handle;
-}
-
-static inline uint16_t darksys_valid(const darksys *s, darksys_handle_t handle)
-{
-    if (handle >= s->next)
-        return 0;
-
-    uint16_t slot = s->lookup[handle];
-
-    return slot < s->count && s->handles[slot] == handle;
-}
-
-static inline void darksys_remove(darksys *s, darksys_handle_t handle)
-{
-    uint16_t slot = s->lookup[handle];
-    uint16_t last = --s->count;
-
-    if (slot != last)
-    {
-        uint16_t params = s->params;
-        void **dst = s->pool + slot * params;
-        void **src = s->pool + last * params;
-
-        while (params--)
-            *dst++ = *src++;
-
-        uint16_t moved = s->handles[last];
-
-        s->handles[slot] = moved;
-        s->lookup[moved] = slot;
-    }
-
-    s->lookup[handle] = s->free_head;
-    s->free_head = handle;
-}
-
-static inline void darksys_clear(darksys *s)
-{
-    s->count = 0;
-    s->next = 0;
-    s->free_head = DARKSYS_INVALID_HANDLE;
-}
+/* ============================================================================
+ * PUBLIC API
+ * ============================================================================ */
 
 #define DARKSYS_POOL_ALLOC(ALLOC, CAPACITY, PARAMS)                       \
     {                                                                     \
@@ -129,6 +72,86 @@ static inline void darksys_clear(darksys *s)
 #define DARKSYS_DATA(SYSTEM, HANDLE) \
     ((SYSTEM)->pool + (SYSTEM)->lookup[(HANDLE)] * (SYSTEM)->params)
 
+#define DARKSYS_ADD(SYSTEM, ...)                                                                                \
+    ({                                                                                                          \
+        darksys *_s = (SYSTEM);                                                                                 \
+        darksys_handle _handle = DARKSYS_INVALID_HANDLE;                                                        \
+        if (_DARKSYS_NARGS(__VA_ARGS__) == _s->params && (_handle = darksys_add(_s)) != DARKSYS_INVALID_HANDLE) \
+            _DARKSYS_WRITE_N(_DARKSYS_NARGS(__VA_ARGS__), _s, __VA_ARGS__);                                     \
+        _handle;                                                                                                \
+    })
+
+#define DARKSYS_FOREACH(SYSTEM, ...) _DARKSYS_FOREACH_DISPATCH(_DARKSYS_FOREACH_NARGS(__VA_ARGS__), SYSTEM, __VA_ARGS__)
+
+/* ============================================================================
+ * FUNCTIONS
+ * ============================================================================ */
+
+static inline darksys_handle darksys_add(darksys *s)
+{
+    if (s->count >= s->capacity || (s->free_head == DARKSYS_INVALID_HANDLE && s->next >= s->capacity))
+        return DARKSYS_INVALID_HANDLE;
+
+    darksys_handle handle = s->free_head;
+
+    if (s->free_head != DARKSYS_INVALID_HANDLE)
+        s->free_head = s->lookup[handle];
+    else
+        handle = s->next++;
+
+    uint16_t slot = s->count++;
+
+    s->handles[slot] = handle;
+    s->lookup[handle] = slot;
+
+    return handle;
+}
+
+static inline uint16_t darksys_valid(const darksys *s, darksys_handle handle)
+{
+    if (handle >= s->next)
+        return 0;
+
+    uint16_t slot = s->lookup[handle];
+
+    return slot < s->count && s->handles[slot] == handle;
+}
+
+static inline void darksys_remove(darksys *s, darksys_handle handle)
+{
+    uint16_t slot = s->lookup[handle];
+    uint16_t last = --s->count;
+
+    if (slot != last)
+    {
+        uint16_t params = s->params;
+        void **dst = s->pool + slot * params;
+        void **src = s->pool + last * params;
+
+        while (params--)
+            *dst++ = *src++;
+
+        uint16_t moved = s->handles[last];
+
+        s->handles[slot] = moved;
+        s->lookup[moved] = slot;
+    }
+
+    s->lookup[handle] = s->free_head;
+    s->free_head = handle;
+}
+
+static inline void darksys_clear(darksys *s)
+{
+    s->count = 0;
+    s->next = 0;
+    s->free_head = DARKSYS_INVALID_HANDLE;
+}
+
+/* ============================================================================
+ * PRIVATE
+ * ============================================================================ */
+
 #define _DARKSYS_NARGS(...) _DARKSYS_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1)
 #define _DARKSYS_NARGS_I(_1, _2, _3, _4, _5, N, ...) N
 
@@ -153,17 +176,6 @@ static inline void darksys_clear(darksys *s)
 #define _DARKSYS_WRITE_5(SYSTEM, A, B, C, D, E) \
     (_DARKSYS_WRITE_4(SYSTEM, A, B, C, D),      \
      (SYSTEM)->pool[((SYSTEM)->count - 1) * (SYSTEM)->params + 4] = (E))
-
-#define DARKSYS_ADD(SYSTEM, ...)                                                                                \
-    ({                                                                                                          \
-        darksys *_s = (SYSTEM);                                                                                 \
-        darksys_handle_t _handle = DARKSYS_INVALID_HANDLE;                                                      \
-        if (_DARKSYS_NARGS(__VA_ARGS__) == _s->params && (_handle = darksys_add(_s)) != DARKSYS_INVALID_HANDLE) \
-            _DARKSYS_WRITE_N(_DARKSYS_NARGS(__VA_ARGS__), _s, __VA_ARGS__);                                     \
-        _handle;                                                                                                \
-    })
-
-#define DARKSYS_FOREACH(SYSTEM, ...) _DARKSYS_FOREACH_DISPATCH(_DARKSYS_FOREACH_NARGS(__VA_ARGS__), SYSTEM, __VA_ARGS__)
 
 #define _DARKSYS_FOREACH_DISPATCH(N, SYSTEM, ...) _DARKSYS_FOREACH_DISPATCH_I(N, SYSTEM, __VA_ARGS__)
 #define _DARKSYS_FOREACH_DISPATCH_I(N, SYSTEM, ...) _DARKSYS_FOREACH_##N(SYSTEM, __VA_ARGS__)
