@@ -21,27 +21,18 @@ typedef struct
 
 static inline darksys_handle_t darksys_add(darksys *s)
 {
-    if (s->count >= s->capacity)
+    if (s->count >= s->capacity || (s->free_head == DARKSYS_INVALID_HANDLE && s->next >= s->capacity))
         return DARKSYS_INVALID_HANDLE;
 
-    uint16_t slot = s->count;
-    darksys_handle_t handle;
+    darksys_handle_t handle = s->free_head;
 
     if (s->free_head != DARKSYS_INVALID_HANDLE)
-    {
-        handle = s->free_head;
         s->free_head = s->lookup[handle];
-    }
-    else if (s->next < s->capacity)
-    {
-        handle = s->next++;
-    }
     else
-    {
-        return DARKSYS_INVALID_HANDLE;
-    }
+        handle = s->next++;
 
-    s->count = slot + 1;
+    uint16_t slot = s->count++;
+
     s->handles[slot] = handle;
     s->lookup[handle] = slot;
 
@@ -68,9 +59,8 @@ static inline void darksys_remove(darksys *s, darksys_handle_t handle)
         uint16_t params = s->params;
         void **dst = s->pool + slot * params;
         void **src = s->pool + last * params;
-        uint16_t i = params;
 
-        while (i--)
+        while (params--)
             *dst++ = *src++;
 
         uint16_t moved = s->handles[last];
