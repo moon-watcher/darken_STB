@@ -168,6 +168,21 @@ struct darken_entity
 };
 
 /* ============================================================================
+ * PRIVATE
+ * ============================================================================ */
+
+// Single call-site helper for invoking update()/destroy(), used everywhere the engine calls into user code.
+// The argument list is fixed per mode (see the big comment above), so there is nothing to configure here.
+#ifdef DARKEN_DIRECT
+#define _DARKEN_ARGS(ENTITY) (ENTITY), (ENTITY)->data
+#else
+#define _DARKEN_ARGS(ENTITY) (ENTITY)->data
+#endif
+
+#define _DARKEN_ALIGN4(X) (((X) + 3U) & ~3U)
+#define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD))
+
+/* ============================================================================
  * PUBLIC API
  * ============================================================================ */
 
@@ -381,11 +396,15 @@ static inline void darken_update(darken *ctx)
 
         if (state == DARKEN_DELETE)
         {
-            darken_entity_delete(_entity);
+            if (_entity->destroy)
+                _entity->destroy(_DARKEN_ARGS(_entity));
+
+            darken_swap(ctx, _entity->slot, --_entity->owner->size);
             continue;
         }
 
-        darken_entity_pause(_entity);
+        darken_swap(ctx, _entity->slot, --_entity->owner->size);
+        darken_swap(ctx, _entity->slot, --_entity->owner->paused);
     });
 #endif
 }
@@ -400,18 +419,3 @@ static inline void darken_reset(darken *ctx)
     ctx->size = 0;
     ctx->paused = ctx->capacity;
 }
-
-/* ============================================================================
- * PRIVATE
- * ============================================================================ */
-
-// Single call-site helper for invoking update()/destroy(), used everywhere the engine calls into user code.
-// The argument list is fixed per mode (see the big comment above), so there is nothing to configure here.
-#ifdef DARKEN_DIRECT
-#define _DARKEN_ARGS(ENTITY) (ENTITY), (ENTITY)->data
-#else
-#define _DARKEN_ARGS(ENTITY) (ENTITY)->data
-#endif
-
-#define _DARKEN_ALIGN4(X) (((X) + 3U) & ~3U)
-#define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD))

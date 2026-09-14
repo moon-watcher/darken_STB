@@ -20,6 +20,62 @@ typedef struct
 } darksys;
 
 /* ============================================================================
+ * PRIVATE
+ * ============================================================================ */
+
+#define _DARKSYS_NARGS(...) _DARKSYS_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1)
+#define _DARKSYS_NARGS_I(_1, _2, _3, _4, _5, N, ...) N
+
+#define _DARKSYS_WRITE_N(N, SYSTEM, ...) _DARKSYS_WRITE_N_I(N, SYSTEM, __VA_ARGS__)
+#define _DARKSYS_WRITE_N_I(N, SYSTEM, ...) _DARKSYS_WRITE_##N(SYSTEM, __VA_ARGS__)
+
+#define _DARKSYS_WRITE_1(SYSTEM, A) \
+    ((SYSTEM)->pool[((SYSTEM)->count - 1) * (SYSTEM)->params] = (A))
+
+#define _DARKSYS_WRITE_2(SYSTEM, A, B) \
+    (_DARKSYS_WRITE_1(SYSTEM, A),      \
+     (SYSTEM)->pool[((SYSTEM)->count - 1) * (SYSTEM)->params + 1] = (B))
+
+#define _DARKSYS_WRITE_3(SYSTEM, A, B, C) \
+    (_DARKSYS_WRITE_2(SYSTEM, A, B),      \
+     (SYSTEM)->pool[((SYSTEM)->count - 1) * (SYSTEM)->params + 2] = (C))
+
+#define _DARKSYS_WRITE_4(SYSTEM, A, B, C, D) \
+    (_DARKSYS_WRITE_3(SYSTEM, A, B, C),      \
+     (SYSTEM)->pool[((SYSTEM)->count - 1) * (SYSTEM)->params + 3] = (D))
+
+#define _DARKSYS_WRITE_5(SYSTEM, A, B, C, D, E) \
+    (_DARKSYS_WRITE_4(SYSTEM, A, B, C, D),      \
+     (SYSTEM)->pool[((SYSTEM)->count - 1) * (SYSTEM)->params + 4] = (E))
+
+#define _DARKSYS_FOREACH_DISPATCH(N, SYSTEM, ...) _DARKSYS_FOREACH_DISPATCH_I(N, SYSTEM, __VA_ARGS__)
+#define _DARKSYS_FOREACH_DISPATCH_I(N, SYSTEM, ...) _DARKSYS_FOREACH_##N(SYSTEM, __VA_ARGS__)
+
+#define _DARKSYS_FOREACH_NARGS(...) _DARKSYS_FOREACH_NARGS_I(__VA_ARGS__, 6, 5, 4, 3, 2, 1, 0)
+#define _DARKSYS_FOREACH_NARGS_I(_1, _2, _3, _4, _5, _6, N, ...) N
+
+#define _DARKSYS_FOREACH_2(SYSTEM, A, IT) _DARKSYS_FOREACH_RUN(SYSTEM, A = _pool[0]; IT)
+#define _DARKSYS_FOREACH_3(SYSTEM, A, B, IT) _DARKSYS_FOREACH_RUN(SYSTEM, A = _pool[0]; B = _pool[1]; IT)
+#define _DARKSYS_FOREACH_4(SYSTEM, A, B, C, IT) _DARKSYS_FOREACH_RUN(SYSTEM, A = _pool[0]; B = _pool[1]; C = _pool[2]; IT)
+#define _DARKSYS_FOREACH_5(SYSTEM, A, B, C, D, IT) _DARKSYS_FOREACH_RUN(SYSTEM, A = _pool[0]; B = _pool[1]; C = _pool[2]; D = _pool[3]; IT)
+#define _DARKSYS_FOREACH_6(SYSTEM, A, B, C, D, E, IT) _DARKSYS_FOREACH_RUN(SYSTEM, A = _pool[0]; B = _pool[1]; C = _pool[2]; D = _pool[3]; E = _pool[4]; IT)
+
+#define _DARKSYS_FOREACH_RUN(SYSTEM, CODE) \
+    do                                     \
+    {                                      \
+        darksys *s = (SYSTEM);             \
+        void **_pool = s->pool;            \
+        uint16_t _count = s->count;        \
+        uint16_t _params = s->params;      \
+                                           \
+        while (_count--)                   \
+        {                                  \
+            CODE;                          \
+            _pool += _params;              \
+        }                                  \
+    } while (0)
+
+/* ============================================================================
  * PUBLIC API
  * ============================================================================ */
 
@@ -147,59 +203,3 @@ static inline void darksys_clear(darksys *s)
     s->next = 0;
     s->free_head = DARKSYS_INVALID_HANDLE;
 }
-
-/* ============================================================================
- * PRIVATE
- * ============================================================================ */
-
-#define _DARKSYS_NARGS(...) _DARKSYS_NARGS_I(__VA_ARGS__, 5, 4, 3, 2, 1)
-#define _DARKSYS_NARGS_I(_1, _2, _3, _4, _5, N, ...) N
-
-#define _DARKSYS_WRITE_N(N, SYSTEM, ...) _DARKSYS_WRITE_N_I(N, SYSTEM, __VA_ARGS__)
-#define _DARKSYS_WRITE_N_I(N, SYSTEM, ...) _DARKSYS_WRITE_##N(SYSTEM, __VA_ARGS__)
-
-#define _DARKSYS_WRITE_1(SYSTEM, A) \
-    ((SYSTEM)->pool[((SYSTEM)->count - 1) * (SYSTEM)->params] = (A))
-
-#define _DARKSYS_WRITE_2(SYSTEM, A, B) \
-    (_DARKSYS_WRITE_1(SYSTEM, A),      \
-     (SYSTEM)->pool[((SYSTEM)->count - 1) * (SYSTEM)->params + 1] = (B))
-
-#define _DARKSYS_WRITE_3(SYSTEM, A, B, C) \
-    (_DARKSYS_WRITE_2(SYSTEM, A, B),      \
-     (SYSTEM)->pool[((SYSTEM)->count - 1) * (SYSTEM)->params + 2] = (C))
-
-#define _DARKSYS_WRITE_4(SYSTEM, A, B, C, D) \
-    (_DARKSYS_WRITE_3(SYSTEM, A, B, C),      \
-     (SYSTEM)->pool[((SYSTEM)->count - 1) * (SYSTEM)->params + 3] = (D))
-
-#define _DARKSYS_WRITE_5(SYSTEM, A, B, C, D, E) \
-    (_DARKSYS_WRITE_4(SYSTEM, A, B, C, D),      \
-     (SYSTEM)->pool[((SYSTEM)->count - 1) * (SYSTEM)->params + 4] = (E))
-
-#define _DARKSYS_FOREACH_DISPATCH(N, SYSTEM, ...) _DARKSYS_FOREACH_DISPATCH_I(N, SYSTEM, __VA_ARGS__)
-#define _DARKSYS_FOREACH_DISPATCH_I(N, SYSTEM, ...) _DARKSYS_FOREACH_##N(SYSTEM, __VA_ARGS__)
-
-#define _DARKSYS_FOREACH_NARGS(...) _DARKSYS_FOREACH_NARGS_I(__VA_ARGS__, 6, 5, 4, 3, 2, 1, 0)
-#define _DARKSYS_FOREACH_NARGS_I(_1, _2, _3, _4, _5, _6, N, ...) N
-
-#define _DARKSYS_FOREACH_2(SYSTEM, A, IT) _DARKSYS_FOREACH_RUN(SYSTEM, A = _pool[0]; IT)
-#define _DARKSYS_FOREACH_3(SYSTEM, A, B, IT) _DARKSYS_FOREACH_RUN(SYSTEM, A = _pool[0]; B = _pool[1]; IT)
-#define _DARKSYS_FOREACH_4(SYSTEM, A, B, C, IT) _DARKSYS_FOREACH_RUN(SYSTEM, A = _pool[0]; B = _pool[1]; C = _pool[2]; IT)
-#define _DARKSYS_FOREACH_5(SYSTEM, A, B, C, D, IT) _DARKSYS_FOREACH_RUN(SYSTEM, A = _pool[0]; B = _pool[1]; C = _pool[2]; D = _pool[3]; IT)
-#define _DARKSYS_FOREACH_6(SYSTEM, A, B, C, D, E, IT) _DARKSYS_FOREACH_RUN(SYSTEM, A = _pool[0]; B = _pool[1]; C = _pool[2]; D = _pool[3]; E = _pool[4]; IT)
-
-#define _DARKSYS_FOREACH_RUN(SYSTEM, CODE) \
-    do                                     \
-    {                                      \
-        darksys *s = (SYSTEM);             \
-        void **_pool = s->pool;            \
-        uint16_t _count = s->count;        \
-        uint16_t _params = s->params;      \
-                                           \
-        while (_count--)                   \
-        {                                  \
-            CODE;                          \
-            _pool += _params;              \
-        }                                  \
-    } while (0)
