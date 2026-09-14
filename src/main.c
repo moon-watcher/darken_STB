@@ -6,8 +6,10 @@ int main(void)
     // dsmap0_bench_deepseek_main();
     // bench_darksys_compare();
     // bench_darksys89_compare();
-    test_darksys_sgdk_main();
-    bench_darksys_sgdk_main();
+    // test_darksys_sgdk_main();
+    // bench_darksys_sgdk_main();
+    //dsmap_test_main();
+    darken8_test_main();
     
     return 0;
 }
