@@ -1,10 +1,8 @@
-#pragma once
-
-#include <stdint.h>
-
 /*
  * darksys - Dynamic Slot Map System
  *
+ * darksys-1.0.0_dev
+ * 
  * Stores groups of pointers associated with stable handles.
  *
  * Each handle identifies one group of `params` consecutive pointers.
@@ -42,6 +40,9 @@
  *     free_head  = first released handle
  *     free_count = number of released handles
  */
+#pragma once
+
+#include <stdint.h>
 
 typedef struct
 {
