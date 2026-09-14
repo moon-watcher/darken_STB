@@ -179,13 +179,11 @@ void darken_entity_pause(darken_entity);
 void darken_entity_resume(darken_entity);
 void darken_entity_delete(darken_entity);
 
-#ifndef DARKEN_DIRECT
 // Sentinel return values for update() callbacks in state-machine mode.
 // Any other darken_state value returned is treated as the next update callback.
 #define DARKEN_CONTINUE ((darken_state)1)
 #define DARKEN_DELETE ((darken_state)0)
 #define DARKEN_PAUSE ((darken_state)2)
-#endif
 
 // Dynamic allocation: use with malloc/calloc or custom allocator
 //     darken m = DARKEN_POOL_ALLOC(MEM_alloc, 5, sizeof(struct MyComponent));
@@ -247,19 +245,20 @@ void darken_entity_delete(darken_entity);
 
 // Iterate over all active entities in REVERSE order (from size-1 down to 0).
 // Reverse order allows safe deletion during iteration.
-#define DARKEN_FOREACH(CTX, CODE)                        \
-    do                                                   \
-    {                                                    \
-        uint16_t _index = (CTX)->size;                   \
-        if (_index)                                      \
-        {                                                \
-            darken_entity _entity, *_pool = (CTX)->pool; \
-            while (_index--)                             \
-            {                                            \
-                _entity = _pool[_index];                 \
-                CODE;                                    \
-            }                                            \
-        }                                                \
+#define DARKEN_FOREACH(CTX, CODE)                      \
+    do                                                 \
+    {                                                  \
+        darken *_ctx = (CTX);                          \
+        uint16_t _index = _ctx->size;                  \
+        if (_index)                                    \
+        {                                              \
+            darken_entity *_pool = _ctx->pool;         \
+            while (_index--)                           \
+            {                                          \
+                darken_entity _entity = _pool[_index]; \
+                CODE;                                  \
+            }                                          \
+        }                                              \
     } while (0)
 
 // Declare a typed pointer to an entity's data payload
@@ -336,18 +335,16 @@ static inline void _darken_swap(darken_entity pool[], uint16_t i, uint16_t j)
 void darken_init(darken *ctx)
 {
     ctx->size = 0;
-    uint16_t capacity = ctx->paused = ctx->capacity;
+    uint16_t i = ctx->paused = ctx->capacity;
     uint8_t *storage = ctx->storage;
-    uint16_t step = ctx->stride;
-    darken_entity entity, *pool = ctx->pool;
 
-    while (capacity--)
+    while (i--)
     {
-        entity = pool[capacity] = (darken_entity)storage;
-        entity->owner = ctx;
-        entity->slot = capacity;
+        ctx->pool[i] = (darken_entity)storage;
+        ctx->pool[i]->owner = ctx;
+        ctx->pool[i]->slot = i;
 
-        storage += step;
+        storage += ctx->stride;
     }
 }
 
