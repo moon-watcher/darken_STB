@@ -202,11 +202,10 @@ typedef struct
         void **_pool = s->pool;         \
         uint16_t _params = s->params;   \
                                         \
-        while (_count)                  \
+        while (_count--)                \
         {                               \
             CODE;                       \
             _pool += _params;           \
-            --_count;                   \
         }                               \
     } while (0)
 
@@ -258,11 +257,6 @@ static inline void darksys8_init(darksys8 *s)
 }
 
 // Checks whether `handle` currently refers to a live group.
-// Returns:
-//      0 : valid
-//     -1 : handle is outside the range of valid handles
-//     -2 : handle points to an inactive slot
-//     -3 : corrupted lookup / handle does not match the slot
 //
 // Both darksys8_data() and darksys8_remove() go through this single check, so there is
 // only one place that decides what "valid" means.
