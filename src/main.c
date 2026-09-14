@@ -9,7 +9,8 @@ int main(void)
     // test_darksys_sgdk_main();
     // bench_darksys_sgdk_main();
     //dsmap_test_main();
-    darken8_test_main();
+    // darken8_test_main();
+    test_vsmap_main();
     
     return 0;
 }
