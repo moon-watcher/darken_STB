@@ -59,9 +59,12 @@ typedef struct
 #define _DARKSYS_WRITE_N(N, SYSTEM, ...) _DARKSYS_WRITE_N_I(N, SYSTEM, __VA_ARGS__)
 #define _DARKSYS_WRITE_N_I(N, SYSTEM, ...) _DARKSYS_WRITE_##N(SYSTEM, __VA_ARGS__)
 
-// Writes the fields of the record just placed at slot (count - 1). Same
-// note as everywhere else: (count - 1) * params is used directly, not
-// stored into a uint16_t first, so it stays a single MULU.W/MULS.W.
+// Writes the fields of the record just placed at slot (count - 1).
+// (count - 1) * params is computed inline rather than stashed in a named
+// uint16_t first -- naming it wouldn't change C's integer promotion rules
+// either way, but it does invite a later edit that quietly widens the
+// type, so the intent (keep this a 16-bit multiply on m68k) is spelled
+// out here instead of assumed.
 #define _DARKSYS_WRITE_1(SYSTEM, A) ((SYSTEM)->pool[((SYSTEM)->count - 1) * (SYSTEM)->params] = (A))
 #define _DARKSYS_WRITE_2(SYSTEM, A, B) (_DARKSYS_WRITE_1(SYSTEM, A), (SYSTEM)->pool[((SYSTEM)->count - 1) * (SYSTEM)->params + 1] = (B))
 #define _DARKSYS_WRITE_3(SYSTEM, A, B, C) (_DARKSYS_WRITE_2(SYSTEM, A, B), (SYSTEM)->pool[((SYSTEM)->count - 1) * (SYSTEM)->params + 2] = (C))
@@ -216,6 +219,10 @@ static inline darksys_handle_t darksys_add(darksys_t *s)
     return handle;
 }
 
+// Returns nonzero if `handle` is currently live: it must have been issued
+// (handle < next) and the slot it maps to must still point back to it.
+// That second check is what catches a stale handle whose slot has since
+// been recycled by swap-and-pop removal or handle reuse.
 static inline uint16_t darksys_valid(const darksys_t *s, darksys_handle_t handle)
 {
     if (handle >= s->next)

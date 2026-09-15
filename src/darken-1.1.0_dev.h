@@ -17,8 +17,10 @@
  * The entity structure serves as a container for user data with lifecycle management. The flexible array member
  * 'data[]' allows entities to have variable-sized payloads while maintaining contiguous memory layout.
  *
- * The stride between entities is pre-calculated during ctx initialization to enable O(1) access to any entity
- * by index.
+ * The stride between entities is pre-calculated once, at ctx initialization, purely to lay out the fixed
+ * storage block (darken_init() walks it in `stride`-sized steps to hand each entity its permanent address).
+ * O(1) access by index comes from `pool[]` itself being a flat array of pointers -- stride plays no part in
+ * any lookup after init.
  *
  * An entity's own memory address (this struct) never moves once allocated by darken_init(). What moves between
  * the ctx's zones is only the *pointer* to it inside darken.pool[]. This is what makes it safe to keep a raw
@@ -301,6 +303,11 @@ static inline void darken_swap(darken_entity pool[], uint16_t i, uint16_t j)
     pool[j]->slot = j;
 }
 
+// Moves an active entity into the paused zone via two swaps through the free
+// zone: first it's evicted from the active zone (swapped to the free zone's
+// near edge, `size` shrinks), then evicted again into the paused zone
+// (swapped to the free zone's far edge, `paused` shrinks). A no-op if the
+// entity isn't currently active.
 static inline void darken_entity_pause(darken_entity entity)
 {
     if (!DARKEN_ENTITY_IN_ACTIVE(entity))
@@ -310,6 +317,11 @@ static inline void darken_entity_pause(darken_entity entity)
     darken_swap(entity->owner->pool, entity->slot, --entity->owner->paused);
 }
 
+// Moves a paused entity back into the active zone -- the mirror image of
+// darken_entity_pause(): first swapped to the free zone's far edge (`paused`
+// grows), landing it in the free zone, then swapped to the free zone's near
+// edge (`size` grows), landing it in the active zone. A no-op if the entity
+// isn't currently paused.
 static inline void darken_entity_resume(darken_entity entity)
 {
     if (!DARKEN_ENTITY_IN_PAUSED(entity))
@@ -359,6 +371,11 @@ static inline void darken_entity_delete(darken_entity entity)
 //         darken_init(&m);
 //         ...
 //     }
+// Walks the capacity-sized storage block once, handing each pool slot a
+// permanent address. The loop counts down (capacity-1 to 0) rather than up
+// purely because that's the cheaper direction to test on m68k (DBRA) -- it
+// does not imply slot i lives at storage offset i*stride. Only ->slot and
+// ->owner, not array position, are guaranteed to track an entity afterward.
 static inline void darken_init(darken *ctx)
 {
     ctx->size = 0;
@@ -399,16 +416,22 @@ static inline void darken_update(darken *ctx)
             if (_entity->destroy)
                 _entity->destroy(_DARKEN_ARGS(_entity));
 
-            darken_swap(ctx, _entity->slot, --_entity->owner->size);
+            darken_swap(ctx->pool, _entity->slot, --_entity->owner->size);
             continue;
         }
 
-        darken_swap(ctx, _entity->slot, --_entity->owner->size);
-        darken_swap(ctx, _entity->slot, --_entity->owner->paused);
+        // Only DARKEN_PAUSE can reach here (see the sentinel table in the
+        // header comment): move the entity into the paused zone.
+        darken_swap(ctx->pool, _entity->slot, --_entity->owner->size);
+        darken_swap(ctx->pool, _entity->slot, --_entity->owner->paused);
     });
 #endif
 }
 
+// Calls destroy() on every currently active entity, then drops the whole
+// pool back to the free zone (size = 0, paused = capacity). Paused entities
+// are swept away the same way darken_entity_delete() treats them: silently,
+// without their destroy() ever running.
 static inline void darken_reset(darken *ctx)
 {
     DARKEN_FOREACH(ctx, {
