@@ -3,7 +3,7 @@
  *
  * darksys-1.0.0_dev
  *
- * * GNU C note:
+ * GNU C note:
  * - This header uses GNU C and statement expressions.
  * - Darksys targets GCC and the Motorola 68000.
  * - 16-bit members preference for optimal 68K performance.
@@ -12,11 +12,20 @@
  *
  * Stores up to `capacity` records of `params` void* fields each, packed
  * contiguously in `pool` so that iteration is a plain linear pointer walk.
- * Every record is reachable through a stable handle even after other
- * records are added/removed: `handles` (slot -> handle, dense) and
- * `lookup` (handle -> slot, sparse) are kept in sync with a swap-and-pop
- * scheme, so add()/remove() are O(1) and a live record never moves without
- * its handle staying valid.
+ *
+ * Every active record is reachable through a stable handle:
+ *
+ *     handles[slot] -> handle
+ *     lookup[handle] -> slot
+ *
+ * Both tables are kept in sync with a swap-and-pop removal scheme. Removing
+ * a record moves the last active record into the freed slot, while preserving
+ * the handle of the moved record. The pointers stored in `pool` are therefore
+ * kept associated with their original handles.
+ *
+ * darksys_add() is O(1).
+ * darksys_remove() is O(params), because removing a record copies its `params`
+ * pointer fields into the freed slot.
  */
 #pragma once
 
@@ -36,7 +45,7 @@ typedef struct
     uint16_t capacity;
     uint16_t params;
     uint16_t count;     // active records right now
-    uint16_t next;      // highest handle ever issued (bump allocator)
+    uint16_t next;      // next handle to issue from the bump allocator
     uint16_t free_head; // head of the free-handle list, or INVALID
 } darksys_t;
 
@@ -118,7 +127,7 @@ typedef struct
 
 // Declares a statically-sized storage struct (no malloc) named NAME, with
 // CAPACITY records of PARAMS fields each. Use DARKSYS_BIND(NAME) to get a
-// `darksys` view over it.
+// `darksys_t` view over it.
 #define DARKSYS_DECLARE(NAME, CAPACITY, PARAMS)     \
     struct                                          \
     {                                               \
@@ -145,9 +154,9 @@ typedef struct
         .free_head = DARKSYS_INVALID_HANDLE, \
     }
 
-// Pointer to the first field of HANDLE's record; row[0..params-1] are its
-// fields, in the order they were written. Does NOT check that HANDLE is
-// valid -- call darksys_valid() first if that isn't already known.
+// Pointer to the first field of HANDLE's record. row[0..params-1] are the
+// fields of that record, in the order they were written. Does NOT check that
+// HANDLE is valid -- call darksys_valid() first if that isn't already known.
 #define DARKSYS_DATA(SYSTEM, HANDLE) ((darksys_data_t)((SYSTEM)->pool + (SYSTEM)->lookup[(HANDLE)] * (SYSTEM)->params))
 
 // Adds a record and writes its fields in one call:
@@ -167,8 +176,9 @@ typedef struct
 
 // Iterates active records in pool order (not handle order), binding one
 // local per field:
-//     void *sprite; int16_t x, y;
-//     DARKSYS_FOREACH(&pool, sprite, x, y, { move(sprite, x, y); });
+//     void *sprite;
+//     int16_t *x, *y;
+//     DARKSYS_FOREACH(&pool, sprite, x, y, { move(sprite, *x, *y); });
 //
 // See the write-back note on _DARKSYS_FOREACH_RUN above if the loop body
 // needs to update a field in place.
@@ -217,15 +227,17 @@ static inline uint16_t darksys_valid(const darksys_t *s, darksys_handle_t handle
 }
 
 // Swap-and-pop removal: the last active record takes the freed slot, so
-// `pool` stays dense and iteration/add() never have to skip holes.
+// `pool` stays dense and iteration never has to skip holes.
 //
-// Does NOT validate `handle` -- the caller is expected to only pass
-// handles known to be valid (e.g. one just returned by darksys_add(), or
-// checked with darksys_valid()). Calling this with a handle that was never
-// issued reads lookup[] out of bounds; calling it twice on the same handle
-// (or on one darksys_valid() would reject) still runs `--s->count`, which
-// underflows to 0xFFFF and corrupts the free list. If that can happen in a
-// given call site, guard it with darksys_valid() there.
+// The handle of the moved record remains valid because its `handles` and
+// `lookup` entries are updated together.
+//
+// Does NOT validate `handle` -- the caller is expected to only pass handles
+// known to be valid (e.g. one just returned by darksys_add(), or checked
+// with darksys_valid()). Calling this with a handle that was never issued
+// reads lookup[] out of bounds; calling it twice on the same handle
+// corrupts count and the free list. If that can happen in a given call
+// site, guard it with darksys_valid().
 static inline void darksys_remove(darksys_t *s, darksys_handle_t handle)
 {
     uint16_t slot = s->lookup[handle];
