@@ -182,12 +182,7 @@ struct darken_entity_t
 #endif
 
 #define _DARKEN_ALIGN(X, A) (((X) + (uintptr_t)(A) - 1) & ~((uintptr_t)(A) - 1))
-// Floored at 4 to preserve the original m68k-only behavior exactly (m68k
-// pointers/function pointers need at most 4-byte alignment there); raised
-// above 4 on hosts (e.g. x86-64) where struct darken_entity_t's pointer
-// members actually need 8-byte alignment, which UBSan will otherwise flag.
-#define _DARKEN_ENTITY_ALIGN (_Alignof(struct darken_entity_t) > 4 ? _Alignof(struct darken_entity_t) : 4)
-#define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN(sizeof(struct darken_entity_t) + (PAYLOAD), _DARKEN_ENTITY_ALIGN)
+#define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN(sizeof(struct darken_entity_t) + (PAYLOAD), 4)
 
 /* ============================================================================
  * PUBLIC API
@@ -242,6 +237,7 @@ struct darken_entity_t
 // Runtime binding: locals, reassignment, any context
 // Use when you need to (re)bind a darken_t context to storage at runtime
 #define DARKEN_BIND(NAME)            \
+    (darken_t)                       \
     {                                \
         .pool = (NAME).pool,         \
         .storage = (NAME).data,      \
