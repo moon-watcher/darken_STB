@@ -4,7 +4,7 @@
 #define CAPACITY 8
 #define PARAMS 4
 
-DARKSYS_POOL_DECLARE(storage, CAPACITY, PARAMS);
+DARKSYS_DECLARE(storage, CAPACITY, PARAMS);
 static darksys system;
 
 #define assert(x) \
@@ -18,7 +18,7 @@ static void test_add_data(void)
     int c = 30;
     int d = 40;
 
-    system = DARKSYS_POOL_BIND(storage);
+    system = DARKSYS_BIND(storage);
 
     darksys_handle h = DARKSYS_ADD(&system, &a, &b, &c, &d);
 
@@ -48,7 +48,7 @@ static void test_foreach(void)
     int vx1 = 30;
     int vy1 = 40;
 
-    system = DARKSYS_POOL_BIND(storage);
+    system = DARKSYS_BIND(storage);
 
     DARKSYS_ADD(&system, &x0, &y0, &vx0, &vy0);
     DARKSYS_ADD(&system, &x1, &y1, &vx1, &vy1);
@@ -87,7 +87,7 @@ static void test_remove_middle(void)
     darksys_handle b;
     darksys_handle c;
 
-    system = DARKSYS_POOL_BIND(storage);
+    system = DARKSYS_BIND(storage);
 
     a = DARKSYS_ADD(&system, &a0, &a1, &a2, &a3);
     b = DARKSYS_ADD(&system, &b0, &b1, &b2, &b3);
@@ -133,7 +133,7 @@ static void test_handle_reuse(void)
     int c2 = 11;
     int c3 = 12;
 
-    system = DARKSYS_POOL_BIND(storage);
+    system = DARKSYS_BIND(storage);
 
     darksys_handle a = DARKSYS_ADD(&system, &a0, &a1, &a2, &a3);
     darksys_handle b = DARKSYS_ADD(&system, &b0, &b1, &b2, &b3);
@@ -172,7 +172,7 @@ static void test_data_write(void)
     int b2 = 300;
     int b3 = 400;
 
-    system = DARKSYS_POOL_BIND(storage);
+    system = DARKSYS_BIND(storage);
 
     darksys_handle h = DARKSYS_ADD(&system, &a0, &a1, &a2, &a3);
 
@@ -207,7 +207,7 @@ static void test_clear(void)
     int c = 3;
     int d = 4;
 
-    system = DARKSYS_POOL_BIND(storage);
+    system = DARKSYS_BIND(storage);
 
     DARKSYS_ADD(&system, &a, &b, &c, &d);
 

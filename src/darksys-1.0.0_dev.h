@@ -102,8 +102,8 @@ typedef struct
  * ============================================================================ */
 
 // Allocates pool/lookup/handles with ALLOC (e.g. malloc, or SGDK's MEM_alloc)
-// and returns a brace-init darksys ready to use. Pair with DARKSYS_POOL_FREE.
-#define DARKSYS_POOL_ALLOC(ALLOC, CAPACITY, PARAMS)                            \
+// and returns a brace-init darksys ready to use. Pair with DARKSYS_FREE.
+#define DARKSYS_ALLOC(ALLOC, CAPACITY, PARAMS)                                 \
     {                                                                          \
         .pool = (darksys_data)(ALLOC)((CAPACITY) * (PARAMS) * sizeof(void *)), \
         .lookup = (uint16_t *)(ALLOC)((CAPACITY) * sizeof(uint16_t)),          \
@@ -115,31 +115,31 @@ typedef struct
         .free_head = DARKSYS_INVALID_HANDLE,                                   \
     }
 
-#define DARKSYS_POOL_FREE(FREE, SYSTEM) \
-    do                                  \
-    {                                   \
-        (FREE)((SYSTEM)->pool);         \
-        (FREE)((SYSTEM)->lookup);       \
-        (FREE)((SYSTEM)->handles);      \
+#define DARKSYS_FREE(FREE, SYSTEM) \
+    do                             \
+    {                              \
+        (FREE)((SYSTEM)->pool);    \
+        (FREE)((SYSTEM)->lookup);  \
+        (FREE)((SYSTEM)->handles); \
     } while (0)
 
 // Declares a statically-sized storage struct (no malloc) named NAME, with
-// CAPACITY records of PARAMS fields each. Use DARKSYS_POOL_BIND(NAME) to
-// get a `darksys` view over it.
-#define DARKSYS_POOL_DECLARE(NAME, CAPACITY, PARAMS) \
-    struct                                           \
-    {                                                \
-        darksys_data pool[(CAPACITY) * (PARAMS)];    \
-        uint16_t lookup[(CAPACITY)];                 \
-        uint16_t handles[(CAPACITY)];                \
-        uint16_t capacity;                           \
-        uint16_t params;                             \
-    } NAME = {                                       \
-        .capacity = (CAPACITY),                      \
-        .params = (PARAMS),                          \
+// CAPACITY records of PARAMS fields each. Use DARKSYS_BIND(NAME) to get a
+// `darksys` view over it.
+#define DARKSYS_DECLARE(NAME, CAPACITY, PARAMS)   \
+    struct                                        \
+    {                                             \
+        darksys_data pool[(CAPACITY) * (PARAMS)]; \
+        uint16_t lookup[(CAPACITY)];              \
+        uint16_t handles[(CAPACITY)];             \
+        uint16_t capacity;                        \
+        uint16_t params;                          \
+    } NAME = {                                    \
+        .capacity = (CAPACITY),                   \
+        .params = (PARAMS),                       \
     }
 
-#define DARKSYS_POOL_BIND(NAME)              \
+#define DARKSYS_BIND(NAME)                   \
     (darksys)                                \
     {                                        \
         .pool = (NAME).pool,                 \

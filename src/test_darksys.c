@@ -26,8 +26,8 @@ static void test_expect(uint16_t condition, const char *name)
 
 static void test_basic(void)
 {
-    DARKSYS_POOL_DECLARE(storage, TEST_CAPACITY, 3);
-    darksys system = DARKSYS_POOL_BIND(storage);
+    DARKSYS_DECLARE(storage, TEST_CAPACITY, 3);
+    darksys system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -75,17 +75,17 @@ static void test_basic(void)
 
 static void test_add_params(void)
 {
-    DARKSYS_POOL_DECLARE(s1_storage, 4, 1);
-    DARKSYS_POOL_DECLARE(s2_storage, 4, 2);
-    DARKSYS_POOL_DECLARE(s3_storage, 4, 3);
-    DARKSYS_POOL_DECLARE(s4_storage, 4, 4);
-    DARKSYS_POOL_DECLARE(s5_storage, 4, 5);
+    DARKSYS_DECLARE(s1_storage, 4, 1);
+    DARKSYS_DECLARE(s2_storage, 4, 2);
+    DARKSYS_DECLARE(s3_storage, 4, 3);
+    DARKSYS_DECLARE(s4_storage, 4, 4);
+    DARKSYS_DECLARE(s5_storage, 4, 5);
 
-    darksys s1 = DARKSYS_POOL_BIND(s1_storage);
-    darksys s2 = DARKSYS_POOL_BIND(s2_storage);
-    darksys s3 = DARKSYS_POOL_BIND(s3_storage);
-    darksys s4 = DARKSYS_POOL_BIND(s4_storage);
-    darksys s5 = DARKSYS_POOL_BIND(s5_storage);
+    darksys s1 = DARKSYS_BIND(s1_storage);
+    darksys s2 = DARKSYS_BIND(s2_storage);
+    darksys s3 = DARKSYS_BIND(s3_storage);
+    darksys s4 = DARKSYS_BIND(s4_storage);
+    darksys s5 = DARKSYS_BIND(s5_storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -121,8 +121,8 @@ static void test_add_params(void)
     );
 
     {
-        DARKSYS_POOL_DECLARE(invalid_storage, 4, 3);
-        darksys system = DARKSYS_POOL_BIND(invalid_storage);
+        DARKSYS_DECLARE(invalid_storage, 4, 3);
+        darksys system = DARKSYS_BIND(invalid_storage);
 
         test_expect(
             DARKSYS_ADD(&system, &a, &b) == DARKSYS_INVALID_HANDLE,
@@ -172,8 +172,8 @@ static void test_add_params(void)
 
 static void test_direct_add(void)
 {
-    DARKSYS_POOL_DECLARE(storage, 4, 2);
-    darksys system = DARKSYS_POOL_BIND(storage);
+    DARKSYS_DECLARE(storage, 4, 2);
+    darksys system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -210,8 +210,8 @@ static void test_direct_add(void)
 
 static void test_valid(void)
 {
-    DARKSYS_POOL_DECLARE(storage, 4, 2);
-    darksys system = DARKSYS_POOL_BIND(storage);
+    DARKSYS_DECLARE(storage, 4, 2);
+    darksys system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -254,8 +254,8 @@ static void test_valid(void)
 
 static void test_data(void)
 {
-    DARKSYS_POOL_DECLARE(storage, 4, 3);
-    darksys system = DARKSYS_POOL_BIND(storage);
+    DARKSYS_DECLARE(storage, 4, 3);
+    darksys system = DARKSYS_BIND(storage);
 
     uint16_t a = 10;
     uint16_t b = 20;
@@ -287,8 +287,8 @@ static void test_data(void)
 
 static void test_remove(void)
 {
-    DARKSYS_POOL_DECLARE(storage, 4, 3);
-    darksys system = DARKSYS_POOL_BIND(storage);
+    DARKSYS_DECLARE(storage, 4, 3);
+    darksys system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -340,8 +340,8 @@ static void test_remove_cases(void)
     kprintf("=== TEST REMOVE CASES === ");
 
     {
-        DARKSYS_POOL_DECLARE(storage, 1, 2);
-        darksys system = DARKSYS_POOL_BIND(storage);
+        DARKSYS_DECLARE(storage, 1, 2);
+        darksys system = DARKSYS_BIND(storage);
 
         uint16_t a = 1;
         uint16_t b = 2;
@@ -358,8 +358,8 @@ static void test_remove_cases(void)
     }
 
     {
-        DARKSYS_POOL_DECLARE(storage, 4, 2);
-        darksys system = DARKSYS_POOL_BIND(storage);
+        DARKSYS_DECLARE(storage, 4, 2);
+        darksys system = DARKSYS_BIND(storage);
 
         uint16_t a = 1;
         uint16_t b = 2;
@@ -390,8 +390,8 @@ static void test_remove_cases(void)
     }
 
     {
-        DARKSYS_POOL_DECLARE(storage, 4, 2);
-        darksys system = DARKSYS_POOL_BIND(storage);
+        DARKSYS_DECLARE(storage, 4, 2);
+        darksys system = DARKSYS_BIND(storage);
 
         uint16_t a = 1;
         uint16_t b = 2;
@@ -422,8 +422,8 @@ static void test_remove_cases(void)
     }
 
     {
-        DARKSYS_POOL_DECLARE(storage, 4, 2);
-        darksys system = DARKSYS_POOL_BIND(storage);
+        DARKSYS_DECLARE(storage, 4, 2);
+        darksys system = DARKSYS_BIND(storage);
 
         uint16_t a = 1;
         uint16_t b = 2;
@@ -444,8 +444,8 @@ static void test_remove_cases(void)
     }
 
     {
-        DARKSYS_POOL_DECLARE(storage, 4, 2);
-        darksys system = DARKSYS_POOL_BIND(storage);
+        DARKSYS_DECLARE(storage, 4, 2);
+        darksys system = DARKSYS_BIND(storage);
 
         uint16_t a = 1;
         uint16_t b = 2;
@@ -497,8 +497,8 @@ static void test_remove_cases(void)
 
 static void test_free_list(void)
 {
-    DARKSYS_POOL_DECLARE(storage, 8, 2);
-    darksys system = DARKSYS_POOL_BIND(storage);
+    DARKSYS_DECLARE(storage, 8, 2);
+    darksys system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -545,8 +545,8 @@ static void test_free_list(void)
 
 static void test_clear(void)
 {
-    DARKSYS_POOL_DECLARE(storage, 8, 3);
-    darksys system = DARKSYS_POOL_BIND(storage);
+    DARKSYS_DECLARE(storage, 8, 3);
+    darksys system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -579,8 +579,8 @@ static void test_clear(void)
 
 static void test_full(void)
 {
-    DARKSYS_POOL_DECLARE(storage, 4, 1);
-    darksys system = DARKSYS_POOL_BIND(storage);
+    DARKSYS_DECLARE(storage, 4, 1);
+    darksys system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
 
@@ -613,8 +613,8 @@ static void test_full(void)
 
 static void test_invalid(void)
 {
-    DARKSYS_POOL_DECLARE(storage, 4, 1);
-    darksys system = DARKSYS_POOL_BIND(storage);
+    DARKSYS_DECLARE(storage, 4, 1);
+    darksys system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
 
@@ -651,8 +651,8 @@ static void test_invalid(void)
 
 static void test_foreach_1(void)
 {
-    DARKSYS_POOL_DECLARE(storage, 4, 1);
-    darksys system = DARKSYS_POOL_BIND(storage);
+    DARKSYS_DECLARE(storage, 4, 1);
+    darksys system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -686,8 +686,8 @@ static void test_foreach_1(void)
 
 static void test_foreach_2(void)
 {
-    DARKSYS_POOL_DECLARE(storage, 4, 2);
-    darksys system = DARKSYS_POOL_BIND(storage);
+    DARKSYS_DECLARE(storage, 4, 2);
+    darksys system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -723,8 +723,8 @@ static void test_foreach_2(void)
 
 static void test_foreach_3(void)
 {
-    DARKSYS_POOL_DECLARE(storage, 2, 3);
-    darksys system = DARKSYS_POOL_BIND(storage);
+    DARKSYS_DECLARE(storage, 2, 3);
+    darksys system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -756,8 +756,8 @@ static void test_foreach_3(void)
 
 static void test_foreach_4(void)
 {
-    DARKSYS_POOL_DECLARE(storage, 2, 4);
-    darksys system = DARKSYS_POOL_BIND(storage);
+    DARKSYS_DECLARE(storage, 2, 4);
+    darksys system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -792,8 +792,8 @@ static void test_foreach_4(void)
 
 static void test_foreach_5(void)
 {
-    DARKSYS_POOL_DECLARE(storage, 2, 5);
-    darksys system = DARKSYS_POOL_BIND(storage);
+    DARKSYS_DECLARE(storage, 2, 5);
+    darksys system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -831,8 +831,8 @@ static void test_foreach_5(void)
 
 static void test_foreach_remove(void)
 {
-    DARKSYS_POOL_DECLARE(storage, 8, 3);
-    darksys system = DARKSYS_POOL_BIND(storage);
+    DARKSYS_DECLARE(storage, 8, 3);
+    darksys system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -862,8 +862,8 @@ static void test_foreach_remove(void)
 
 static void test_bind(void)
 {
-    DARKSYS_POOL_DECLARE(storage, 4, 2);
-    darksys system = DARKSYS_POOL_BIND(storage);
+    DARKSYS_DECLARE(storage, 4, 2);
+    darksys system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -888,7 +888,7 @@ static void test_bind(void)
 
 static void test_alloc(void)
 {
-    darksys system = DARKSYS_POOL_ALLOC(MEM_alloc, 8, 3);
+    darksys system = DARKSYS_ALLOC(MEM_alloc, 8, 3);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -925,7 +925,7 @@ static void test_alloc(void)
         "alloc data 2"
     );
 
-    DARKSYS_POOL_FREE(MEM_free, &system);
+    DARKSYS_FREE(MEM_free, &system);
 }
 
 /* ============================================================================
@@ -934,8 +934,8 @@ static void test_alloc(void)
 
 static void bench(void)
 {
-    DARKSYS_POOL_DECLARE(storage, BENCH_CAPACITY, BENCH_PARAMS);
-    darksys system = DARKSYS_POOL_BIND(storage);
+    DARKSYS_DECLARE(storage, BENCH_CAPACITY, BENCH_PARAMS);
+    darksys system = DARKSYS_BIND(storage);
 
     static uint16_t values[BENCH_CAPACITY * BENCH_PARAMS];
     static darksys_handle handles[BENCH_CAPACITY];
