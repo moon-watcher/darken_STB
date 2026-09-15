@@ -30,12 +30,13 @@
 #include <stdint.h>
 
 typedef uint16_t darksys_handle;
+typedef void **darksys_data;
 
 #define DARKSYS_INVALID_HANDLE ((darksys_handle)0xFFFFu)
 
 typedef struct
 {
-    void **pool;
+    darksys_data pool;
     uint16_t *lookup;  // handle -> slot while active, free-list link while free
     uint16_t *handles; // slot -> handle (dense)
 
@@ -85,7 +86,7 @@ typedef struct
     do                                     \
     {                                      \
         darksys *s = (SYSTEM);             \
-        void **_pool = s->pool;            \
+        darksys_data _pool = s->pool;      \
         uint16_t _count = s->count;        \
         uint16_t _params = s->params;      \
                                            \
@@ -102,16 +103,16 @@ typedef struct
 
 // Allocates pool/lookup/handles with ALLOC (e.g. malloc, or SGDK's MEM_alloc)
 // and returns a brace-init darksys ready to use. Pair with DARKSYS_POOL_FREE.
-#define DARKSYS_POOL_ALLOC(ALLOC, CAPACITY, PARAMS)                       \
-    {                                                                     \
-        .pool = (void **)(ALLOC)((CAPACITY) * (PARAMS) * sizeof(void *)), \
-        .lookup = (uint16_t *)(ALLOC)((CAPACITY) * sizeof(uint16_t)),     \
-        .handles = (uint16_t *)(ALLOC)((CAPACITY) * sizeof(uint16_t)),    \
-        .capacity = (CAPACITY),                                           \
-        .params = (PARAMS),                                               \
-        .count = 0,                                                       \
-        .next = 0,                                                        \
-        .free_head = DARKSYS_INVALID_HANDLE,                              \
+#define DARKSYS_POOL_ALLOC(ALLOC, CAPACITY, PARAMS)                            \
+    {                                                                          \
+        .pool = (darksys_data)(ALLOC)((CAPACITY) * (PARAMS) * sizeof(void *)), \
+        .lookup = (uint16_t *)(ALLOC)((CAPACITY) * sizeof(uint16_t)),          \
+        .handles = (uint16_t *)(ALLOC)((CAPACITY) * sizeof(uint16_t)),         \
+        .capacity = (CAPACITY),                                                \
+        .params = (PARAMS),                                                    \
+        .count = 0,                                                            \
+        .next = 0,                                                             \
+        .free_head = DARKSYS_INVALID_HANDLE,                                   \
     }
 
 #define DARKSYS_POOL_FREE(FREE, SYSTEM) \
@@ -128,7 +129,7 @@ typedef struct
 #define DARKSYS_POOL_DECLARE(NAME, CAPACITY, PARAMS) \
     struct                                           \
     {                                                \
-        void *pool[(CAPACITY) * (PARAMS)];           \
+        darksys_data pool[(CAPACITY) * (PARAMS)];    \
         uint16_t lookup[(CAPACITY)];                 \
         uint16_t handles[(CAPACITY)];                \
         uint16_t capacity;                           \
@@ -153,13 +154,12 @@ typedef struct
 
 // Pointer to the first field of HANDLE's record; row[0..params-1] are its
 // fields, in the order they were written. Does NOT check that HANDLE is
-// valid -- call darksys_valid() first if that isn't already known. Same
-// multiply note as the rest of the file: used directly, single MULU.W.
-#define DARKSYS_DATA(SYSTEM, HANDLE) \
-    ((SYSTEM)->pool + (SYSTEM)->lookup[(HANDLE)] * (SYSTEM)->params)
+// valid -- call darksys_valid() first if that isn't already known.
+#define DARKSYS_DATA(SYSTEM, HANDLE) ((darksys_data)((SYSTEM)->pool + (SYSTEM)->lookup[(HANDLE)] * (SYSTEM)->params))
 
 // Adds a record and writes its fields in one call:
 //     darksys_handle h = DARKSYS_ADD(&pool, x, y, sprite);
+//
 // Returns DARKSYS_INVALID_HANDLE (and writes nothing) if the argument count
 // doesn't match `params`, or if the pool is full.
 #define DARKSYS_ADD(SYSTEM, ...)                                                                                \
@@ -175,6 +175,7 @@ typedef struct
 // local per field:
 //     void *sprite; int16_t x, y;
 //     DARKSYS_FOREACH(&pool, sprite, x, y, { move(sprite, x, y); });
+//
 // See the write-back note on _DARKSYS_FOREACH_RUN above if the loop body
 // needs to update a field in place.
 #define DARKSYS_FOREACH(SYSTEM, ...) _DARKSYS_FOREACH_DISPATCH(_DARKSYS_FOREACH_NARGS(__VA_ARGS__), SYSTEM, __VA_ARGS__)
@@ -243,8 +244,8 @@ static inline void darksys_remove(darksys *s, darksys_handle handle)
         // DBRA, and the post-incremented pool pointers compile to (An)+
         // addressing -- the cheapest way to walk memory on this CPU.
         uint16_t params = s->params;
-        void **dst = s->pool + slot * params;
-        void **src = s->pool + last * params;
+        darksys_data dst = s->pool + slot * params;
+        darksys_data src = s->pool + last * params;
 
         while (params--)
             *dst++ = *src++;

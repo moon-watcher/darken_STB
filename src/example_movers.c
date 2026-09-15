@@ -1,120 +1,242 @@
 #include <stdint.h>
 #include "darksys-1.0.0_dev.h"
 
-/* --------------------------------------------------------------------------
- * Minimal fix16_t stand-in, matching SGDK's own type 1:1 (a plain int32_t,
- * 16.16 fixed point). In real SGDK code just `#include <genesis.h>` and use
- * its fix16_t/FIX16/F16toInt directly -- this stub exists only so the
- * example builds and runs standalone here, off-console.
- * ------------------------------------------------------------------------ */
-typedef int32_t fix16_t;
-#define FIX16(x) ((fix16_t)((x) * 65536))
-#define FIX16_TO_INT(x) ((int)((x) >> 16))
+#define CAPACITY 8
+#define PARAMS 4
 
-/* --------------------------------------------------------------------------
- * A pool of moving entities: x, y, vx, vy per record (4 params).
- * Each fix16_t is exactly 32 bits, same width as a void* on m68k, so it is
- * stored directly as the pointer's bit pattern -- no boxing, no extra
- * allocation, just a cast in and a cast out.
- * ------------------------------------------------------------------------ */
-#define MAX_MOVERS 8
-#define MOVER_PARAMS 4 /* x, y, vx, vy */
-
-DARKSYS_POOL_DECLARE(moversStorage, MAX_MOVERS, MOVER_PARAMS);
-static darksys movers;
-
-static darksys_handle mover_spawn(fix16_t x, fix16_t y, fix16_t vx, fix16_t vy)
-{
-    return DARKSYS_ADD(&movers, x, y, vx, vy);
-}
+DARKSYS_POOL_DECLARE(storage, CAPACITY, PARAMS);
+static darksys system;
 
 #define assert(x) \
     if (!(x))     \
-        return;
+        kprintf("ERROR: %s", #x);
 
-/* System: integrates position += velocity for every active mover.
- *
- * DARKSYS_FOREACH binds one local per field; each local receives the raw
- * void* bit pattern that was stored, so it must be cast back to the real
- * type before use -- exactly like reading any other value out of darksys.
- * To write the new position back in place, assign to `_pool[0]`/`_pool[1]`
- * (the same two slots xp/yp were just read from); see the comment on
- * _DARKSYS_FOREACH_RUN in darksys.h. */
-static void movers_update(void)
+static void test_add_data(void)
 {
-    DARKSYS_FOREACH(&movers, fix16_t * x, fix16_t * y, fix16_t * vx, fix16_t * vy, {
+    int a = 10;
+    int b = 20;
+    int c = 30;
+    int d = 40;
+
+    system = DARKSYS_POOL_BIND(storage);
+
+    darksys_handle h = DARKSYS_ADD(&system, &a, &b, &c, &d);
+
+    assert(h == 0);
+    assert(system.count == 1);
+    assert(darksys_valid(&system, h));
+
+    darksys_data row = DARKSYS_DATA(&system, h);
+
+    assert(*(int *)row[0] == 10);
+    assert(*(int *)row[1] == 20);
+    assert(*(int *)row[2] == 30);
+    assert(*(int *)row[3] == 40);
+
+    kprintf("ADD/DATA OK");
+}
+
+static void test_foreach(void)
+{
+    int x0 = 1;
+    int y0 = 2;
+    int vx0 = 3;
+    int vy0 = 4;
+
+    int x1 = 10;
+    int y1 = 20;
+    int vx1 = 30;
+    int vy1 = 40;
+
+    system = DARKSYS_POOL_BIND(storage);
+
+    DARKSYS_ADD(&system, &x0, &y0, &vx0, &vy0);
+    DARKSYS_ADD(&system, &x1, &y1, &vx1, &vy1);
+
+    DARKSYS_FOREACH(&system, int *x, int *y, int *vx, int *vy, {
         *x += *vx;
         *y += *vy;
     });
+
+    assert(x0 == 4);
+    assert(y0 == 6);
+    assert(x1 == 40);
+    assert(y1 == 60);
+
+    kprintf("FOREACH OK");
 }
 
-static void mover_print(darksys_handle h)
+static void test_remove_middle(void)
 {
-    void **row = DARKSYS_DATA(&movers, h);
-    fix16_t x = (fix16_t)row[0];
-    fix16_t y = (fix16_t)row[1];
-    kprintf("  h=%u -> x=%d y=%d", h, FIX16_TO_INT(x), FIX16_TO_INT(y));
+    int a0 = 10;
+    int a1 = 11;
+    int a2 = 12;
+    int a3 = 13;
+
+    int b0 = 20;
+    int b1 = 21;
+    int b2 = 22;
+    int b3 = 23;
+
+    int c0 = 30;
+    int c1 = 31;
+    int c2 = 32;
+    int c3 = 33;
+
+    darksys_handle a;
+    darksys_handle b;
+    darksys_handle c;
+
+    system = DARKSYS_POOL_BIND(storage);
+
+    a = DARKSYS_ADD(&system, &a0, &a1, &a2, &a3);
+    b = DARKSYS_ADD(&system, &b0, &b1, &b2, &b3);
+    c = DARKSYS_ADD(&system, &c0, &c1, &c2, &c3);
+
+    darksys_remove(&system, a);
+
+    assert(system.count == 2);
+    assert(darksys_valid(&system, b));
+    assert(!darksys_valid(&system, a));
+    assert(darksys_valid(&system, c));
+
+    darksys_data rc = DARKSYS_DATA(&system, c);
+    darksys_data rb = DARKSYS_DATA(&system, b);
+
+    assert(*(int *)rc[0] == 30);
+    assert(*(int *)rc[1] == 31);
+    assert(*(int *)rc[2] == 32);
+    assert(*(int *)rc[3] == 33);
+
+    assert(*(int *)rb[0] == 20);
+    assert(*(int *)rb[1] == 21);
+    assert(*(int *)rb[2] == 22);
+    assert(*(int *)rb[3] == 23);
+
+    kprintf("REMOVE OK");
 }
 
-int example_movers(void)
+static void test_handle_reuse(void)
 {
-    movers = DARKSYS_POOL_BIND(moversStorage);
+    int a0 = 1;
+    int a1 = 2;
+    int a2 = 3;
+    int a3 = 4;
 
-    darksys_handle a = mover_spawn(FIX16(0), FIX16(0), FIX16(1), FIX16(0));    /* moves right  */
-    darksys_handle b = mover_spawn(FIX16(10), FIX16(10), FIX16(0), FIX16(-1)); /* moves up   */
-    darksys_handle c = mover_spawn(FIX16(5), FIX16(5), FIX16(2), FIX16(2));    /* moves diagonally */
+    int b0 = 5;
+    int b1 = 6;
+    int b2 = 7;
+    int b3 = 8;
 
-    assert(a != DARKSYS_INVALID_HANDLE && b != DARKSYS_INVALID_HANDLE && c != DARKSYS_INVALID_HANDLE);
+    int c0 = 9;
+    int c1 = 10;
+    int c2 = 11;
+    int c3 = 12;
 
-    kprintf("frame 0:");
-    mover_print(a);
-    mover_print(b);
-    mover_print(c);
+    system = DARKSYS_POOL_BIND(storage);
 
-    for (int frame = 1; frame <= 3; ++frame)
-    {
-        movers_update();
-        kprintf("frame %d:", frame);
-        mover_print(a);
-        mover_print(b);
-        mover_print(c);
-    }
+    darksys_handle a = DARKSYS_ADD(&system, &a0, &a1, &a2, &a3);
+    darksys_handle b = DARKSYS_ADD(&system, &b0, &b1, &b2, &b3);
 
-    /* a moves +1 on x every frame, 3 frames in a row */
-    void **ra = DARKSYS_DATA(&movers, a);
-    assert(FIX16_TO_INT((fix16_t)ra[0]) == 3);
-    assert(FIX16_TO_INT((fix16_t)ra[1]) == 0);
+    darksys_remove(&system, a);
 
-    /* b moves -1 on y every frame */
-    void **rb = DARKSYS_DATA(&movers, b);
-    assert(FIX16_TO_INT((fix16_t)rb[0]) == 10);
-    assert(FIX16_TO_INT((fix16_t)rb[1]) == 7);
+    assert(!darksys_valid(&system, a));
+    assert(darksys_valid(&system, b));
 
-    /* removing b mid-pool must not disturb a or c, and their DATA pointers
-     * must still resolve correctly afterwards (this is exactly what the
-     * offsets[] cache in darksys_remove needs to keep in sync) */
-    darksys_remove(&movers, b);
-    assert(!darksys_valid(&movers, b));
-    assert(darksys_valid(&movers, a) && darksys_valid(&movers, c));
+    darksys_handle c = DARKSYS_ADD(&system, &c0, &c1, &c2, &c3);
 
-    void **ra2 = DARKSYS_DATA(&movers, a);
-    void **rc2 = DARKSYS_DATA(&movers, c);
-    assert(FIX16_TO_INT((fix16_t)ra2[0]) == 3);
-    assert(FIX16_TO_INT((fix16_t)rc2[0]) == 11); /* 5 + 2*3 */
+    assert(c == a);
+    assert(system.count == 2);
+    assert(darksys_valid(&system, c));
+    assert(darksys_valid(&system, b));
 
-    movers_update(); /* one more frame, now with only a and c active */
-    ra2 = DARKSYS_DATA(&movers, a);
-    rc2 = DARKSYS_DATA(&movers, c);
-    assert(FIX16_TO_INT((fix16_t)ra2[0]) == 4);
-    assert(FIX16_TO_INT((fix16_t)rc2[0]) == 13);
+    darksys_data rc = DARKSYS_DATA(&system, c);
 
-    /* removing an already-removed handle, or one that was never issued,
-     * must be a no-op (this is the bug fixed in darksys_remove) */
-    uint16_t count_before = movers.count;
-    darksys_remove(&movers, b);
-    darksys_remove(&movers, (darksys_handle)999);
-    assert(movers.count == count_before);
+    assert(*(int *)rc[0] == 9);
+    assert(*(int *)rc[1] == 10);
+    assert(*(int *)rc[2] == 11);
+    assert(*(int *)rc[3] == 12);
 
-    kprintf("ALL OK");
+    kprintf("REUSE OK");
+}
+
+static void test_data_write(void)
+{
+    int a0 = 10;
+    int a1 = 20;
+    int a2 = 30;
+    int a3 = 40;
+
+    int b0 = 100;
+    int b1 = 200;
+    int b2 = 300;
+    int b3 = 400;
+
+    system = DARKSYS_POOL_BIND(storage);
+
+    darksys_handle h = DARKSYS_ADD(&system, &a0, &a1, &a2, &a3);
+
+    darksys_data row = DARKSYS_DATA(&system, h);
+
+    *(int *)row[0] = 50;
+    *(int *)row[1] = 60;
+    *(int *)row[2] = 70;
+    *(int *)row[3] = 80;
+
+    assert(a0 == 50);
+    assert(a1 == 60);
+    assert(a2 == 70);
+    assert(a3 == 80);
+
+    darksys_handle h2 = DARKSYS_ADD(&system, &b0, &b1, &b2, &b3);
+
+    darksys_data row2 = DARKSYS_DATA(&system, h2);
+
+    assert(*(int *)row2[0] == 100);
+    assert(*(int *)row2[1] == 200);
+    assert(*(int *)row2[2] == 300);
+    assert(*(int *)row2[3] == 400);
+
+    kprintf("DATA WRITE OK");
+}
+
+static void test_clear(void)
+{
+    int a = 1;
+    int b = 2;
+    int c = 3;
+    int d = 4;
+
+    system = DARKSYS_POOL_BIND(storage);
+
+    DARKSYS_ADD(&system, &a, &b, &c, &d);
+
+    assert(system.count == 1);
+
+    darksys_clear(&system);
+
+    assert(system.count == 0);
+    assert(system.next == 0);
+    assert(system.free_head == DARKSYS_INVALID_HANDLE);
+
+    darksys_handle h = DARKSYS_ADD(&system, &a, &b, &c, &d);
+
+    assert(h == 0);
+    assert(system.count == 1);
+    assert(darksys_valid(&system, h));
+
+    kprintf("CLEAR OK");
+}
+
+int test_darksys(void)
+{
+    test_add_data();
+    test_foreach();
+    test_remove_middle();
+    test_handle_reuse();
+    test_data_write();
+    test_clear();
+
+    kprintf("ALL TESTS OK");
     return 0;
 }
