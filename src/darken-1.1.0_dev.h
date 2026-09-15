@@ -195,7 +195,7 @@ struct darken_entity_t
 #define DARKEN_PAUSE ((darken_state_t)2)
 
 // Dynamic allocation: use with malloc/calloc or custom allocator
-//     darken_t m = DARKEN_POOL_ALLOC(MEM_alloc, 5, sizeof(struct MyComponent));
+//     darken_t m = DARKEN_ALLOC(MEM_alloc, 5, sizeof(struct MyComponent));
 //     darken_init(&m);
 //     ...
 //     free(m.pool);
@@ -209,8 +209,8 @@ struct darken_entity_t
     }
 
 // Static allocation with automatic storage duration (stack or global)
-//     DARKEN_POOL_DECLARE(storage, 5, sizeof(struct MyComponent));
-//     darken_t m = DARKEN_POOL_BIND(storage);
+//     DARKEN_DECLARE(storage, 5, sizeof(struct MyComponent));
+//     darken_t m = DARKEN_BIND(storage);
 //     darken_init(&m);
 #define DARKEN_DECLARE(NAME, CAPACITY, PAYLOAD)                                                \
     struct                                                                                     \
@@ -350,7 +350,7 @@ static inline void darken_entity_delete(darken_entity_t entity)
 // USAGE EXAMPLES:
 //
 // DYNAMIC:
-//     darken_t m = DARKEN_POOL_ALLOC(MEM_alloc, 5, sizeof(struct MyComponent));
+//     darken_t m = DARKEN_ALLOC(MEM_alloc, 5, sizeof(struct MyComponent));
 //     darken_init(&m);
 //     ...
 //     free(m.pool);
@@ -358,13 +358,13 @@ static inline void darken_entity_delete(darken_entity_t entity)
 //
 // STATIC (Runtime binding):
 // Runtime: locals, reassignment, any context
-//     DARKEN_POOL_DECLARE(storage, 5, sizeof(struct MyComponent));
-//     darken_t m = DARKEN_POOL_BIND(storage);
+//     DARKEN_DECLARE(storage, 5, sizeof(struct MyComponent));
+//     darken_t m = DARKEN_BIND(storage);
 //     darken_init(&m);
 //
 // STATIC (Compile-time initialization):
 // Static/global initialization: compile-time constants
-//     DARKEN_POOL_DECLARE(storage, 5, sizeof(struct MyComponent));
+//     DARKEN_DECLARE(storage, 5, sizeof(struct MyComponent));
 //     darken_t m = DARKEN_INIT(storage);
 //
 //     void init_test_manager() {
