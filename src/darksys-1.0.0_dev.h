@@ -1,5 +1,14 @@
 /**
- * darksys_t - handle-based sparse pool ("slot map") for SGDK / Sega Genesis.
+ * darksys.h - Darksys (DARKula SYStems) Handle-based sparse pool ("slot map")
+ *
+ * darksys-1.0.0_dev
+ *
+ * * GNU C note:
+ * - This header uses GNU C and statement expressions.
+ * - Darksys targets GCC and the Motorola 68000.
+ * - 16-bit members preference for optimal 68K performance.
+ *
+ *
  *
  * Stores up to `capacity` records of `params` void* fields each, packed
  * contiguously in `pool` so that iteration is a plain linear pointer walk.
@@ -8,22 +17,6 @@
  * `lookup` (handle -> slot, sparse) are kept in sync with a swap-and-pop
  * scheme, so add()/remove() are O(1) and a live record never moves without
  * its handle staying valid.
- *
- * GCC / m68000 notes (checked against SGDK's toolchain, -m68000, -O0..-O3):
- *
- *  - The 68000 has no 32x32 hardware multiply, only 16x16->32
- *    (MULU.W/MULS.W, ~40-70 cycles); a genuine 32-bit multiply falls back
- *    to libgcc's __mulsi3 (several hundred cycles, call+return included).
- *    Every `slot * params` / `count * params` below keeps both operands as
- *    uint16_t and uses the product directly (never narrows it into a
- *    uint16_t temporary first). That is what lets GCC emit a single
- *    MULU.W/MULS.W instead of __mulsi3 -- confirmed by inspecting the
- *    actual .s output, not just inferred from the C types.
- *  - The swap-copy in remove() walks with `while (params--) *dst++ = *src++;`
- *    (post-incremented pointers, count down to zero): the m68k backend
- *    turns that into DBRA plus (An)+ addressing, the cheapest way to walk
- *    memory on this CPU. DARKSYS_FOREACH uses the same idiom, and never
- *    needed a multiply to begin with (it just walks pool by += params).
  */
 #pragma once
 
