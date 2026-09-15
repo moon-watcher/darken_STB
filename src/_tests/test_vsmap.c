@@ -1,5 +1,5 @@
 #include <genesis.h>
-#include "vsmap.h"
+#include "../vsmap.h"
 
 #define TEST_CAPACITY 8
 #define BENCH_CAPACITY 128

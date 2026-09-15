@@ -1,5 +1,5 @@
 #include <stdint.h>
-#include "darksys-1.0.0_dev.h"
+#include "../darksys-1.0.0_dev.h"
 
 #define CAPACITY 8
 #define PARAMS 4

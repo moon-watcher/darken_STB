@@ -1,5 +1,5 @@
 #include <genesis.h>
-#include "darksys-1.0.0_dev.h"
+#include "../darksys-1.0.0_dev.h"
 
 #define TEST_CAPACITY 8
 #define BENCH_CAPACITY 128
