@@ -181,8 +181,13 @@ struct darken_entity_t
 #define _DARKEN_ARGS(ENTITY) (ENTITY)->data
 #endif
 
-#define _DARKEN_ALIGN4(X) (((X) + 3U) & ~3U)
-#define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN4(sizeof(struct darken_entity_t) + (PAYLOAD))
+#define _DARKEN_ALIGN(X, A) (((X) + (uintptr_t)(A) - 1) & ~((uintptr_t)(A) - 1))
+// Floored at 4 to preserve the original m68k-only behavior exactly (m68k
+// pointers/function pointers need at most 4-byte alignment there); raised
+// above 4 on hosts (e.g. x86-64) where struct darken_entity_t's pointer
+// members actually need 8-byte alignment, which UBSan will otherwise flag.
+#define _DARKEN_ENTITY_ALIGN (_Alignof(struct darken_entity_t) > 4 ? _Alignof(struct darken_entity_t) : 4)
+#define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN(sizeof(struct darken_entity_t) + (PAYLOAD), _DARKEN_ENTITY_ALIGN)
 
 /* ============================================================================
  * PUBLIC API
@@ -226,12 +231,12 @@ struct darken_entity_t
 
 // Static/global initialization: compile-time constants
 // Use when the storage is defined at file scope and you want compile-time initialization
-#define DARKEN_INIT(STORAGE)                                                                 \
-    {                                                                                        \
-        .pool = (STORAGE).pool,                                                              \
-        .storage = (STORAGE).data,                                                           \
-        .capacity = sizeof((STORAGE).pool) / sizeof(darken_entity),                          \
-        .stride = sizeof((STORAGE).data) / (sizeof((STORAGE).pool) / sizeof(darken_entity)), \
+#define DARKEN_INIT(STORAGE)                                                                   \
+    {                                                                                          \
+        .pool = (STORAGE).pool,                                                                \
+        .storage = (STORAGE).data,                                                             \
+        .capacity = sizeof((STORAGE).pool) / sizeof(darken_entity_t),                          \
+        .stride = sizeof((STORAGE).data) / (sizeof((STORAGE).pool) / sizeof(darken_entity_t)), \
     }
 
 // Runtime binding: locals, reassignment, any context
@@ -275,7 +280,7 @@ struct darken_entity_t
 
 // Recover the entity handle from a pointer to its data payload
 // (Mostly useful in STATE-MACHINE mode where callbacks only receive data)
-#define DARKEN_ENTITY(DATA) ((darken_entity_t)((uint8_t *)(DATA) - (uint32_t)&((darken_entity_t)0)->data))
+#define DARKEN_ENTITY(DATA) ((darken_entity_t)((uint8_t *)(DATA) - (uintptr_t)&((darken_entity_t)0)->data))
 
 // Zone membership tests
 #define DARKEN_ENTITY_IN_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->owner->size)
