@@ -12,7 +12,8 @@ int main(void)
     // darken8_test_main();
     // test_vsmap_main();
     test_darksys_main();
-    darken_run_benchmarks();
-    
+    // darken_run_benchmarks();
+    example_movers();
+
     return 0;
 }
