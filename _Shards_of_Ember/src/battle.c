@@ -18,7 +18,7 @@
 #include "darken.h"
 
 
-void battle_start(darken_entity enemy)
+void battle_start(darken_entity_t enemy)
 {
     EnemyData *e = &((EntityData *)enemy->data)->enemy;
 
@@ -139,7 +139,7 @@ void battle_input(u16 pressed)
         if ((random() % 100) < 70)
         {
             entity_set_pos(g_battle_enemy, e->spawn_x, e->spawn_y);
-            g_battle_enemy->state = (darken_state)enemy_state_patrol;
+            g_battle_enemy->state = (darken_state_t)enemy_state_patrol;
             g_battle_enemy = NULL;
             g_state = GS_EXPLORE;
             sprintf(g_msg, "You got away safely.");

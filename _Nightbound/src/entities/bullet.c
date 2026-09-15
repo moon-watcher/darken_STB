@@ -18,9 +18,9 @@ static void *bullet_destroy(void *data)
     return DARKEN_CONTINUE;
 }
 
-darken_entity bullet_spawn(fix16 x, fix16 y, int16_t direction)
+darken_entity_t bullet_spawn(fix16 x, fix16 y, int16_t direction)
 {
-    darken_entity entity = darken_spawn(&g_entity_manager);
+    darken_entity_t entity = darken_spawn(&g_entity_manager);
     if (!entity)
         return NULL;
 
@@ -45,7 +45,7 @@ darken_entity bullet_spawn(fix16 x, fix16 y, int16_t direction)
     return entity;
 }
 
-void bullet_post_update(darken_entity entity, GameEntity *bullet)
+void bullet_post_update(darken_entity_t entity, GameEntity *bullet)
 {
     if (bullet->x < 0 || bullet->x > FIX16(1600) ||
         collision_point_solid(bullet->x, bullet->y))

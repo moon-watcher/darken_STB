@@ -141,32 +141,32 @@
 #include <stdint.h>
 
 #ifdef DARKEN_DIRECT
-typedef void (*darken_state)();
+typedef void (*darken_state_t)();
 #else
-typedef void *(*darken_state)();
+typedef void *(*darken_state_t)();
 #endif
 
-typedef struct darken_entity *darken_entity;
+typedef struct darken_entity_t *darken_entity_t;
 
-typedef struct darken
+typedef struct darken_t
 {
-    darken_entity *pool; // Pointer array to entities in the ctx's storage block
-    uint8_t *storage;    // Pointer to the contiguous memory block where entities are allocated
+    darken_entity_t *pool; // Pointer array to entities in the ctx's storage block
+    uint8_t *storage;      // Pointer to the contiguous memory block where entities are allocated
     uint16_t capacity;
     uint16_t size;
     uint16_t paused;
     uint16_t stride;
-} darken;
+} darken_t;
 
-struct darken_entity
+struct darken_entity_t
 {
-    uint16_t slot;        // Private: Index in the ctx's pool array
-    uint16_t usr;         // User-defined field for custom data
-    darken_state update;  // User-defined update callback
-    darken_state destroy; // User-defined destroy callback
-    uint32_t tag;         // User-defined tag for identification or categorization
-    darken *owner;        // Private: Pointer to the owning ctx
-    uint8_t data[];       // Payload
+    uint16_t slot;          // Private: Index in the ctx's pool array
+    uint16_t usr;           // User-defined field for custom data
+    darken_state_t update;  // User-defined update callback
+    darken_state_t destroy; // User-defined destroy callback
+    uint32_t tag;           // User-defined tag for identification or categorization
+    darken_t *owner;        // Private: Pointer to the owning ctx
+    uint8_t data[];         // Payload
 };
 
 /* ============================================================================
@@ -182,7 +182,7 @@ struct darken_entity
 #endif
 
 #define _DARKEN_ALIGN4(X) (((X) + 3U) & ~3U)
-#define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN4(sizeof(struct darken_entity) + (PAYLOAD))
+#define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN4(sizeof(struct darken_entity_t) + (PAYLOAD))
 
 /* ============================================================================
  * PUBLIC API
@@ -190,19 +190,19 @@ struct darken_entity
 
 // Sentinel return values for update() callbacks in state-machine mode.
 // Any other darken_state value returned is treated as the next update callback.
-#define DARKEN_CONTINUE ((darken_state)1)
-#define DARKEN_DELETE ((darken_state)0)
-#define DARKEN_PAUSE ((darken_state)2)
+#define DARKEN_CONTINUE ((darken_state_t)1)
+#define DARKEN_DELETE ((darken_state_t)0)
+#define DARKEN_PAUSE ((darken_state_t)2)
 
 // Dynamic allocation: use with malloc/calloc or custom allocator
-//     darken m = DARKEN_POOL_ALLOC(MEM_alloc, 5, sizeof(struct MyComponent));
+//     darken_t m = DARKEN_POOL_ALLOC(MEM_alloc, 5, sizeof(struct MyComponent));
 //     darken_init(&m);
 //     ...
 //     free(m.pool);
 //     free(m.storage);
-#define DARKEN_POOL_ALLOC(ALLOC, CAPACITY, PAYLOAD)                                 \
+#define DARKEN_ALLOC(ALLOC, CAPACITY, PAYLOAD)                                      \
     {                                                                               \
-        .pool = (darken_entity *)(ALLOC)((CAPACITY) * sizeof(darken_entity)),       \
+        .pool = (darken_entity_t *)(ALLOC)((CAPACITY) * sizeof(darken_entity_t)),   \
         .storage = (uint8_t *)(ALLOC)((CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)), \
         .capacity = (CAPACITY),                                                     \
         .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                                   \
@@ -210,14 +210,14 @@ struct darken_entity
 
 // Static allocation with automatic storage duration (stack or global)
 //     DARKEN_POOL_DECLARE(storage, 5, sizeof(struct MyComponent));
-//     darken m = DARKEN_POOL_BIND(storage);
+//     darken_t m = DARKEN_POOL_BIND(storage);
 //     darken_init(&m);
-#define DARKEN_POOL_DECLARE(NAME, CAPACITY, PAYLOAD)                                           \
+#define DARKEN_DECLARE(NAME, CAPACITY, PAYLOAD)                                                \
     struct                                                                                     \
     {                                                                                          \
         uint16_t capacity;                                                                     \
         uint16_t stride;                                                                       \
-        darken_entity pool[(CAPACITY)] __attribute__((aligned(4)));                            \
+        darken_entity_t pool[(CAPACITY)] __attribute__((aligned(4)));                          \
         uint8_t data[(CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)] __attribute__((aligned(4))); \
     } NAME = {                                                                                 \
         .capacity = (CAPACITY),                                                                \
@@ -226,7 +226,7 @@ struct darken_entity
 
 // Static/global initialization: compile-time constants
 // Use when the storage is defined at file scope and you want compile-time initialization
-#define DARKEN_POOL_INIT(STORAGE)                                                            \
+#define DARKEN_INIT(STORAGE)                                                                 \
     {                                                                                        \
         .pool = (STORAGE).pool,                                                              \
         .storage = (STORAGE).data,                                                           \
@@ -235,8 +235,8 @@ struct darken_entity
     }
 
 // Runtime binding: locals, reassignment, any context
-// Use when you need to (re)bind a darken context to storage at runtime
-#define DARKEN_POOL_BIND(NAME)       \
+// Use when you need to (re)bind a darken_t context to storage at runtime
+#define DARKEN_BIND(NAME)            \
     {                                \
         .pool = (NAME).pool,         \
         .storage = (NAME).data,      \
@@ -248,26 +248,26 @@ struct darken_entity
 // The returned entity may contain garbage from a previous occupant — always initialize
 // all fields you care about (update, destroy, tag, usr, and data).
 #define DARKEN_SPAWN(CTX) ({                                  \
-    darken *_ctx = (CTX);                                     \
+    darken_t *_ctx = (CTX);                                   \
     _ctx->size < _ctx->paused ? _ctx->pool[_ctx->size++] : 0; \
 })
 
 // Iterate over all active entities in REVERSE order (from size-1 down to 0).
 // Reverse order allows safe deletion during iteration.
-#define DARKEN_FOREACH(CTX, CODE)                      \
-    do                                                 \
-    {                                                  \
-        darken *_ctx = (CTX);                          \
-        uint16_t _index = _ctx->size;                  \
-        if (_index)                                    \
-        {                                              \
-            darken_entity *_pool = _ctx->pool;         \
-            while (_index--)                           \
-            {                                          \
-                darken_entity _entity = _pool[_index]; \
-                CODE;                                  \
-            }                                          \
-        }                                              \
+#define DARKEN_FOREACH(CTX, CODE)                        \
+    do                                                   \
+    {                                                    \
+        darken_t *_ctx = (CTX);                          \
+        uint16_t _index = _ctx->size;                    \
+        if (_index)                                      \
+        {                                                \
+            darken_entity_t *_pool = _ctx->pool;         \
+            while (_index--)                             \
+            {                                            \
+                darken_entity_t _entity = _pool[_index]; \
+                CODE;                                    \
+            }                                            \
+        }                                                \
     } while (0)
 
 // Declare a typed pointer to an entity's data payload
@@ -275,7 +275,7 @@ struct darken_entity
 
 // Recover the entity handle from a pointer to its data payload
 // (Mostly useful in STATE-MACHINE mode where callbacks only receive data)
-#define DARKEN_ENTITY(DATA) ((darken_entity)((uint8_t *)(DATA) - (uint32_t)&((darken_entity)0)->data))
+#define DARKEN_ENTITY(DATA) ((darken_entity_t)((uint8_t *)(DATA) - (uint32_t)&((darken_entity_t)0)->data))
 
 // Zone membership tests
 #define DARKEN_ENTITY_IN_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->owner->size)
@@ -291,12 +291,12 @@ struct darken_entity
  * FUNCTIONS
  * ============================================================================ */
 
-static inline void darken_swap(darken_entity pool[], uint16_t i, uint16_t j)
+static inline void darken_swap(darken_entity_t pool[], uint16_t i, uint16_t j)
 {
     if (i == j)
         return;
 
-    darken_entity tmp = pool[i];
+    darken_entity_t tmp = pool[i];
     pool[i] = pool[j];
     pool[j] = tmp;
     pool[i]->slot = i;
@@ -308,7 +308,7 @@ static inline void darken_swap(darken_entity pool[], uint16_t i, uint16_t j)
 // near edge, `size` shrinks), then evicted again into the paused zone
 // (swapped to the free zone's far edge, `paused` shrinks). A no-op if the
 // entity isn't currently active.
-static inline void darken_entity_pause(darken_entity entity)
+static inline void darken_entity_pause(darken_entity_t entity)
 {
     if (!DARKEN_ENTITY_IN_ACTIVE(entity))
         return;
@@ -322,7 +322,7 @@ static inline void darken_entity_pause(darken_entity entity)
 // grows), landing it in the free zone, then swapped to the free zone's near
 // edge (`size` grows), landing it in the active zone. A no-op if the entity
 // isn't currently paused.
-static inline void darken_entity_resume(darken_entity entity)
+static inline void darken_entity_resume(darken_entity_t entity)
 {
     if (!DARKEN_ENTITY_IN_PAUSED(entity))
         return;
@@ -333,7 +333,7 @@ static inline void darken_entity_resume(darken_entity entity)
 
 // Note: darken_entity_delete() only calls destroy() if the entity is active.
 // If the entity is paused, it's moved to the free zone without calling destroy().
-static inline void darken_entity_delete(darken_entity entity)
+static inline void darken_entity_delete(darken_entity_t entity)
 {
     if (DARKEN_ENTITY_IN_ACTIVE(entity))
     {
@@ -350,7 +350,7 @@ static inline void darken_entity_delete(darken_entity entity)
 // USAGE EXAMPLES:
 //
 // DYNAMIC:
-//     darken m = DARKEN_POOL_ALLOC(MEM_alloc, 5, sizeof(struct MyComponent));
+//     darken_t m = DARKEN_POOL_ALLOC(MEM_alloc, 5, sizeof(struct MyComponent));
 //     darken_init(&m);
 //     ...
 //     free(m.pool);
@@ -359,13 +359,13 @@ static inline void darken_entity_delete(darken_entity entity)
 // STATIC (Runtime binding):
 // Runtime: locals, reassignment, any context
 //     DARKEN_POOL_DECLARE(storage, 5, sizeof(struct MyComponent));
-//     darken m = DARKEN_POOL_BIND(storage);
+//     darken_t m = DARKEN_POOL_BIND(storage);
 //     darken_init(&m);
 //
 // STATIC (Compile-time initialization):
 // Static/global initialization: compile-time constants
 //     DARKEN_POOL_DECLARE(storage, 5, sizeof(struct MyComponent));
-//     darken m = DARKEN_POOL_INIT(storage);
+//     darken_t m = DARKEN_INIT(storage);
 //
 //     void init_test_manager() {
 //         darken_init(&m);
@@ -376,7 +376,7 @@ static inline void darken_entity_delete(darken_entity entity)
 // purely because that's the cheaper direction to test on m68k (DBRA) -- it
 // does not imply slot i lives at storage offset i*stride. Only ->slot and
 // ->owner, not array position, are guaranteed to track an entity afterward.
-static inline void darken_init(darken *ctx)
+static inline void darken_init(darken_t *ctx)
 {
     ctx->size = 0;
     uint16_t i = ctx->paused = ctx->capacity;
@@ -384,7 +384,7 @@ static inline void darken_init(darken *ctx)
 
     while (i--)
     {
-        ctx->pool[i] = (darken_entity)storage;
+        ctx->pool[i] = (darken_entity_t)storage;
         ctx->pool[i]->owner = ctx;
         ctx->pool[i]->slot = i;
 
@@ -392,7 +392,7 @@ static inline void darken_init(darken *ctx)
     }
 }
 
-static inline void darken_update(darken *ctx)
+static inline void darken_update(darken_t *ctx)
 {
 #ifdef DARKEN_DIRECT
     DARKEN_FOREACH(ctx, {
@@ -400,7 +400,7 @@ static inline void darken_update(darken *ctx)
     });
 #else
     DARKEN_FOREACH(ctx, {
-        darken_state state = _entity->update(_DARKEN_ARGS(_entity));
+        darken_state_t state = _entity->update(_DARKEN_ARGS(_entity));
 
         if (state == DARKEN_CONTINUE)
             continue;
@@ -432,7 +432,7 @@ static inline void darken_update(darken *ctx)
 // pool back to the free zone (size = 0, paused = capacity). Paused entities
 // are swept away the same way darken_entity_delete() treats them: silently,
 // without their destroy() ever running.
-static inline void darken_reset(darken *ctx)
+static inline void darken_reset(darken_t *ctx)
 {
     DARKEN_FOREACH(ctx, {
         if (_entity->destroy)

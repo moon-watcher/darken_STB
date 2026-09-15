@@ -45,7 +45,7 @@ static u16 in_range(s16 ax, s16 ay, s16 bx, s16 by, s16 radius)
 static void step_toward(EnemyData *e, s16 tx, s16 ty)
 {
     s16 nx = e->x, ny = e->y;
-    darken_entity blocker;
+    darken_entity_t blocker;
 
     if (e->x != tx)
         nx += (tx > e->x) ? 1 : -1;
@@ -66,10 +66,10 @@ void *enemy_state_patrol(void *data)
 {
     EnemyData *e = (EnemyData *)data;
     PlayerData *p = (PlayerData *)g_player->data;
-    darken_entity self = darken_entity_from_data(data);
+    darken_entity_t self = darken_entity_from_data(data);
 
     if (g_map == (MapId)self->usr && in_range(e->x, e->y, p->x, p->y, AGGRO_RADIUS))
-        return (darken_state)enemy_state_chase;
+        return (darken_state_t)enemy_state_chase;
 
     if ((random() % 3) == 0)
     {
@@ -79,7 +79,7 @@ void *enemy_state_patrol(void *data)
 
         if (in_range(nx, ny, e->spawn_x, e->spawn_y, 3) && !tile_blocked(nx, ny))
         {
-            darken_entity blocker = entity_at(nx, ny);
+            darken_entity_t blocker = entity_at(nx, ny);
             if (!blocker || blocker->tag == KIND_PLAYER)
             {
                 e->x = nx;
@@ -92,12 +92,12 @@ void *enemy_state_patrol(void *data)
 
 void *enemy_state_chase(void *data)
 {
-    darken_entity self = darken_entity_from_data(data);
+    darken_entity_t self = darken_entity_from_data(data);
     EnemyData *e = (EnemyData *)data;
     PlayerData *p = (PlayerData *)g_player->data;
 
     if (g_map != (MapId)self->usr || !in_range(e->x, e->y, p->x, p->y, DEAGGRO_RADIUS))
-        return (darken_state)enemy_state_patrol;
+        return (darken_state_t)enemy_state_patrol;
 
     step_toward(e, p->x, p->y);
 
@@ -112,7 +112,7 @@ void *enemy_state_chase(void *data)
 static void *enemy_destructor(void *data)
 {
     EnemyData *e = (EnemyData *)data;
-    darken_entity self = darken_entity_from_data(data);
+    darken_entity_t self = darken_entity_from_data(data);
 
     /* A chance of bonus loot when a monster falls. Note: darken only calls
      * a destructor for entities removed from the ACTIVE zone (see
@@ -131,14 +131,14 @@ static void *item_destructor(void *data)
     return DARKEN_DELETE;
 }
 
-darken_entity spawn_player(s16 x, s16 y)
+darken_entity_t spawn_player(s16 x, s16 y)
 {
-    darken_entity e = darken_spawn(&g_world);
+    darken_entity_t e = darken_spawn(&g_world);
     PlayerData *p = (PlayerData *)e->data;
 
     e->tag = KIND_PLAYER;
     e->usr = 0;
-    e->state = (darken_state)passive_state;
+    e->state = (darken_state_t)passive_state;
     e->destructor = NULL;
 
     memset(p, 0, sizeof(*p));
@@ -155,15 +155,15 @@ darken_entity spawn_player(s16 x, s16 y)
     return e;
 }
 
-darken_entity spawn_enemy(EnemyType type, s16 x, s16 y, MapId map)
+darken_entity_t spawn_enemy(EnemyType type, s16 x, s16 y, MapId map)
 {
-    darken_entity e = darken_spawn(&g_world);
+    darken_entity_t e = darken_spawn(&g_world);
     EnemyData *d = (EnemyData *)e->data;
 
     e->tag = KIND_ENEMY;
     e->usr = (u16)map;
-    e->state = (darken_state)enemy_state_patrol;
-    e->destructor = (darken_state)enemy_destructor;
+    e->state = (darken_state_t)enemy_state_patrol;
+    e->destructor = (darken_state_t)enemy_destructor;
 
     d->x = x;
     d->y = y;
@@ -178,15 +178,15 @@ darken_entity spawn_enemy(EnemyType type, s16 x, s16 y, MapId map)
     return e;
 }
 
-darken_entity spawn_item(ItemType type, s16 x, s16 y, s16 value, MapId map)
+darken_entity_t spawn_item(ItemType type, s16 x, s16 y, s16 value, MapId map)
 {
-    darken_entity e = darken_spawn(&g_world);
+    darken_entity_t e = darken_spawn(&g_world);
     ItemData *d = (ItemData *)e->data;
 
     e->tag = KIND_ITEM;
     e->usr = (u16)map;
-    e->state = (darken_state)passive_state;
-    e->destructor = (darken_state)item_destructor;
+    e->state = (darken_state_t)passive_state;
+    e->destructor = (darken_state_t)item_destructor;
 
     d->x = x;
     d->y = y;
@@ -195,14 +195,14 @@ darken_entity spawn_item(ItemType type, s16 x, s16 y, s16 value, MapId map)
     return e;
 }
 
-darken_entity spawn_npc(const char *name, s16 x, s16 y, MapId map)
+darken_entity_t spawn_npc(const char *name, s16 x, s16 y, MapId map)
 {
-    darken_entity e = darken_spawn(&g_world);
+    darken_entity_t e = darken_spawn(&g_world);
     NpcData *d = (NpcData *)e->data;
 
     e->tag = KIND_NPC;
     e->usr = (u16)map;
-    e->state = (darken_state)passive_state;
+    e->state = (darken_state_t)passive_state;
     e->destructor = NULL;
 
     d->x = x;

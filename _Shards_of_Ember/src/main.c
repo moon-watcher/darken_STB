@@ -22,11 +22,11 @@
 /* Globals                                                                 */
 /* ---------------------------------------------------------------------- */
 
-darken g_world;
-darken_entity g_player;
+darken_t g_world;
+darken_entity_t g_player;
 GameState g_state = GS_TITLE;
 MapId g_map = MAP_OVERWORLD;
-darken_entity g_battle_enemy = NULL;
+darken_entity_t g_battle_enemy = NULL;
 char g_msg[40] = "";
 char g_msg2[40] = "";
 

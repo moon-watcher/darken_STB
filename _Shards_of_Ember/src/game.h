@@ -164,11 +164,11 @@ typedef union
 /* Globals (defined in main.c)                                             */
 /* ---------------------------------------------------------------------- */
 
-extern darken g_world;
-extern darken_entity g_player;
+extern darken_t g_world;
+extern darken_entity_t g_player;
 extern GameState g_state;
 extern MapId g_map;
-extern darken_entity g_battle_enemy;
+extern darken_entity_t g_battle_enemy;
 extern char g_msg[40];
 extern char g_msg2[40];
 
@@ -182,9 +182,9 @@ extern char g_msg2[40];
 /* address never moves") is what makes this safe to do from inside a state  */
 /* callback.                                                                */
 /* ---------------------------------------------------------------------- */
-static inline darken_entity darken_entity_from_data(void *data)
+static inline darken_entity_t darken_entity_from_data(void *data)
 {
-    return (darken_entity)((uint8_t *)data - (uint32_t)&((darken_entity)0)->data);
+    return (darken_entity_t)((uint8_t *)data - (uint32_t)&((darken_entity_t)0)->data);
 }
 
 /* ui: small sprintf+VDP_drawText helper shared by every screen (world.c) */
@@ -197,19 +197,19 @@ extern char world_dungeon[MAP_H][MAP_W + 1];
 void build_maps(void);
 const char (*current_map(void))[MAP_W + 1];
 u16 tile_blocked(s16 x, s16 y);
-void entity_pos(darken_entity e, s16 *x, s16 *y);
-void entity_set_pos(darken_entity e, s16 x, s16 y);
-darken_entity entity_at(s16 x, s16 y);
+void entity_pos(darken_entity_t e, s16 *x, s16 *y);
+void entity_set_pos(darken_entity_t e, s16 x, s16 y);
+darken_entity_t entity_at(s16 x, s16 y);
 void switch_map(MapId new_map);
 void render_explore(void);
 void try_move_player(s16 dx, s16 dy);
 void try_interact(void);
 
 /* entities.c --------------------------------------------------------------*/
-darken_entity spawn_player(s16 x, s16 y);
-darken_entity spawn_enemy(EnemyType type, s16 x, s16 y, MapId map);
-darken_entity spawn_item(ItemType type, s16 x, s16 y, s16 value, MapId map);
-darken_entity spawn_npc(const char *name, s16 x, s16 y, MapId map);
+darken_entity_t spawn_player(s16 x, s16 y);
+darken_entity_t spawn_enemy(EnemyType type, s16 x, s16 y, MapId map);
+darken_entity_t spawn_item(ItemType type, s16 x, s16 y, s16 value, MapId map);
+darken_entity_t spawn_npc(const char *name, s16 x, s16 y, MapId map);
 void spawn_world(void);
 void player_gain_exp(s16 amount);
 char enemy_glyph(EnemyType t);
@@ -220,7 +220,7 @@ void *enemy_state_patrol(void *data);
 void *enemy_state_chase(void *data);
 
 /* battle.c ------------------------------------------------------------- */
-void battle_start(darken_entity enemy);
+void battle_start(darken_entity_t enemy);
 void render_battle(void);
 void battle_input(u16 pressed);
 

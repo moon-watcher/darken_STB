@@ -105,7 +105,7 @@
 
 // #define TEST_MGR_CAPACITY 32
 // DARKEN_POOL_DECLARE(test_mgr_storage, TEST_MGR_CAPACITY, sizeof(TestData));
-// static darken test_mgr = DARKEN_POOL_INIT(test_mgr_storage);
+// static darken test_mgr = DARKEN_INIT(test_mgr_storage);
 
 // #define TEST_SYS_CAPACITY 32
 // #define TEST_SYS_PARAMS 2
@@ -429,7 +429,7 @@
 
 // #define BENCH_MGR_CAPACITY 128
 // DARKEN_POOL_DECLARE(bench_mgr_storage, BENCH_MGR_CAPACITY, sizeof(TestData));
-// static darken bench_mgr = DARKEN_POOL_INIT(bench_mgr_storage);
+// static darken bench_mgr = DARKEN_INIT(bench_mgr_storage);
 
 // #define BENCH_SYS_CAPACITY 128
 // #define BENCH_SYS_PARAMS 2

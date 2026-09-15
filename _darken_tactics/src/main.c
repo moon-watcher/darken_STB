@@ -22,7 +22,7 @@
  *
  * WHAT THIS EXAMPLE ACTUALLY EXERCISES FROM darken.h
  * ------------------------------------------------------------
- * - DARKEN_POOL_DECLARE / DARKEN_POOL_INIT — a single static pool holds
+ * - DARKEN_DECLARE / DARKEN_POOL_INIT — a single static pool holds
  *   every unit on the field, both teams together.
  * - DARKEN_SPAWN — creating heroes and monsters.
  * - update()/destroy() in DIRECT mode — see unit_update()/unit_destroy().
@@ -117,8 +117,8 @@ struct unit
    what it means — `team` here is just a field we defined, same as x/y or
    hp. Nothing about darken.h treats player units and enemy units any
    differently; every distinction below is us filtering by u->team. */
-DARKEN_POOL_DECLARE(unit_storage, MAX_UNITS, sizeof(struct unit));
-static darken units = DARKEN_POOL_INIT(unit_storage);
+DARKEN_DECLARE(unit_storage, MAX_UNITS, sizeof(struct unit));
+static darken_t units = DARKEN_INIT(unit_storage);
 
 /* ----------------------------------------------------------------------
  * Turn / selection state
@@ -147,9 +147,9 @@ static Sprite *cursor_sprite;
    (so a cancelled move can put it back). Held across many frames while
    the player deliberates — safe only because darken.h guarantees this
    handle's target never moves in memory while paused/active/resumed. */
-static darken_entity active_unit    = 0;
+static darken_entity_t active_unit    = 0;
 static u8             active_start_x = 0, active_start_y = 0;
-static darken_entity  attack_target = 0;
+static darken_entity_t  attack_target = 0;
 
 /* ----------------------------------------------------------------------
  * Forward declarations (the call graph isn't a straight line)
@@ -157,7 +157,7 @@ static darken_entity  attack_target = 0;
 
 static void begin_phase(Phase p);
 static void run_enemy_phase(void);
-static void resolve_attack(darken_entity attacker_e, darken_entity target_e);
+static void resolve_attack(darken_entity_t attacker_e, darken_entity_t target_e);
 static void check_victory(void);
 
 /* ----------------------------------------------------------------------
@@ -173,7 +173,7 @@ static u16 manhattan(u8 ax, u8 ay, u8 bx, u8 by)
 
 /* darken_entity is `struct darken_entity *`; DARKEN_DATA gets a typed
    pointer to the payload. Wrapped here purely for readability below. */
-static struct unit *unit_of(darken_entity e) { DARKEN_DATA(struct unit, u, e); return u; }
+static struct unit *unit_of(darken_entity_t e) { DARKEN_DATA(struct unit, u, e); return u; }
 
 static void show_message(const char *msg)
 {
@@ -218,17 +218,17 @@ static void wait_frames(u16 n)
  * DARKEN_FOREACH itself does internally for the active half.
  * -------------------------------------------------------------------- */
 
-static darken_entity unit_at(u8 gx, u8 gy)
+static darken_entity_t unit_at(u8 gx, u8 gy)
 {
     u16 i;
     for (i = 0; i < units.size; i++)
     {
-        darken_entity e = units.pool[i];
+        darken_entity_t e = units.pool[i];
         if (unit_of(e)->gx == gx && unit_of(e)->gy == gy) return e;
     }
     for (i = units.paused; i < units.capacity; i++)
     {
-        darken_entity e = units.pool[i];
+        darken_entity_t e = units.pool[i];
         if (unit_of(e)->gx == gx && unit_of(e)->gy == gy) return e;
     }
     return 0;
@@ -247,15 +247,15 @@ static u16 count_team_alive(Team team)
 /* Nearest unit that does NOT belong to `team` — i.e. "nearest enemy of
    `team`". Used both by the player (find a target near the unit they just
    moved) and by the AI (find the nearest hero to walk towards). */
-static darken_entity nearest_enemy_of(Team team, u8 gx, u8 gy)
+static darken_entity_t nearest_enemy_of(Team team, u8 gx, u8 gy)
 {
-    darken_entity best      = 0;
+    darken_entity_t best      = 0;
     u16           best_dist = 0xFFFF;
     u16           i;
 
     for (i = 0; i < units.size; i++)
     {
-        darken_entity e = units.pool[i];
+        darken_entity_t e = units.pool[i];
         struct unit  *u = unit_of(e);
         if (u->team == team) continue;
         u16 d = manhattan(gx, gy, u->gx, u->gy);
@@ -263,7 +263,7 @@ static darken_entity nearest_enemy_of(Team team, u8 gx, u8 gy)
     }
     for (i = units.paused; i < units.capacity; i++)
     {
-        darken_entity e = units.pool[i];
+        darken_entity_t e = units.pool[i];
         struct unit  *u = unit_of(e);
         if (u->team == team) continue;
         u16 d = manhattan(gx, gy, u->gx, u->gy);
@@ -323,7 +323,7 @@ static void resume_team(Team team)
    callback — so update() has one small, honest job: keep the hardware
    sprite in sync with the logical grid position, for whichever unit(s)
    just moved this frame. */
-static void unit_update(darken_entity entity, struct unit *u)
+static void unit_update(darken_entity_t entity, struct unit *u)
 {
     (void)entity;
     SPR_setPosition(u->spr, grid_px_x(u->gx), grid_px_y(u->gy));
@@ -332,7 +332,7 @@ static void unit_update(darken_entity entity, struct unit *u)
 /* Called once, right before a unit is actually removed from the pool.
    Its only job is to give back the hardware sprite slot — darken.h
    doesn't know SGDK sprites exist, that link only lives in *our* payload. */
-static void unit_destroy(darken_entity entity, struct unit *u)
+static void unit_destroy(darken_entity_t entity, struct unit *u)
 {
     (void)entity;
     SPR_releaseSprite(u->spr);
@@ -345,7 +345,7 @@ static void unit_destroy(darken_entity entity, struct unit *u)
    acts entirely while every hero is paused from having already gone this
    round) would otherwise skip its destroy() callback and leak its sprite.
    Resuming right before deleting guarantees destroy() always runs. */
-static void kill_unit(darken_entity e)
+static void kill_unit(darken_entity_t e)
 {
     darken_entity_resume(e);
     darken_entity_delete(e);
@@ -355,9 +355,9 @@ static void kill_unit(darken_entity e)
  * Spawning
  * -------------------------------------------------------------------- */
 
-static darken_entity spawn_unit(Team team, UnitClass cls, u8 gx, u8 gy)
+static darken_entity_t spawn_unit(Team team, UnitClass cls, u8 gx, u8 gy)
 {
-    darken_entity e = DARKEN_SPAWN(&units);
+    darken_entity_t e = DARKEN_SPAWN(&units);
     if (!e) return 0; /* pool full */
 
     struct unit *u = unit_of(e);
@@ -407,7 +407,7 @@ static darken_entity spawn_unit(Team team, UnitClass cls, u8 gx, u8 gy)
  * Combat
  * -------------------------------------------------------------------- */
 
-static void resolve_attack(darken_entity attacker_e, darken_entity target_e)
+static void resolve_attack(darken_entity_t attacker_e, darken_entity_t target_e)
 {
     struct unit *a = unit_of(attacker_e);
     struct unit *t = unit_of(target_e);
@@ -426,9 +426,9 @@ static void resolve_attack(darken_entity attacker_e, darken_entity target_e)
  * Enemy AI — one simple pass per enemy unit, per enemy phase
  * -------------------------------------------------------------------- */
 
-static void ai_take_turn(darken_entity self_e, struct unit *self)
+static void ai_take_turn(darken_entity_t self_e, struct unit *self)
 {
-    darken_entity target_e = nearest_enemy_of(TEAM_ENEMY, self->gx, self->gy);
+    darken_entity_t target_e = nearest_enemy_of(TEAM_ENEMY, self->gx, self->gy);
     if (!target_e) return; /* no heroes left; shouldn't normally happen mid-phase */
 
     struct unit *target = unit_of(target_e);
@@ -568,7 +568,7 @@ static void handle_player_input(u16 pressed)
 
             if (pressed & BUTTON_A)
             {
-                darken_entity e = unit_at(cursor_x, cursor_y);
+                darken_entity_t e = unit_at(cursor_x, cursor_y);
                 /* DARKEN_ENTITY_IN_ACTIVE(e) is exactly "hasn't acted yet
                    this round": only the current phase's team ever has
                    members in the active zone (see the big comment above). */
@@ -600,7 +600,7 @@ static void handle_player_input(u16 pressed)
             {
                 struct unit  *u        = unit_of(active_unit);
                 u16           dist     = manhattan(active_start_x, active_start_y, cursor_x, cursor_y);
-                darken_entity occupant = unit_at(cursor_x, cursor_y);
+                darken_entity_t occupant = unit_at(cursor_x, cursor_y);
 
                 if (dist > (u16)u->move_range || (occupant && occupant != active_unit))
                 {
@@ -660,7 +660,7 @@ static void handle_player_input(u16 pressed)
 
 static void update_hud(void)
 {
-    darken_entity e = (pstate == PS_SELECT_UNIT) ? unit_at(cursor_x, cursor_y) : active_unit;
+    darken_entity_t e = (pstate == PS_SELECT_UNIT) ? unit_at(cursor_x, cursor_y) : active_unit;
 
     if (e)
     {

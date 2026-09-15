@@ -78,23 +78,23 @@ u16 tile_blocked(s16 x, s16 y)
 /* Every EntityData variant shares `s16 x; s16 y;` as its first two members,
  * so reading/writing through .player is valid regardless of which variant
  * is actually live (C's "common initial sequence" rule for unions). */
-void entity_pos(darken_entity e, s16 *x, s16 *y)
+void entity_pos(darken_entity_t e, s16 *x, s16 *y)
 {
     EntityData *d = (EntityData *)e->data;
     *x = d->player.x;
     *y = d->player.y;
 }
 
-void entity_set_pos(darken_entity e, s16 x, s16 y)
+void entity_set_pos(darken_entity_t e, s16 x, s16 y)
 {
     EntityData *d = (EntityData *)e->data;
     d->player.x = x;
     d->player.y = y;
 }
 
-darken_entity entity_at(s16 x, s16 y)
+darken_entity_t entity_at(s16 x, s16 y)
 {
-    darken_entity found = NULL;
+    darken_entity_t found = NULL;
 
     DARKEN_FOREACH(&g_world, {
         s16 ex;
@@ -115,7 +115,7 @@ darken_entity entity_at(s16 x, s16 y)
  * they occupy does. */
 void switch_map(MapId new_map)
 {
-    darken_entity snap[MAX_ENTITIES];
+    darken_entity_t snap[MAX_ENTITIES];
     u16 n, i;
 
     n = 0;
@@ -175,7 +175,7 @@ void render_explore(void)
     VDP_drawText("D-PAD MOVE   A TALK   B STATUS", MAP_X, 26);
 }
 
-static void pickup_item(darken_entity item)
+static void pickup_item(darken_entity_t item)
 {
     ItemData *d = &((EntityData *)item->data)->item;
     PlayerData *p = (PlayerData *)g_player->data;
@@ -213,7 +213,7 @@ void try_move_player(s16 dx, s16 dy)
     }
     else
     {
-        darken_entity other = entity_at(nx, ny);
+        darken_entity_t other = entity_at(nx, ny);
         if (other && other->tag == KIND_ENEMY)
         {
             battle_start(other);
@@ -271,7 +271,7 @@ void try_interact(void)
 
     for (i = 0; i < 4; i++)
     {
-        darken_entity other = entity_at(p->x + off[i][0], p->y + off[i][1]);
+        darken_entity_t other = entity_at(p->x + off[i][0], p->y + off[i][1]);
         if (other && other->tag == KIND_NPC)
         {
             g_state = GS_SHOP;

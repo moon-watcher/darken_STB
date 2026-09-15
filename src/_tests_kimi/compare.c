@@ -78,8 +78,8 @@ static void st_bbb_walk(void *d)
  * ============================================================================ */
 static void bench_create_reset_32_darken(void)
 {
-    DARKEN_POOL_DECLARE(st, 32, sizeof(struct MyComponent));
-    darken m = DARKEN_POOL_BIND(st);
+    DARKEN_DECLARE(st, 32, sizeof(struct MyComponent));
+    darken_t m = DARKEN_BIND(st);
     darken_init(&m);
 
     u32 t0 = bench_start();
@@ -116,12 +116,12 @@ static void bench_create_reset_32_bbb(void)
  * ============================================================================ */
 static void bench_update_loop_32_darken(void)
 {
-    DARKEN_POOL_DECLARE(st, 32, sizeof(struct MyComponent));
-    darken m = DARKEN_POOL_BIND(st);
+    DARKEN_DECLARE(st, 32, sizeof(struct MyComponent));
+    darken_t m = DARKEN_BIND(st);
     darken_init(&m);
     for (u16 i = 0; i < 32; ++i)
     {
-        darken_entity e = DARKEN_SPAWN(&m);
+        darken_entity_t e = DARKEN_SPAWN(&m);
         e->update = st_DARKEN_CONTINUE;
     }
     u32 t0 = bench_start();
@@ -154,12 +154,12 @@ static void bench_update_loop_32_bbb(void)
  * ============================================================================ */
 static void bench_update_transition_darken(void)
 {
-    DARKEN_POOL_DECLARE(st, 32, sizeof(struct MyComponent));
-    darken m = DARKEN_POOL_BIND(st);
+    DARKEN_DECLARE(st, 32, sizeof(struct MyComponent));
+    darken_t m = DARKEN_BIND(st);
     darken_init(&m);
     for (u16 i = 0; i < 32; ++i)
     {
-        darken_entity e = DARKEN_SPAWN(&m);
+        darken_entity_t e = DARKEN_SPAWN(&m);
         e->update = st_darken_once_then_walk; /* cambia a walk en 1er frame */
     }
     u32 t0 = bench_start();
@@ -202,12 +202,12 @@ static void bench_update_transition_bbb(void)
  * ============================================================================ */
 static void bench_selfkill_darken(void)
 {
-    DARKEN_POOL_DECLARE(st, 32, sizeof(struct MyComponent));
-    darken m = DARKEN_POOL_BIND(st);
+    DARKEN_DECLARE(st, 32, sizeof(struct MyComponent));
+    darken_t m = DARKEN_BIND(st);
     darken_init(&m);
     for (u16 i = 0; i < 32; ++i)
     {
-        darken_entity e = DARKEN_SPAWN(&m);
+        darken_entity_t e = DARKEN_SPAWN(&m);
         e->update = st_darken_delete;
     }
     u32 t0 = bench_start();
@@ -246,12 +246,12 @@ static void bench_selfkill_bbb(void)
  * ============================================================================ */
 static void bench_update_128_darken(void)
 {
-    DARKEN_POOL_DECLARE(st, 128, sizeof(struct MyComponent));
-    darken m = DARKEN_POOL_BIND(st);
+    DARKEN_DECLARE(st, 128, sizeof(struct MyComponent));
+    darken_t m = DARKEN_BIND(st);
     darken_init(&m);
     for (u16 i = 0; i < 128; ++i)
     {
-        darken_entity e = DARKEN_SPAWN(&m);
+        darken_entity_t e = DARKEN_SPAWN(&m);
         e->update = st_darken_walk;
     }
     u32 t0 = bench_start();
@@ -278,12 +278,12 @@ static void bench_update_128_bbb(void)
 
 static void bench_update_256_darken(void)
 {
-    DARKEN_POOL_DECLARE(st, 256, sizeof(struct MyComponent));
-    darken m = DARKEN_POOL_BIND(st);
+    DARKEN_DECLARE(st, 256, sizeof(struct MyComponent));
+    darken_t m = DARKEN_BIND(st);
     darken_init(&m);
     for (u16 i = 0; i < 256; ++i)
     {
-        darken_entity e = DARKEN_SPAWN(&m);
+        darken_entity_t e = DARKEN_SPAWN(&m);
         e->update = st_darken_walk;
     }
     u32 t0 = bench_start();
@@ -313,10 +313,10 @@ static void bench_update_256_bbb(void)
  * ============================================================================ */
 static void bench_pause_resume_darken(void)
 {
-    DARKEN_POOL_DECLARE(st, 32, sizeof(struct MyComponent));
-    darken m = DARKEN_POOL_BIND(st);
+    DARKEN_DECLARE(st, 32, sizeof(struct MyComponent));
+    darken_t m = DARKEN_BIND(st);
     darken_init(&m);
-    darken_entity ents[32];
+    darken_entity_t ents[32];
     for (u16 i = 0; i < 32; ++i)
     {
         ents[i] = DARKEN_SPAWN(&m);
@@ -360,11 +360,11 @@ static void bench_pause_resume_bbb(void)
  * ============================================================================ */
 static void bench_swap_darken(void)
 {
-    DARKEN_POOL_DECLARE(st, 2, sizeof(struct MyComponent));
-    darken m = DARKEN_POOL_BIND(st);
+    DARKEN_DECLARE(st, 2, sizeof(struct MyComponent));
+    darken_t m = DARKEN_BIND(st);
     darken_init(&m);
-    darken_entity a = DARKEN_SPAWN(&m);
-    darken_entity b = DARKEN_SPAWN(&m);
+    darken_entity_t a = DARKEN_SPAWN(&m);
+    darken_entity_t b = DARKEN_SPAWN(&m);
     u32 t0 = bench_start();
     for (u32 r = 0; r < BENCH_REPS_SWAP; ++r)
     {
@@ -398,15 +398,15 @@ static void bench_swap_bbb(void)
  * ============================================================================ */
 static void bench_apply_delete_darken(void)
 {
-    DARKEN_POOL_DECLARE(st, 32, sizeof(struct MyComponent));
-    darken m = DARKEN_POOL_BIND(st);
+    DARKEN_DECLARE(st, 32, sizeof(struct MyComponent));
+    darken_t m = DARKEN_BIND(st);
     darken_init(&m);
     u32 t0 = bench_start();
     for (u32 r = 0; r < BENCH_REPS_SMALL; ++r)
     {
         for (u16 i = 0; i < 32; ++i)
         {
-            darken_entity e = DARKEN_SPAWN(&m);
+            darken_entity_t e = DARKEN_SPAWN(&m);
             e->tag = i;
         }
         uint16_t idx = 0;
@@ -465,12 +465,12 @@ static void *st_darken_mixed(void *d)
 
 static void bench_mixed_stress_darken(void)
 {
-    DARKEN_POOL_DECLARE(st, 64, sizeof(struct MyComponent));
-    darken m = DARKEN_POOL_BIND(st);
+    DARKEN_DECLARE(st, 64, sizeof(struct MyComponent));
+    darken_t m = DARKEN_BIND(st);
     darken_init(&m);
     for (u16 i = 0; i < 64; ++i)
     {
-        darken_entity e = DARKEN_SPAWN(&m);
+        darken_entity_t e = DARKEN_SPAWN(&m);
         e->update = st_darken_mixed;
         ((struct MyComponent *)e->data)->x = i;
     }
@@ -483,7 +483,7 @@ static void bench_mixed_stress_darken(void)
             darken_reset(&m);
             for (u16 i = 0; i < 64; ++i)
             {
-                darken_entity e = DARKEN_SPAWN(&m);
+                darken_entity_t e = DARKEN_SPAWN(&m);
                 e->update = st_darken_mixed;
                 ((struct MyComponent *)e->data)->x = i;
             }
@@ -545,8 +545,8 @@ static void bench_mixed_stress_bbb(void)
  * ============================================================================ */
 static void bench_empty_darken(void)
 {
-    DARKEN_POOL_DECLARE(st, 64, sizeof(struct MyComponent));
-    darken m = DARKEN_POOL_BIND(st);
+    DARKEN_DECLARE(st, 64, sizeof(struct MyComponent));
+    darken_t m = DARKEN_BIND(st);
     darken_init(&m);
     u32 t0 = bench_start();
     for (u32 r = 0; r < BENCH_REPS_SMALL; ++r)
@@ -573,15 +573,15 @@ static void bench_memory_overhead(void)
     kprintf("========== MEMORIA ==========");
     u16 stride = _DARKEN_ENTITY_STRIDE(sizeof(struct MyComponent));
     kprintf("stride MyComponent: %d bytes/entidad", stride);
-    kprintf("sizeof(darken_entity) base: %d", (int)sizeof(struct darken_entity));
+    kprintf("sizeof(darken_entity) base: %d", (int)sizeof(struct darken_entity_t));
     kprintf("sizeof(bbb_entity)   base: %d", (int)sizeof(struct bbb_entity));
 
     u32 ram = 64 * 1024;
     kprintf("Entidades en 64KB: ~%ld", ram / stride);
 
-    DARKEN_POOL_DECLARE(st32, 32, sizeof(struct MyComponent));
+    DARKEN_DECLARE(st32, 32, sizeof(struct MyComponent));
     kprintf("Pool 32:  %d bytes storage", 32 * stride);
-    DARKEN_POOL_DECLARE(st128, 128, sizeof(struct MyComponent));
+    DARKEN_DECLARE(st128, 128, sizeof(struct MyComponent));
     kprintf("Pool 128: %d bytes storage", 128 * stride);
     kprintf("==============================");
 }

@@ -166,8 +166,8 @@ typedef struct {
     s16 max_hp;
     s16 t;
     u8  timer;
-    darken_entity shield_left;
-    darken_entity shield_right;
+    darken_entity_t shield_left;
+    darken_entity_t shield_right;
 } boss_data;
 
 /* ============================================================================
@@ -187,13 +187,13 @@ typedef struct {
 
 static game_state G = {0};
 
-static darken       world;
+static darken_t       world;
 static DARKEN_STORAGE(world_storage, MAX_ENTITIES, PAYLOAD_SIZE);
 
-static darken       fx_world;
+static darken_t       fx_world;
 static DARKEN_STORAGE(fx_storage, MAX_ENTITIES, PAYLOAD_SIZE);
 
-static darken_entity player_entity = 0;
+static darken_entity_t player_entity = 0;
 
 static s16 pending_x[8];
 static s16 pending_y[8];
@@ -490,7 +490,7 @@ static void *state_particle_fade(particle_data *p)
 
 static void spawn_player_bullet(s16 x, s16 y, s16 vx, s16 vy)
 {
-    darken_entity b = darken_spawn(&world);
+    darken_entity_t b = darken_spawn(&world);
     if (!b) return;
     DARKEN_DATA(bullet_data, bul, b);
     bul->x = x; bul->y = y;
@@ -501,7 +501,7 @@ static void spawn_player_bullet(s16 x, s16 y, s16 vx, s16 vy)
 
 static void spawn_enemy_bullet(s16 x, s16 y, s16 vx, s16 vy)
 {
-    darken_entity b = darken_spawn(&world);
+    darken_entity_t b = darken_spawn(&world);
     if (!b) return;
     DARKEN_DATA(bullet_data, bul, b);
     bul->x = x; bul->y = y;
@@ -512,7 +512,7 @@ static void spawn_enemy_bullet(s16 x, s16 y, s16 vx, s16 vy)
 
 static void spawn_enemy(u8 etype, s16 x, s16 y)
 {
-    darken_entity e = darken_spawn(&world);
+    darken_entity_t e = darken_spawn(&world);
     if (!e) return;
     DARKEN_DATA(enemy_data, ed, e);
     ed->x = x; ed->y = y;
@@ -533,7 +533,7 @@ static void spawn_enemy(u8 etype, s16 x, s16 y)
 
 static void spawn_powerup(s16 x, s16 y)
 {
-    darken_entity e = darken_spawn(&world);
+    darken_entity_t e = darken_spawn(&world);
     if (!e) return;
     DARKEN_DATA(powerup_data, pwr, e);
     pwr->x = x; pwr->y = y;
@@ -546,7 +546,7 @@ static void spawn_powerup(s16 x, s16 y)
 
 static void spawn_particle(s16 x, s16 y, u8 color)
 {
-    darken_entity p = darken_spawn(&fx_world);
+    darken_entity_t p = darken_spawn(&fx_world);
     if (!p) return;
     DARKEN_DATA(particle_data, pt, p);
     pt->x = x; pt->y = y;
@@ -560,7 +560,7 @@ static void spawn_particle(s16 x, s16 y, u8 color)
 
 static void spawn_boss(void)
 {
-    darken_entity boss = darken_spawn(&world);
+    darken_entity_t boss = darken_spawn(&world);
     if (!boss) return;
     DARKEN_DATA(boss_data, b, boss);
     b->x = 160; b->y = -16;
@@ -572,7 +572,7 @@ static void spawn_boss(void)
     boss->destructor = destructor_boss;
     boss->tag = TAG_BOSS;
 
-    darken_entity sl = darken_spawn(&world);
+    darken_entity_t sl = darken_spawn(&world);
     if (sl) {
         DARKEN_DATA(enemy_data, sed, sl);
         sed->x = b->x - 24; sed->y = b->y;
@@ -581,7 +581,7 @@ static void spawn_boss(void)
         sl->tag = TAG_BOSS_SHIELD;
         b->shield_left = sl;
     }
-    darken_entity sr = darken_spawn(&world);
+    darken_entity_t sr = darken_spawn(&world);
     if (sr) {
         DARKEN_DATA(enemy_data, sed, sr);
         sed->x = b->x + 24; sed->y = b->y;
@@ -609,12 +609,12 @@ static void check_collisions(void)
 
     /* Player bullets vs enemies/boss/shields */
     for (i = world.size - 1; i >= 0; --i) {
-        darken_entity bul = world.pool[i];
+        darken_entity_t bul = world.pool[i];
         if (bul->tag != TAG_PLAYER_BULLET) continue;
         DARKEN_DATA(bullet_data, bd, bul);
 
         for (j = world.size - 1; j >= 0; --j) {
-            darken_entity target = world.pool[j];
+            darken_entity_t target = world.pool[j];
             if (target->tag != TAG_ENEMY && target->tag != TAG_BOSS && target->tag != TAG_BOSS_SHIELD)
                 continue;
 
@@ -659,7 +659,7 @@ static void check_collisions(void)
     s16 px = ps->x - 4, py = ps->y - 4;
 
     for (i = world.size - 1; i >= 0; --i) {
-        darken_entity e = world.pool[i];
+        darken_entity_t e = world.pool[i];
         int hit = 0;
 
         if (e->tag == TAG_ENEMY_BULLET) {
