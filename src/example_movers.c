@@ -5,7 +5,7 @@
 #define PARAMS 4
 
 DARKSYS_DECLARE(storage, CAPACITY, PARAMS);
-static darksys system;
+static darksys_t system;
 
 #define assert(x) \
     if (!(x))     \
@@ -20,13 +20,13 @@ static void test_add_data(void)
 
     system = DARKSYS_BIND(storage);
 
-    darksys_handle h = DARKSYS_ADD(&system, &a, &b, &c, &d);
+    darksys_handle_t h = DARKSYS_ADD(&system, &a, &b, &c, &d);
 
     assert(h == 0);
     assert(system.count == 1);
     assert(darksys_valid(&system, h));
 
-    darksys_data row = DARKSYS_DATA(&system, h);
+    darksys_data_t row = DARKSYS_DATA(&system, h);
 
     assert(*(int *)row[0] == 10);
     assert(*(int *)row[1] == 20);
@@ -83,9 +83,9 @@ static void test_remove_middle(void)
     int c2 = 32;
     int c3 = 33;
 
-    darksys_handle a;
-    darksys_handle b;
-    darksys_handle c;
+    darksys_handle_t a;
+    darksys_handle_t b;
+    darksys_handle_t c;
 
     system = DARKSYS_BIND(storage);
 
@@ -100,8 +100,8 @@ static void test_remove_middle(void)
     assert(!darksys_valid(&system, a));
     assert(darksys_valid(&system, c));
 
-    darksys_data rc = DARKSYS_DATA(&system, c);
-    darksys_data rb = DARKSYS_DATA(&system, b);
+    darksys_data_t rc = DARKSYS_DATA(&system, c);
+    darksys_data_t rb = DARKSYS_DATA(&system, b);
 
     assert(*(int *)rc[0] == 30);
     assert(*(int *)rc[1] == 31);
@@ -135,22 +135,22 @@ static void test_handle_reuse(void)
 
     system = DARKSYS_BIND(storage);
 
-    darksys_handle a = DARKSYS_ADD(&system, &a0, &a1, &a2, &a3);
-    darksys_handle b = DARKSYS_ADD(&system, &b0, &b1, &b2, &b3);
+    darksys_handle_t a = DARKSYS_ADD(&system, &a0, &a1, &a2, &a3);
+    darksys_handle_t b = DARKSYS_ADD(&system, &b0, &b1, &b2, &b3);
 
     darksys_remove(&system, a);
 
     assert(!darksys_valid(&system, a));
     assert(darksys_valid(&system, b));
 
-    darksys_handle c = DARKSYS_ADD(&system, &c0, &c1, &c2, &c3);
+    darksys_handle_t c = DARKSYS_ADD(&system, &c0, &c1, &c2, &c3);
 
     assert(c == a);
     assert(system.count == 2);
     assert(darksys_valid(&system, c));
     assert(darksys_valid(&system, b));
 
-    darksys_data rc = DARKSYS_DATA(&system, c);
+    darksys_data_t rc = DARKSYS_DATA(&system, c);
 
     assert(*(int *)rc[0] == 9);
     assert(*(int *)rc[1] == 10);
@@ -174,9 +174,9 @@ static void test_data_write(void)
 
     system = DARKSYS_BIND(storage);
 
-    darksys_handle h = DARKSYS_ADD(&system, &a0, &a1, &a2, &a3);
+    darksys_handle_t h = DARKSYS_ADD(&system, &a0, &a1, &a2, &a3);
 
-    darksys_data row = DARKSYS_DATA(&system, h);
+    darksys_data_t row = DARKSYS_DATA(&system, h);
 
     *(int *)row[0] = 50;
     *(int *)row[1] = 60;
@@ -188,9 +188,9 @@ static void test_data_write(void)
     assert(a2 == 70);
     assert(a3 == 80);
 
-    darksys_handle h2 = DARKSYS_ADD(&system, &b0, &b1, &b2, &b3);
+    darksys_handle_t h2 = DARKSYS_ADD(&system, &b0, &b1, &b2, &b3);
 
-    darksys_data row2 = DARKSYS_DATA(&system, h2);
+    darksys_data_t row2 = DARKSYS_DATA(&system, h2);
 
     assert(*(int *)row2[0] == 100);
     assert(*(int *)row2[1] == 200);
@@ -219,7 +219,7 @@ static void test_clear(void)
     assert(system.next == 0);
     assert(system.free_head == DARKSYS_INVALID_HANDLE);
 
-    darksys_handle h = DARKSYS_ADD(&system, &a, &b, &c, &d);
+    darksys_handle_t h = DARKSYS_ADD(&system, &a, &b, &c, &d);
 
     assert(h == 0);
     assert(system.count == 1);

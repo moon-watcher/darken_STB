@@ -27,7 +27,7 @@ static void test_expect(uint16_t condition, const char *name)
 static void test_basic(void)
 {
     DARKSYS_DECLARE(storage, TEST_CAPACITY, 3);
-    darksys system = DARKSYS_BIND(storage);
+    darksys_t system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -41,7 +41,7 @@ static void test_basic(void)
     test_expect(system.next == 0, "next");
     test_expect(system.free_head == DARKSYS_INVALID_HANDLE, "free_head");
 
-    darksys_handle handle = DARKSYS_ADD(&system, &a, &b, &c);
+    darksys_handle_t handle = DARKSYS_ADD(&system, &a, &b, &c);
 
     test_expect(handle == 0, "first handle");
     test_expect(handle != DARKSYS_INVALID_HANDLE, "first valid handle");
@@ -81,11 +81,11 @@ static void test_add_params(void)
     DARKSYS_DECLARE(s4_storage, 4, 4);
     DARKSYS_DECLARE(s5_storage, 4, 5);
 
-    darksys s1 = DARKSYS_BIND(s1_storage);
-    darksys s2 = DARKSYS_BIND(s2_storage);
-    darksys s3 = DARKSYS_BIND(s3_storage);
-    darksys s4 = DARKSYS_BIND(s4_storage);
-    darksys s5 = DARKSYS_BIND(s5_storage);
+    darksys_t s1 = DARKSYS_BIND(s1_storage);
+    darksys_t s2 = DARKSYS_BIND(s2_storage);
+    darksys_t s3 = DARKSYS_BIND(s3_storage);
+    darksys_t s4 = DARKSYS_BIND(s4_storage);
+    darksys_t s5 = DARKSYS_BIND(s5_storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -122,7 +122,7 @@ static void test_add_params(void)
 
     {
         DARKSYS_DECLARE(invalid_storage, 4, 3);
-        darksys system = DARKSYS_BIND(invalid_storage);
+        darksys_t system = DARKSYS_BIND(invalid_storage);
 
         test_expect(
             DARKSYS_ADD(&system, &a, &b) == DARKSYS_INVALID_HANDLE,
@@ -173,14 +173,14 @@ static void test_add_params(void)
 static void test_direct_add(void)
 {
     DARKSYS_DECLARE(storage, 4, 2);
-    darksys system = DARKSYS_BIND(storage);
+    darksys_t system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
 
     kprintf("=== TEST DIRECT ADD === ");
 
-    darksys_handle handle = darksys_add(&system);
+    darksys_handle_t handle = darksys_add(&system);
 
     test_expect(handle == 0, "direct add handle");
     test_expect(handle != DARKSYS_INVALID_HANDLE, "direct add valid");
@@ -211,7 +211,7 @@ static void test_direct_add(void)
 static void test_valid(void)
 {
     DARKSYS_DECLARE(storage, 4, 2);
-    darksys system = DARKSYS_BIND(storage);
+    darksys_t system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -223,7 +223,7 @@ static void test_valid(void)
         "empty invalid"
     );
 
-    darksys_handle handle = DARKSYS_ADD(&system, &a, &b);
+    darksys_handle_t handle = DARKSYS_ADD(&system, &a, &b);
 
     test_expect(
         darksys_valid(&system, handle),
@@ -255,7 +255,7 @@ static void test_valid(void)
 static void test_data(void)
 {
     DARKSYS_DECLARE(storage, 4, 3);
-    darksys system = DARKSYS_BIND(storage);
+    darksys_t system = DARKSYS_BIND(storage);
 
     uint16_t a = 10;
     uint16_t b = 20;
@@ -263,7 +263,7 @@ static void test_data(void)
 
     kprintf("=== TEST DATA === ");
 
-    darksys_handle handle = DARKSYS_ADD(&system, &a, &b, &c);
+    darksys_handle_t handle = DARKSYS_ADD(&system, &a, &b, &c);
 
     test_expect(
         DARKSYS_DATA(&system, handle)[0] == &a,
@@ -288,7 +288,7 @@ static void test_data(void)
 static void test_remove(void)
 {
     DARKSYS_DECLARE(storage, 4, 3);
-    darksys system = DARKSYS_BIND(storage);
+    darksys_t system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -299,10 +299,10 @@ static void test_remove(void)
 
     kprintf("=== TEST REMOVE === ");
 
-    darksys_handle h0 = DARKSYS_ADD(&system, &a, &b, &c);
-    darksys_handle h1 = DARKSYS_ADD(&system, &b, &c, &d);
-    darksys_handle h2 = DARKSYS_ADD(&system, &c, &d, &e);
-    darksys_handle h3 = DARKSYS_ADD(&system, &d, &e, &f);
+    darksys_handle_t h0 = DARKSYS_ADD(&system, &a, &b, &c);
+    darksys_handle_t h1 = DARKSYS_ADD(&system, &b, &c, &d);
+    darksys_handle_t h2 = DARKSYS_ADD(&system, &c, &d, &e);
+    darksys_handle_t h3 = DARKSYS_ADD(&system, &d, &e, &f);
 
     test_expect(system.count == 4, "remove setup count");
 
@@ -341,12 +341,12 @@ static void test_remove_cases(void)
 
     {
         DARKSYS_DECLARE(storage, 1, 2);
-        darksys system = DARKSYS_BIND(storage);
+        darksys_t system = DARKSYS_BIND(storage);
 
         uint16_t a = 1;
         uint16_t b = 2;
 
-        darksys_handle handle = DARKSYS_ADD(&system, &a, &b);
+        darksys_handle_t handle = DARKSYS_ADD(&system, &a, &b);
 
         darksys_remove(&system, handle);
 
@@ -359,17 +359,17 @@ static void test_remove_cases(void)
 
     {
         DARKSYS_DECLARE(storage, 4, 2);
-        darksys system = DARKSYS_BIND(storage);
+        darksys_t system = DARKSYS_BIND(storage);
 
         uint16_t a = 1;
         uint16_t b = 2;
         uint16_t c = 3;
         uint16_t d = 4;
 
-        darksys_handle ha = DARKSYS_ADD(&system, &a, &b);
-        darksys_handle hb = DARKSYS_ADD(&system, &b, &c);
-        darksys_handle hc = DARKSYS_ADD(&system, &c, &d);
-        darksys_handle hd = DARKSYS_ADD(&system, &d, &a);
+        darksys_handle_t ha = DARKSYS_ADD(&system, &a, &b);
+        darksys_handle_t hb = DARKSYS_ADD(&system, &b, &c);
+        darksys_handle_t hc = DARKSYS_ADD(&system, &c, &d);
+        darksys_handle_t hd = DARKSYS_ADD(&system, &d, &a);
 
         darksys_remove(&system, ha);
 
@@ -391,17 +391,17 @@ static void test_remove_cases(void)
 
     {
         DARKSYS_DECLARE(storage, 4, 2);
-        darksys system = DARKSYS_BIND(storage);
+        darksys_t system = DARKSYS_BIND(storage);
 
         uint16_t a = 1;
         uint16_t b = 2;
         uint16_t c = 3;
         uint16_t d = 4;
 
-        darksys_handle ha = DARKSYS_ADD(&system, &a, &b);
-        darksys_handle hb = DARKSYS_ADD(&system, &b, &c);
-        darksys_handle hc = DARKSYS_ADD(&system, &c, &d);
-        darksys_handle hd = DARKSYS_ADD(&system, &d, &a);
+        darksys_handle_t ha = DARKSYS_ADD(&system, &a, &b);
+        darksys_handle_t hb = DARKSYS_ADD(&system, &b, &c);
+        darksys_handle_t hc = DARKSYS_ADD(&system, &c, &d);
+        darksys_handle_t hd = DARKSYS_ADD(&system, &d, &a);
 
         darksys_remove(&system, hb);
 
@@ -423,17 +423,17 @@ static void test_remove_cases(void)
 
     {
         DARKSYS_DECLARE(storage, 4, 2);
-        darksys system = DARKSYS_BIND(storage);
+        darksys_t system = DARKSYS_BIND(storage);
 
         uint16_t a = 1;
         uint16_t b = 2;
         uint16_t c = 3;
         uint16_t d = 4;
 
-        darksys_handle ha = DARKSYS_ADD(&system, &a, &b);
-        darksys_handle hb = DARKSYS_ADD(&system, &b, &c);
-        darksys_handle hc = DARKSYS_ADD(&system, &c, &d);
-        darksys_handle hd = DARKSYS_ADD(&system, &d, &a);
+        darksys_handle_t ha = DARKSYS_ADD(&system, &a, &b);
+        darksys_handle_t hb = DARKSYS_ADD(&system, &b, &c);
+        darksys_handle_t hc = DARKSYS_ADD(&system, &c, &d);
+        darksys_handle_t hd = DARKSYS_ADD(&system, &d, &a);
 
         darksys_remove(&system, hd);
 
@@ -445,17 +445,17 @@ static void test_remove_cases(void)
 
     {
         DARKSYS_DECLARE(storage, 4, 2);
-        darksys system = DARKSYS_BIND(storage);
+        darksys_t system = DARKSYS_BIND(storage);
 
         uint16_t a = 1;
         uint16_t b = 2;
         uint16_t c = 3;
         uint16_t d = 4;
 
-        darksys_handle ha = DARKSYS_ADD(&system, &a, &b);
-        darksys_handle hb = DARKSYS_ADD(&system, &b, &c);
-        darksys_handle hc = DARKSYS_ADD(&system, &c, &d);
-        darksys_handle hd = DARKSYS_ADD(&system, &d, &a);
+        darksys_handle_t ha = DARKSYS_ADD(&system, &a, &b);
+        darksys_handle_t hb = DARKSYS_ADD(&system, &b, &c);
+        darksys_handle_t hc = DARKSYS_ADD(&system, &c, &d);
+        darksys_handle_t hd = DARKSYS_ADD(&system, &d, &a);
 
         darksys_remove(&system, hb);
         darksys_remove(&system, hd);
@@ -498,7 +498,7 @@ static void test_remove_cases(void)
 static void test_free_list(void)
 {
     DARKSYS_DECLARE(storage, 8, 2);
-    darksys system = DARKSYS_BIND(storage);
+    darksys_t system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -507,10 +507,10 @@ static void test_free_list(void)
 
     kprintf("=== TEST FREE LIST === ");
 
-    darksys_handle ha = DARKSYS_ADD(&system, &a, &b);
-    darksys_handle hb = DARKSYS_ADD(&system, &b, &c);
-    darksys_handle hc = DARKSYS_ADD(&system, &c, &d);
-    darksys_handle hd = DARKSYS_ADD(&system, &d, &a);
+    darksys_handle_t ha = DARKSYS_ADD(&system, &a, &b);
+    darksys_handle_t hb = DARKSYS_ADD(&system, &b, &c);
+    darksys_handle_t hc = DARKSYS_ADD(&system, &c, &d);
+    darksys_handle_t hd = DARKSYS_ADD(&system, &d, &a);
 
     darksys_remove(&system, hb);
     test_expect(system.free_head == hb, "free head 1");
@@ -522,17 +522,17 @@ static void test_free_list(void)
     test_expect(system.free_head == ha, "free head 3");
 
     {
-        darksys_handle h = DARKSYS_ADD(&system, &a, &b);
+        darksys_handle_t h = DARKSYS_ADD(&system, &a, &b);
         test_expect(h == ha, "free reuse 1");
     }
 
     {
-        darksys_handle h = DARKSYS_ADD(&system, &b, &c);
+        darksys_handle_t h = DARKSYS_ADD(&system, &b, &c);
         test_expect(h == hd, "free reuse 2");
     }
 
     {
-        darksys_handle h = DARKSYS_ADD(&system, &c, &d);
+        darksys_handle_t h = DARKSYS_ADD(&system, &c, &d);
         test_expect(h == hb, "free reuse 3");
     }
 
@@ -546,7 +546,7 @@ static void test_free_list(void)
 static void test_clear(void)
 {
     DARKSYS_DECLARE(storage, 8, 3);
-    darksys system = DARKSYS_BIND(storage);
+    darksys_t system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -580,7 +580,7 @@ static void test_clear(void)
 static void test_full(void)
 {
     DARKSYS_DECLARE(storage, 4, 1);
-    darksys system = DARKSYS_BIND(storage);
+    darksys_t system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
 
@@ -614,7 +614,7 @@ static void test_full(void)
 static void test_invalid(void)
 {
     DARKSYS_DECLARE(storage, 4, 1);
-    darksys system = DARKSYS_BIND(storage);
+    darksys_t system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
 
@@ -652,7 +652,7 @@ static void test_invalid(void)
 static void test_foreach_1(void)
 {
     DARKSYS_DECLARE(storage, 4, 1);
-    darksys system = DARKSYS_BIND(storage);
+    darksys_t system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -687,7 +687,7 @@ static void test_foreach_1(void)
 static void test_foreach_2(void)
 {
     DARKSYS_DECLARE(storage, 4, 2);
-    darksys system = DARKSYS_BIND(storage);
+    darksys_t system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -724,7 +724,7 @@ static void test_foreach_2(void)
 static void test_foreach_3(void)
 {
     DARKSYS_DECLARE(storage, 2, 3);
-    darksys system = DARKSYS_BIND(storage);
+    darksys_t system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -757,7 +757,7 @@ static void test_foreach_3(void)
 static void test_foreach_4(void)
 {
     DARKSYS_DECLARE(storage, 2, 4);
-    darksys system = DARKSYS_BIND(storage);
+    darksys_t system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -793,7 +793,7 @@ static void test_foreach_4(void)
 static void test_foreach_5(void)
 {
     DARKSYS_DECLARE(storage, 2, 5);
-    darksys system = DARKSYS_BIND(storage);
+    darksys_t system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -832,13 +832,13 @@ static void test_foreach_5(void)
 static void test_foreach_remove(void)
 {
     DARKSYS_DECLARE(storage, 8, 3);
-    darksys system = DARKSYS_BIND(storage);
+    darksys_t system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
     uint16_t c = 3;
 
-    darksys_handle handles[5];
+    darksys_handle_t handles[5];
 
     kprintf("=== TEST FOREACH REMOVE === ");
 
@@ -863,7 +863,7 @@ static void test_foreach_remove(void)
 static void test_bind(void)
 {
     DARKSYS_DECLARE(storage, 4, 2);
-    darksys system = DARKSYS_BIND(storage);
+    darksys_t system = DARKSYS_BIND(storage);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -888,7 +888,7 @@ static void test_bind(void)
 
 static void test_alloc(void)
 {
-    darksys system = DARKSYS_ALLOC(MEM_alloc, 8, 3);
+    darksys_t system = DARKSYS_ALLOC(MEM_alloc, 8, 3);
 
     uint16_t a = 1;
     uint16_t b = 2;
@@ -935,18 +935,18 @@ static void test_alloc(void)
 static void bench(void)
 {
     DARKSYS_DECLARE(storage, BENCH_CAPACITY, BENCH_PARAMS);
-    darksys system = DARKSYS_BIND(storage);
+    darksys_t system = DARKSYS_BIND(storage);
 
     static uint16_t values[BENCH_CAPACITY * BENCH_PARAMS];
-    static darksys_handle handles[BENCH_CAPACITY];
+    static darksys_handle_t handles[BENCH_CAPACITY];
 
     uint32_t timer;
     uint32_t total;
     uint32_t sink = 0;
 
-    void *a;
-    void *b;
-    void *c;
+    darksys_data_t a;
+    darksys_data_t b;
+    darksys_data_t c;
 
     kprintf("=== BENCH === ");
     kprintf(
@@ -1137,7 +1137,7 @@ static void bench(void)
 void test_darksys_main(void)
 {
     kprintf("============================== ");
-    kprintf("DARKSYS TEST ");
+    kprintf("DARKSYS_t TEST ");
     kprintf("============================== ");
 
     test_failures = 0;
