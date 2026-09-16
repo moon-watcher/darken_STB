@@ -209,8 +209,7 @@ struct darken_entity_t
 //     darken_t m = DARKEN_ALLOC(MEM_alloc, 5, sizeof(struct MyComponent));
 //     darken_init(&m);
 //     ...
-//     free(m.pool);
-//     free(m.storage);
+//     DARKEN_FREE(MEM_free, &m);
 #define DARKEN_ALLOC(ALLOC, CAPACITY, PAYLOAD)                                      \
     (darken_t)                                                                      \
     {                                                                               \
@@ -219,6 +218,14 @@ struct darken_entity_t
         .capacity = (CAPACITY),                                                     \
         .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                                   \
     }
+
+// Frees the pool and storage blocks previously allocated by DARKEN_ALLOC().
+#define DARKEN_FREE(FREE, CTX)  \
+    do                          \
+    {                           \
+        (FREE)((CTX)->pool);    \
+        (FREE)((CTX)->storage); \
+    } while (0)
 
 // Static allocation with automatic storage duration (stack or global)
 //     DARKEN_DECLARE(storage, 5, sizeof(struct MyComponent));
