@@ -22,7 +22,7 @@
  * #ifdef DARKEN_DIRECT throughout this file.
  */
 
-// #define DARKEN_DIRECT
+#define DARKEN_DIRECT
 
 #include <genesis.h>
 #include "darken-1.1.0_dev.h"
