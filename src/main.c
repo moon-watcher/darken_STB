@@ -1,6 +1,6 @@
 #include <genesis.h>
 
-#define DARKEN_DIRECT
+// #define DARKEN_DIRECT
 
 int main(void)
 {
@@ -18,17 +18,17 @@ int main(void)
     // example_movers();
     // test_darksys();
 
+    // darken_run_tests();
 
-    darken_run_tests();
+    // uint32_t r;
+    // r = darken_bench_init(1000);         kprintf("darken_bench_init: %d", r);
+    // r = darken_bench_spawn(1000);        kprintf("darken_bench_spawn: %d", r);
+    // r = darken_bench_update(1000);       kprintf("darken_bench_update: %d", r);
+    // r = darken_bench_foreach(1000);      kprintf("darken_bench_foreach: %d", r);
+    // r = darken_bench_pause_resume(1000); kprintf("darken_bench_pause_resume: %d", r);
+    // r = darken_bench_delete(1000);       kprintf("darken_bench_delete: %d", r);
 
-    uint32_t r;
-    r = darken_bench_init(1000);         kprintf("darken_bench_init: %d", r);
-    r = darken_bench_spawn(1000);        kprintf("darken_bench_spawn: %d", r);
-    r = darken_bench_update(1000);       kprintf("darken_bench_update: %d", r);
-    r = darken_bench_foreach(1000);      kprintf("darken_bench_foreach: %d", r);
-    r = darken_bench_pause_resume(1000); kprintf("darken_bench_pause_resume: %d", r);
-    r = darken_bench_delete(1000);       kprintf("darken_bench_delete: %d", r);
-
+    darken_sgdk_tests_c();
 
     return 0;
 }
