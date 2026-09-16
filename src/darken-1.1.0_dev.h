@@ -26,6 +26,12 @@
  * the ctx's zones is only the *pointer* to it inside darken.pool[]. This is what makes it safe to keep a raw
  * pointer into entity->data even while the entity gets paused/resumed/reordered.
  *
+ * The ctx itself needs the same guarantee, for the same reason: darken_init() bakes the address it was given
+ * into every entity's ->owner, so the darken_t instance must already be sitting at its final address before
+ * darken_init() runs, and must stay there for as long as the ctx is used. A helper that builds a darken_t on
+ * its own stack and returns it *by value* will compile and look fine, but leaves every entity's ->owner
+ * dangling into a stack frame that no longer exists. Build it in place, or pass a `darken_t *` in.
+ *
  *
  *
  * Ctx: Entity container and lifecycle ctx. Maintains the pointer array in three logical zones:
@@ -47,15 +53,15 @@
  *
  * - Paused zone [paused, capacity):
  *     Entity pointers parked out of the update loop. darken_update() never touches them and DARKEN_FOREACH
- *     never visits them. Crucially, DARKEN_SPAWN() never hands out a slot from this zone, so a paused entity's
- *     slot (and therefore its entity->data pointer) stays valid and untouched until it's explicitly resumed or
- *     deleted. This is what lets keep safely pointing at a paused entity's data.
+ *     never visits them. Crucially, DARKEN_SPAWN() never hands out a slot from this zone, so a paused
+ *     entity's slot (and therefore its entity->data pointer) stays valid and untouched until it's explicitly
+ *     resumed or deleted. This is what lets keep safely pointing at a paused entity's data.
  *
  * Neither darken_init(), nor DARKEN_SPAWN(), nor deletion (whichever path triggers it) initializes or clears
- * update/destroy/tag/usr. An entity handed out by DARKEN_SPAWN() — whether fresh from darken_init() or recycled
- * after a previous entity in that slot was deleted — may still carry whatever values that slot's previous
- * occupant left behind. Setting these fields to the values your entity actually needs (including clearing
- * any you don't want carried over) is the caller's responsibility on every spawn.
+ * update/destroy/tag/usr. An entity handed out by DARKEN_SPAWN() — whether fresh from darken_init() or
+ * recycled after a previous entity in that slot was deleted — may still carry whatever values that slot's
+ * previous occupant left behind. Setting these fields to the values your entity actually needs (including
+ * clearing any you don't want carried over) is the caller's responsibility on every spawn.
  *
  *
  *
@@ -182,7 +188,12 @@ struct darken_entity_t
 #endif
 
 #define _DARKEN_ALIGN(X, A) (((X) + (uintptr_t)(A) - 1) & ~((uintptr_t)(A) - 1))
-#define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN(sizeof(struct darken_entity_t) + (PAYLOAD), 4)
+// Floored at 4 to preserve the original m68k-only behavior exactly (m68k pointers are 4 bytes there).
+// Raised above 4 on hosts (e.g. x86-64) where pointers -- and therefore struct darken_entity_t's
+// update/destroy/owner members -- are wider than 4 bytes, which UBSan will otherwise flag as misaligned
+// access.
+#define _DARKEN_ENTITY_ALIGN (sizeof(void *) > 4 ? sizeof(void *) : 4)
+#define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN(sizeof(struct darken_entity_t) + (PAYLOAD), _DARKEN_ENTITY_ALIGN)
 
 /* ============================================================================
  * PUBLIC API
@@ -212,16 +223,16 @@ struct darken_entity_t
 //     DARKEN_DECLARE(storage, 5, sizeof(struct MyComponent));
 //     darken_t m = DARKEN_BIND(storage);
 //     darken_init(&m);
-#define DARKEN_DECLARE(NAME, CAPACITY, PAYLOAD)                                                \
-    struct                                                                                     \
-    {                                                                                          \
-        uint16_t capacity;                                                                     \
-        uint16_t stride;                                                                       \
-        darken_entity_t pool[(CAPACITY)] __attribute__((aligned(4)));                          \
-        uint8_t data[(CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)] __attribute__((aligned(4))); \
-    } NAME = {                                                                                 \
-        .capacity = (CAPACITY),                                                                \
-        .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                                              \
+#define DARKEN_DECLARE(NAME, CAPACITY, PAYLOAD)                                                                   \
+    struct                                                                                                        \
+    {                                                                                                             \
+        uint16_t capacity;                                                                                        \
+        uint16_t stride;                                                                                          \
+        darken_entity_t pool[(CAPACITY)] __attribute__((aligned(4)));                                             \
+        uint8_t data[(CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)] __attribute__((aligned(_DARKEN_ENTITY_ALIGN))); \
+    } NAME = {                                                                                                    \
+        .capacity = (CAPACITY),                                                                                   \
+        .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                                                                 \
     }
 
 // Static/global initialization: compile-time constants
