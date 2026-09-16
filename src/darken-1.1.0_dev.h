@@ -53,15 +53,15 @@
  *
  * - Paused zone [paused, capacity):
  *     Entity pointers parked out of the update loop. darken_update() never touches them and DARKEN_FOREACH
- *     never visits them. Crucially, DARKEN_SPAWN() never hands out a slot from this zone, so a paused
- *     entity's slot (and therefore its entity->data pointer) stays valid and untouched until it's explicitly
- *     resumed or deleted. This is what lets keep safely pointing at a paused entity's data.
+ *     never visits them. Crucially, DARKEN_SPAWN() never hands out a slot from this zone, so a paused entity's
+ *     slot (and therefore its entity->data pointer) stays valid and untouched until it's explicitly resumed or
+ *     deleted. This is what lets keep safely pointing at a paused entity's data.
  *
  * Neither darken_init(), nor DARKEN_SPAWN(), nor deletion (whichever path triggers it) initializes or clears
- * update/destroy/tag/usr. An entity handed out by DARKEN_SPAWN() — whether fresh from darken_init() or
- * recycled after a previous entity in that slot was deleted — may still carry whatever values that slot's
- * previous occupant left behind. Setting these fields to the values your entity actually needs (including
- * clearing any you don't want carried over) is the caller's responsibility on every spawn.
+ * update/destroy/tag/usr. An entity handed out by DARKEN_SPAWN() — whether fresh from darken_init() or recycled
+ * after a previous entity in that slot was deleted — may still carry whatever values that slot's previous
+ * occupant left behind. Setting these fields to the values your entity actually needs (including clearing
+ * any you don't want carried over) is the caller's responsibility on every spawn.
  *
  *
  *
@@ -212,6 +212,7 @@ struct darken_entity_t
 //     free(m.pool);
 //     free(m.storage);
 #define DARKEN_ALLOC(ALLOC, CAPACITY, PAYLOAD)                                      \
+    (darken_t)                                                                      \
     {                                                                               \
         .pool = (darken_entity_t *)(ALLOC)((CAPACITY) * sizeof(darken_entity_t)),   \
         .storage = (uint8_t *)(ALLOC)((CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)), \
@@ -238,6 +239,7 @@ struct darken_entity_t
 // Static/global initialization: compile-time constants
 // Use when the storage is defined at file scope and you want compile-time initialization
 #define DARKEN_INIT(STORAGE)                                                                   \
+    (darken_t)                                                                                 \
     {                                                                                          \
         .pool = (STORAGE).pool,                                                                \
         .storage = (STORAGE).data,                                                             \
