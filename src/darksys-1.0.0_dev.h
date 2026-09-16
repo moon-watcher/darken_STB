@@ -9,7 +9,6 @@
  * - 16-bit members preference for optimal 68K performance.
  *
  *
- *
  * Stores up to `capacity` records of `params` void* fields each, packed
  * contiguously in `pool` so that iteration is a plain linear pointer walk.
  *
@@ -26,6 +25,28 @@
  * darksys_add() is O(1).
  * darksys_remove() is O(params), because removing a record copies its `params`
  * pointer fields into the freed slot.
+ *
+ *
+ * Capacity ceiling:
+ *
+ * `capacity` is a uint16_t, and DARKSYS_INVALID_HANDLE is 0xFFFF, so the
+ * largest usable capacity is 0xFFFF (65535 handles: 0..0xFFFE). Passing a
+ * literal >= 65536 truncates silently through the uint16_t members; passing
+ * a runtime value that large is undefined behavior the caller must avoid.
+ *
+ *
+ * Storage vs. view (DARKSYS_DECLARE + DARKSYS_BIND):
+ *
+ * DARKSYS_DECLARE lays out the raw memory (pool/lookup/handles + the two
+ * sizing fields). It does NOT carry count/next/free_head -- that triplet is
+ * part of the darksys_t view, not the storage. DARKSYS_BIND therefore gives
+ * you a *fresh* pool over whatever bytes happen to be in the storage arrays.
+ *
+ * Consequence: two darksys_t bound to the same storage share pool[],
+ * lookup[] and handles[] (same memory), but each carries its OWN
+ * count/next/free_head. Mixing operations across two such views will
+ * corrupt the tables. Bind once, keep one darksys_t, and use darksys_clear()
+ * (or a single re-BIND) when you want to start over.
  */
 #pragma once
 
@@ -107,8 +128,14 @@ typedef struct
  * ============================================================================ */
 
 // Allocates pool/lookup/handles with ALLOC (e.g. malloc, or SGDK's MEM_alloc)
-// and returns a brace-init darksys_t ready to use. Pair with DARKSYS_FREE.
+// and yields a (darksys_t){...} compound literal ready to use. Pair with
+// DARKSYS_FREE.
+//
+// Usable anywhere a darksys_t expression is expected (assignment, function
+// argument, ternary, return), not just as a declaration initializer. It mirrors
+// DARKSYS_BIND.
 #define DARKSYS_ALLOC(ALLOC, CAPACITY, PARAMS)                                   \
+    (darksys_t)                                                                  \
     {                                                                            \
         .pool = (darksys_data_t)(ALLOC)((CAPACITY) * (PARAMS) * sizeof(void *)), \
         .lookup = (uint16_t *)(ALLOC)((CAPACITY) * sizeof(uint16_t)),            \
@@ -131,6 +158,10 @@ typedef struct
 // Declares a statically-sized storage struct (no malloc) named NAME, with
 // CAPACITY records of PARAMS fields each. Use DARKSYS_BIND(NAME) to get a
 // `darksys_t` view over it.
+//
+// Note that the struct carries only pool/lookup/handles and the two sizing
+// fields -- count/next/free_head live on the darksys_t view, not here. See
+// the "Storage vs. view" note at the top of this header.
 #define DARKSYS_DECLARE(NAME, CAPACITY, PARAMS)     \
     struct                                          \
     {                                               \
@@ -179,9 +210,10 @@ typedef struct
 
 // Iterates active records in pool order (not handle order), binding one
 // local per field:
-//     void *sprite;
-//     int16_t *x, *y;
-//     DARKSYS_FOREACH(&pool, sprite, x, y, { move(sprite, *x, *y); });
+//     DARKSYS_FOREACH(&pool, Sprite *sprite, int16_t *x, int16_t *y, {
+//         sprite->x += *x;
+//         sprite->y += *y;
+//     });
 //
 // See the write-back note on _DARKSYS_FOREACH_RUN above if the loop body
 // needs to update a field in place.
