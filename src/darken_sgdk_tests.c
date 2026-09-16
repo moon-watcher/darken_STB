@@ -22,7 +22,7 @@
  * #ifdef DARKEN_DIRECT throughout this file.
  */
 
-#define DARKEN_DIRECT
+// #define DARKEN_DIRECT
 
 #include <genesis.h>
 #include "darken-1.1.0_dev.h"
@@ -749,6 +749,4 @@ void darken_sgdk_tests_c()
         sprintf(line, "darken.h: FAIL (%d/%d)", (int)g_failures, (int)g_checks);
     VDP_drawText(line, 2, 12);
     VDP_drawText("see debug console for benchmarks", 2, 14);
-
- 
 }
