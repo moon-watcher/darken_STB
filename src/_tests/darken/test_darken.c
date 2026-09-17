@@ -1,5 +1,5 @@
 #include <stdint.h>
-#include "darken-1.1.0_dev.h"
+#include "../../darken-1.1.0_dev.h"
 
 #define DARKEN_TEST_CAPACITY 32
 

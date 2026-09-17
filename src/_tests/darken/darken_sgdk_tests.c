@@ -27,7 +27,7 @@
 
 #define DARKEN_DIRECT
 #include <stdint.h>
-#include "darken-1.1.0_dev.h"
+#include "../../darken-1.1.0_dev.h"
 
 /* ==========================================================================
  * Shared payload + tiny check/report framework
