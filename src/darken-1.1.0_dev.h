@@ -197,10 +197,10 @@ struct darken_entity_t
 // The argument list is fixed per mode (see the big comment above), so there is nothing to configure here.
 #ifdef DARKEN_DIRECT
 #define _DARKEN_ARGS(ENTITY) (ENTITY), (ENTITY)->data
-#define _DARKEN_FOREACH_ITERATION _entity->update(_DARKEN_ARGS(_entity))
+#define _DARKEN_UPDATE _entity->update(_DARKEN_ARGS(_entity))
 #else
 #define _DARKEN_ARGS(ENTITY) (ENTITY)->data
-#define _DARKEN_FOREACH_ITERATION                                      \
+#define _DARKEN_UPDATE                                                 \
     darken_state_t state = _entity->update(_DARKEN_ARGS(_entity));     \
                                                                        \
     if (state == DARKEN_CONTINUE)                                      \
@@ -451,7 +451,7 @@ static inline void darken_init(darken_t *ctx)
 
 static inline void darken_update(darken_t *ctx)
 {
-    DARKEN_FOREACH(ctx, _DARKEN_FOREACH_ITERATION);
+    DARKEN_FOREACH(ctx, _DARKEN_UPDATE);
 }
 
 // Calls destroy() on every currently active entity, then drops the whole pool back to the free zone
