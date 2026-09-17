@@ -18,7 +18,6 @@ Current version: **darken-1.1.0_dev**
   - [Iterating](#iterating)
   - [API reference](#api-reference)
   - [Complexity](#complexity)
-  - [Limits](#limits)
   - [Gotchas](#gotchas)
 
 ## Requirements
@@ -215,12 +214,9 @@ Visits active entities in **reverse** slot order (`size-1` down to `0`), which i
 | `darken_update`                  | O(active entities)       |
 | `darken_reset`                   | O(active entities)       |
 
-## Limits
-
-`capacity`/`size`/`paused`/`stride` are `uint16_t`, so a single `darken_t` tops out at 65535 entities. Unlike Darksys, Darken has no reserved sentinel value to work around — every value up to 65535 is a usable capacity.
-
 ## Gotchas
 
-- **No staleness detection.** Darken hands you raw pointers, not generation-checked handles. If you keep a `darken_entity_t` around after deleting it, and a later spawn reuses that exact slot, your old pointer now silently refers to the *new* occupant — same address, different entity. If you need to detect this, roll your own generation counter in `tag` or `usr` and check it yourself; Darken (unlike Darksys' `darksys_valid()`) has no built-in way to ask "is this still the entity I think it is?".
+- `capacity`/`size`/`paused`/`stride` are `uint16_t`, so a single `darken_t` tops out at 65535 entities.
+- **No staleness detection.** Darken hands you raw pointers, not generation-checked handles. If you keep a `darken_entity_t` around after deleting it, and a later spawn reuses that exact slot, your old pointer now silently refers to the *new* occupant — same address, different entity. If you need to detect this, roll your own generation counter in `tag` or `usr` and check it yourself; Darken has no built-in way to ask "is this still the entity I think it is?".
 - Fields aren't auto-initialized on spawn (see above) — an entity with a garbage `update` pointer will crash the moment `darken_update()` reaches it.
 - Toolchain and integer-type constraints (GNU C, `<stdint.h>`) are covered in [Requirements](#requirements), not repeated here.
