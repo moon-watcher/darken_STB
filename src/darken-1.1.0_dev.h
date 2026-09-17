@@ -17,12 +17,12 @@
  *    does NOT #include <stdint.h> itself -- the including project must provide them, whether via a plain
  *    `#include <stdint.h>` or whatever equivalent your target already defines them through.
  *
- * 2. A GNU C compiler -- GCC or Clang. Darken relies on GNU C statement expressions (DARKEN_SPAWN),
- *    the __attribute__((aligned)) extension (DARKEN_DECLARE), __alignof__, and _Static_assert
- *    (DARKEN_DECLARE). It will not build under a strict ISO-C-only compiler. Sentinel handling in
- *    state-machine mode (== / > against DARKEN_CONTINUE, DARKEN_DELETE, DARKEN_PAUSE) additionally
- *    relies on GNU C / target-ABI behavior for converting small integer values to function pointers and
- *    comparing function-pointer values with those sentinels.
+ * 2. A GNU C compiler -- GCC or Clang. Darken relies on GNU C statement expressions (DARKEN_SPAWN), the
+ *    __attribute__((aligned)) extension (DARKEN_DECLARE), __alignof__, and _Static_assert (DARKEN_DECLARE).
+ *    It will not build under a strict ISO-C-only compiler. Sentinel handling in state-machine mode 
+ *    (== / > against DARKEN_CONTINUE, DARKEN_DELETE, DARKEN_PAUSE) additionally relies on GNU C / target-ABI
+ *    behavior for converting small integer values to function pointers and comparing function-pointer values
+ *    with those sentinels.
  *
  * 3. CAPACITY must satisfy 1 <= CAPACITY <= 65535, and the computed entity stride must fit in uint16_t.
  *    DARKEN_DECLARE() enforces these constraints with _Static_assert; DARKEN_ALLOC() does not (it is an
@@ -111,7 +111,8 @@
  *         (anything else): treated as a new update callback pointer; installed as entity->update for next
  *                          frame
  *
- *         void *player_walk_state(struct player *data) {
+ *         void *player_walk_state(struct player *data)
+ *         {
  *             data->x++;
  *
  *             if (should_stop(data))
