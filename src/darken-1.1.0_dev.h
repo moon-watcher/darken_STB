@@ -11,19 +11,24 @@
  *
  * Darken is a generic, target-agnostic entity manager: nothing in its logic depends on any specific
  * platform, engine, or toolchain. It operates over plain caller-provided storage and pointers, so it drops
- * into any C project. Two things are required of whoever includes it, though:
+ * into any C project. Three things are required of whoever includes it, though:
  *
  * 1. Fixed-width integer types must already be visible BEFORE this header is included. Darken deliberately
  *    does NOT #include <stdint.h> itself -- the including project must provide them, whether via a plain
  *    `#include <stdint.h>` or whatever equivalent your target already defines them through.
  *
- * 2. A GNU C compiler -- GCC or Clang. Darken relies on GNU C statement expressions (DARKEN_SPAWN,
- *    DARKEN_FOREACH) and the __attribute__((aligned)) extension (DARKEN_DECLARE). It will not build under
+ * 2. A GNU C compiler -- GCC or Clang. Darken relies on GNU C statement expressions (DARKEN_SPAWN),
+ *    the __attribute__((aligned)) extension (DARKEN_DECLARE), and __alignof__. It will not build under
  *    a strict ISO-C-only compiler.
+ *
+ * 3. CAPACITY must be greater than zero, and the computed entity stride must fit in uint16_t.
  *
  * Beyond that, Darken makes no assumptions about the target: pointer width, struct alignment, and endianness
  * are all whatever the compiler says they are for the platform it's building for (see _DARKEN_ENTITY_ALIGN
  * below, computed via __alignof__ rather than any hardcoded value).
+ *
+ * The payload type used with DARKEN_DATA() must not require stricter alignment than struct darken_entity_t
+ * itself. Darken knows the payload size at storage declaration time, but not the payload type's alignment.
  *
  *
  * Entity: Base entity managed by the entity ctx
@@ -83,14 +88,14 @@
  * STATE-MACHINE mode is the default. Define DARKEN_DIRECT before including this header to opt into direct
  * mode instead.
  *
- * Each mode has one fixed callback signature — there is no separate configuration macro for the argument list
- * anymore. The signature is chosen per mode to match how that mode is actually used: state-machine callbacks
- * rarely need the entity handle, since the return value drives the lifecycle; direct-mode callbacks almost
- * always need it, since they call darken_entity_pause()/resume()/delete() themselves.
+ * Each mode has one fixed callback signature — there is no separate configuration macro for the argument list.
+ * The signature is chosen per mode to match how that mode is actually used: state-machine callbacks rarely need
+ * the entity handle, since the return value drives the lifecycle; direct-mode callbacks almost always need it,
+ * since they call darken_entity_pause()/resume()/delete() themselves.
  *
  * 1) STATE-MACHINE mode — default
  * ---------------------------------------------------------
- *     Signature: darken_state callback(void *data)
+ *     Signature: darken_state_t callback(void *data)
  *
  *     Only the entity's payload is passed — never the entity handle. darken_update() reads update()'s return
  *     value and drives the lifecycle itself:
@@ -113,18 +118,19 @@
  *             return DARKEN_CONTINUE;
  *         }
  *
- *     `destroy` has the same signature and the same (data)-only argument as `update`, but its return value
- *     is always ignored — darken_reset() and darken_entity_delete() only ever call it for its side effects.
+ *     `destroy` uses the same callback type and the same (data)-only argument convention as `update`.
+ *     Its return value is always ignored — darken_reset() and darken_entity_delete() only ever call it
+ *     for its side effects.
  *
  *     Need the entity handle anyway (e.g. to read/write usr or tag)? Recover it with DARKEN_ENTITY(data).
  *
- *     Comparing a darken_state value against the sentinels with `==`/`>` relies on GNU C's permissive
+ *     Comparing a darken_state_t value against the sentinels with `==`/`>` relies on GNU C's permissive
  *     pointer/integer handling (see requirement 2 in PORTABILITY / REQUIREMENTS above).
  *
  * 2) DIRECT mode — DARKEN_DIRECT defined
  * ---------------------------------------------------------
- *     Signature: void callback(darken_entity entity)
- *                void callback(darken_entity entity, void *data)
+ *     Signature: void callback(darken_entity_t entity)
+ *                void callback(darken_entity_t entity, void *data)
  *
  *     Both the entity handle and its payload are passed, in that order. darken_update() just calls
  *     entity->update(entity, entity->data) every frame and ignores any return value; entity->destroy(entity,
@@ -134,12 +140,12 @@
  *     darken_entity_resume() or darken_entity_delete() — all of which take the handle it was just given
  *     directly, no DARKEN_ENTITY(data) lookup needed.
  *
- *         void player_walk_state(darken_entity entity) {
+ *         void player_walk_state(darken_entity_t entity) {
  *             DARKEN_DATA(struct player, data, entity);
  *             data->x++;
  *         }
  *
- *         void player_walk_events_state(darken_entity entity, struct player *data) {
+ *         void player_walk_events_state(darken_entity_t entity, struct player *data) {
  *             data->x++;
  *
  *             if (should_stop(data))
@@ -149,9 +155,9 @@
  *                 darken_entity_delete(entity);
  *         }
  *
- *     A callback that only declares the entity parameter (e.g. `void f(darken_entity entity)`) still works:
- *     darken_state has no prototype, so the callee just reads however many leading arguments it declares and
- *     the rest are pushed and ignored.
+ *     A callback that only declares the entity parameter (e.g. `void f(darken_entity_t entity)`) still works:
+ *     darken_state_t has no prototype, so the callee just reads however many leading arguments it declares and
+ *     the rest are pushed and ignored. This is a GNU-C/ABI-oriented convenience, not a general ISO-C rule.
  */
 
 #pragma once
@@ -231,8 +237,8 @@ struct darken_entity_t
 // Alignment is asked from the compiler itself via __alignof__ (a GNU C extension already required -- see
 // PORTABILITY / REQUIREMENTS above) rather than assumed from any particular pointer width or target. This
 // is what keeps every entity's address correctly aligned on any platform: whatever struct darken_entity_t's
-// or darken_entity_t's natural alignment turns out to be there, that's what gets used -- no guessing, no
-// magic numbers, nothing to update when porting to a new target.
+// natural alignment turns out to be there, that's what gets used -- no guessing, no magic numbers, nothing
+// to update when porting to a new target.
 #define _DARKEN_POOL_ALIGN __alignof__(darken_entity_t)
 #define _DARKEN_ENTITY_ALIGN __alignof__(struct darken_entity_t)
 #define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN(sizeof(struct darken_entity_t) + (PAYLOAD), _DARKEN_ENTITY_ALIGN)
@@ -249,9 +255,13 @@ struct darken_entity_t
 
 // Dynamic allocation: use with malloc/calloc or custom allocator
 //     darken_t m = DARKEN_ALLOC(malloc, 5, sizeof(struct MyComponent));
+//     if (!m.pool || !m.storage) return;
 //     darken_init(&m);
 //     ...
 //     DARKEN_FREE(free, &m);
+//
+// DARKEN_ALLOC() does not handle allocation failure or partial allocation cleanup.
+// CAPACITY must be > 0 and the computed stride must fit in uint16_t.
 #define DARKEN_ALLOC(ALLOC, CAPACITY, PAYLOAD)                                      \
     (darken_t)                                                                      \
     {                                                                               \
@@ -262,6 +272,7 @@ struct darken_entity_t
     }
 
 // Frees the pool and storage blocks previously allocated by DARKEN_ALLOC().
+// DARKEN_FREE() only releases memory; it does not call destroy() or reset the ctx.
 #define DARKEN_FREE(FREE, CTX)  \
     do                          \
     {                           \
@@ -273,6 +284,9 @@ struct darken_entity_t
 //     DARKEN_DECLARE(storage, 5, sizeof(struct MyComponent));
 //     darken_t m = DARKEN_BIND(storage);
 //     darken_init(&m);
+//
+// CAPACITY must be > 0. The payload type used with DARKEN_DATA() must not require stricter alignment than
+// struct darken_entity_t.
 #define DARKEN_DECLARE(NAME, CAPACITY, PAYLOAD)                                                                   \
     struct                                                                                                        \
     {                                                                                                             \
@@ -286,7 +300,7 @@ struct darken_entity_t
     }
 
 // Static/global initialization: compile-time constants.
-// Use when the storage is defined at file scope and you want compile-time initialization
+// Use when the storage is defined at file scope and you want static initialization
 #define DARKEN_INIT(STORAGE)                                                                   \
     (darken_t)                                                                                 \
     {                                                                                          \
@@ -316,7 +330,8 @@ struct darken_entity_t
 })
 
 // Iterate over all active entities in REVERSE order (from size-1 down to 0).
-// Reverse order allows safe deletion during iteration.
+// Reverse iteration makes deleting or pausing the currently visited entity safe.
+// Deleting or reordering other entities from inside CODE can affect which entities are visited in this pass.
 #define DARKEN_FOREACH(CTX, CODE)                        \
     do                                                   \
     {                                                    \
@@ -337,7 +352,8 @@ struct darken_entity_t
 #define DARKEN_DATA(TYPE, VAR, ENTITY) TYPE *VAR = (TYPE *)(ENTITY)->data;
 
 // Recover the entity handle from a pointer to its data payload (Mostly useful in STATE-MACHINE mode where
-// callbacks only receive data)
+// callbacks only receive data).
+// DATA must point to the beginning of an entity's data[] payload.
 #define DARKEN_ENTITY(DATA) ((darken_entity_t)((uint8_t *)(DATA) - (uintptr_t)&((darken_entity_t)0)->data))
 
 // Zone membership tests
@@ -410,8 +426,10 @@ static inline void darken_entity_delete(darken_entity_t entity)
 //
 // DYNAMIC:
 //     darken_t m = DARKEN_ALLOC(malloc, 5, sizeof(struct MyComponent));
+//     if (!m.pool || !m.storage) return;
 //     darken_init(&m);
 //     ...
+//     darken_reset(&m);
 //     DARKEN_FREE(free, &m);
 //
 // STATIC (Runtime binding):
@@ -423,16 +441,21 @@ static inline void darken_entity_delete(darken_entity_t entity)
 // STATIC (Compile-time initialization):
 // Static/global initialization: compile-time constants
 //     DARKEN_DECLARE(storage, 5, sizeof(struct MyComponent));
-//     darken_t m = DARKEN_INIT(storage);
+//     static darken_t m = DARKEN_INIT(storage);
 //
 //     void init_test_manager() {
 //         darken_init(&m);
 //         ...
 //     }
+//
+// darken_init() must only be called on unused/uninitialized storage, or after darken_reset() when the
+// current population is intentionally being discarded. It does not call destroy() for the entities already
+// managed by the ctx.
+//
 // Walks the capacity-sized storage block once, handing each pool slot a permanent address. The loop counts
-// down (capacity-1 to 0) rather than up; the direction itself is not significant and does not imply slot
-// i lives at storage offset i*stride. Only ->slot and ->owner, not array position, are guaranteed to track
-// an entity afterward.
+// down (capacity-1 to 0) rather than up; the direction itself is not significant and does not imply slot i
+// lives at storage offset i*stride. Only ->slot and ->owner, not array position, are guaranteed to track an
+// entity afterward.
 static inline void darken_init(darken_t *ctx)
 {
     ctx->size = 0;
@@ -457,6 +480,9 @@ static inline void darken_update(darken_t *ctx)
 // Calls destroy() on every currently active entity, then drops the whole pool back to the free zone
 // (size = 0, paused = capacity). Paused entities are swept away the same way darken_entity_delete() treats
 // them: silently, without their destroy() ever running.
+//
+// destroy() callbacks used by darken_reset() must not mutate the ctx's pool zones by deleting, pausing,
+// resuming, spawning, or otherwise reordering entities during the reset iteration.
 static inline void darken_reset(darken_t *ctx)
 {
     DARKEN_FOREACH(ctx, {
