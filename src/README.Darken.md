@@ -1,10 +1,11 @@
 # Darken — DARKula ENgine Entity System
 
-`darken.h` is a single-header entity/lifecycle manager for C, built for GCC on the Motorola 68000 (Sega Genesis / Mega Drive via [SGDK](https://github.com/Stephane-D/SGDK)), and equally usable on a normal host. No dynamic dispatch, no hidden allocations after setup, no handle tables — entities are plain pointers into a caller-provided storage block, kept dense by swap-and-pop.
+`darken.h` is a generic, single-header entity/lifecycle manager for C — target-agnostic, with no dependency on any specific platform, engine, or toolchain. It operates purely over plain caller-provided storage and pointers, so it drops into any C project. No dynamic dispatch, no hidden allocations after setup, no handle tables — entities are plain pointers into a caller-provided storage block, kept dense by swap-and-pop.
 
 Current version: **darken-1.1.0_dev**
 
 - [Darken — DARKula ENgine Entity System](#darken--darkula-engine-entity-system)
+  - [Requirements](#requirements)
   - [Core idea](#core-idea)
   - [The three zones](#the-three-zones)
   - [Two guarantees you can rely on](#two-guarantees-you-can-rely-on)
@@ -19,7 +20,20 @@ Current version: **darken-1.1.0_dev**
   - [Complexity](#complexity)
   - [Limits](#limits)
   - [Gotchas](#gotchas)
-  - [Using this from SGDK](#using-this-from-sgdk)
+
+## Requirements
+
+Two things are required of whoever includes `darken.h`:
+
+1. **Fixed-width integer types visible before including the header.** Darken uses `uint8_t`/`uint16_t`/`uint32_t`/`uintptr_t` and deliberately does **not** `#include <stdint.h>` itself — the including project must provide them, whether via a plain `#include <stdint.h>` or whatever equivalent your target already defines them through.
+2. **A GNU C compiler — GCC or Clang.** Darken relies on GNU C statement expressions (`DARKEN_SPAWN`, `DARKEN_FOREACH`) and the `__attribute__((aligned))` extension (`DARKEN_DECLARE`). It will not build under a strict ISO-C-only compiler.
+
+Darken originates from, and ships in production on, GCC targeting the Motorola 68000 — that heritage shows up only in a couple of tuning choices, kept here as notes rather than requirements:
+
+- Entity storage alignment floors at 4 bytes, matching m68k pointer width; it's raised automatically on hosts where pointers are wider.
+- Struct fields prefer 16-bit members where the value range allows it, since that's the m68k's cheapest word size.
+
+Nothing else is 68k-specific: on any other GCC/Clang target this is just a plain, generic single-header entity manager.
 
 ## Core idea
 
@@ -84,18 +98,20 @@ static darken_t m = DARKEN_INIT(storage);
 
 All three (`DARKEN_ALLOC`, `DARKEN_BIND`, `DARKEN_INIT`) expand to a `(darken_t){...}` compound literal, so they work anywhere a `darken_t` expression is legal — a declaration initializer, a plain assignment to reassign an existing variable, a function argument, and so on.
 
-`ALLOC` is any `void *(*)(size_t-like)` allocator — `malloc`, or SGDK's `MEM_alloc`.
+`ALLOC` is any `void *(*)(size_t-like)` allocator — `malloc`.
 
 ## Spawning an entity
 
 ```c
 darken_entity_t e = DARKEN_SPAWN(&m);
-if (!e) { /* pool full */ }
 
-e->update  = enemy_walk_state;
+if (!e) return;
+
+e->update = enemy_walk_state;
 e->destroy = enemy_on_death;
-e->tag     = 0;
-e->usr     = 0;
+e->tag = 0;
+e->usr = 0;
+
 DARKEN_DATA(struct MyComponent, data, e);
 data->hp = 10;
 ```
@@ -111,9 +127,13 @@ darken_state_t player_walk(struct Player *p)
 {
     p->x++;
 
-    if (should_stop(p))  return player_stop;      // installs a new callback for NEXT frame
-    if (should_die(p))   return DARKEN_DELETE;     // destroy() runs (if set), then the entity dies
-    return DARKEN_CONTINUE;                        // stay active, same callback
+    if (should_stop(p))
+        return player_stop;   // installs a new callback for NEXT frame
+
+    if (should_die(p))
+        return DARKEN_DELETE; // destroy() runs (if set), then the entity dies
+
+    return DARKEN_CONTINUE;   // stay active, same callback
 }
 ```
 
@@ -152,9 +172,9 @@ Both the handle and the payload are passed; `darken_update()` calls `entity->upd
 ## Pause, resume, delete
 
 ```c
-darken_entity_pause(e);    // -> paused zone; no-op if already paused/not active
-darken_entity_resume(e);   // -> active zone; no-op if already active/not paused
-darken_entity_delete(e);   // destroy() runs only if e was ACTIVE; paused deletes skip it
+darken_entity_pause(e);  // -> paused zone; no-op if already paused/not active
+darken_entity_resume(e); // -> active zone; no-op if already active/not paused
+darken_entity_delete(e); // destroy() runs only if e was ACTIVE; paused deletes skip it
 ```
 
 `darken_reset(&m)` calls `destroy()` on every active entity and drops the whole pool back to the free zone — paused entities are swept away the same way a paused `darken_entity_delete()` treats them: silently, `destroy()` never runs for them.
@@ -208,18 +228,4 @@ Visits active entities in **reverse** slot order (`size-1` down to `0`), which i
 
 - **No staleness detection.** Darken hands you raw pointers, not generation-checked handles. If you keep a `darken_entity_t` around after deleting it, and a later spawn reuses that exact slot, your old pointer now silently refers to the *new* occupant — same address, different entity. If you need to detect this, roll your own generation counter in `tag` or `usr` and check it yourself; Darken (unlike Darksys' `darksys_valid()`) has no built-in way to ask "is this still the entity I think it is?".
 - Fields aren't auto-initialized on spawn (see above) — an entity with a garbage `update` pointer will crash the moment `darken_update()` reaches it.
-- Relies on GNU C: statement expressions (`DARKEN_SPAWN`) and `__attribute__((aligned))` (`DARKEN_DECLARE`). Needs GCC or Clang, not a strict ISO-C-only compiler.
-
-## Using this from SGDK
-
-```c
-#include <genesis.h>
-#include "darken.h"
-
-darken_t m = DARKEN_ALLOC(MEM_alloc, 32, sizeof(struct Enemy));
-darken_init(&m);
-...
-DARKEN_FREE(MEM_free, &m);
-```
-
-**Don't `#include <stdint.h>` yourself in an SGDK project.** This header deliberately does not include it either — SGDK's own `types.h` (pulled in by `<genesis.h>`) is SGDK's documented stand-in for `<stdint.h>`, defining `uint8_t`/`uint16_t`/`uint32_t` as compatibility macros over its native `u8`/`u16`/`u32`. Bringing in a real `<stdint.h>` on top of that has been confirmed to produce hard `conflicting types` errors for `s8`/`s32`/`u32` on at least one toolchain. Outside SGDK, just `#include <stdint.h>` before this header — it isn't included for you.
+- Toolchain and integer-type constraints (GNU C, `<stdint.h>`) are covered in [Requirements](#requirements), not repeated here.

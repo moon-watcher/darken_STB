@@ -5,10 +5,32 @@
  *
  * Full documentation: README.Darken.md
  *
- * GNU C note:
- * - This header uses GNU C __attribute__ extension and statement expressions.
- * - 4-byte align boundary because Darken targets GCC and the Motorola 68000.
- * - 16-bit members preference for optimal 68K performance.
+ * ============================================================================
+ * PORTABILITY / REQUIREMENTS -- READ THIS FIRST
+ * ============================================================================
+ *
+ * Darken is a generic, target-agnostic entity manager: nothing in its logic depends on any specific
+ * platform, engine, or toolchain. It operates over plain caller-provided storage and pointers, so it drops
+ * into any C project. Two things are required of whoever includes it, though:
+ *
+ * 1. Fixed-width integer types must already be visible BEFORE this header is included. Darken uses
+ *    uint8_t/uint16_t/uint32_t/uintptr_t and deliberately does NOT #include <stdint.h> itself -- the
+ *    including project must provide them, whether via a plain `#include <stdint.h>` or whatever equivalent
+ *    your target already defines them through.
+ *
+ * 2. A GNU C compiler -- GCC or Clang. Darken relies on GNU C statement expressions (DARKEN_SPAWN,
+ *    DARKEN_FOREACH) and the __attribute__((aligned)) extension (DARKEN_DECLARE). It will not build under
+ *    a strict ISO-C-only compiler.
+ *
+ * Darken originates from, and ships in production on, GCC targeting the Motorola 68000 (Sega Genesis /
+ * Mega Drive) -- that heritage shows up only in a couple of tuning choices, kept here as notes rather 
+ * than requirements:
+ *   - Entity storage alignment floors at 4 bytes, matching m68k pointer width (see _DARKEN_ENTITY_ALIGN
+ *     below); it's raised automatically on hosts where pointers are wider.
+ *   - Struct fields prefer 16-bit members where the value range allows it, since that's the m68k's
+ *     cheapest word size.
+ * Nothing else is 68k-specific: on any other GCC/Clang target this is just a plain, generic single-header
+ * entity manager.
  *
  *
  * Entity: Base entity managed by the entity ctx
@@ -141,7 +163,9 @@
 
 #pragma once
 
-#include <stdint.h>
+// Darken does NOT include <stdint.h> itself -- see "PORTABILITY / REQUIREMENTS" at the top of this file.
+// Make sure uint8_t/uint16_t/uint32_t/uintptr_t are visible before this point: either `#include <stdint.h>`
+// yourself, or rely on whatever your platform already provides in its place.
 
 #ifdef DARKEN_DIRECT
 typedef void (*darken_state_t)();
