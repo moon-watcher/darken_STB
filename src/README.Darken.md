@@ -22,7 +22,7 @@ Current version: **darken-1.1.0_dev**
 
 ## Requirements
 
-Two things are required of whoever includes `darken.h`:
+Three things are required of whoever includes `darken.h`:
 
 1. **Fixed-width integer types visible before including the header.** Darken deliberately does **not** `#include <stdint.h>` itself — the including project must provide them, whether via a plain `#include <stdint.h>` or whatever equivalent your target already defines them through. Even on bare-metal/freestanding targets without a full C library, GCC ships its own self-contained `<stdint.h>` — so a plain `#include <stdint.h>` typically works regardless of whether your platform's own headers define these types themselves.
 
@@ -61,14 +61,16 @@ The ctx keeps `pool[]` partitioned into three contiguous zones and moves entitie
 
 ```c
 // WRONG — m's address dies with the function
-static darken_t make_pool(void) {
+darken_t make_pool(void)
+{
     darken_t m = DARKEN_ALLOC(malloc, 8, sizeof(Enemy));
     darken_init(&m);
     return m;
 }
 
 // RIGHT — build it in its final home
-static void make_pool(darken_t *m) {
+void make_pool(darken_t *m)
+{
     *m = DARKEN_ALLOC(malloc, 8, sizeof(Enemy));
     darken_init(m);
 }
@@ -109,6 +111,7 @@ All three (`DARKEN_ALLOC`, `DARKEN_BIND`, `DARKEN_INIT`) expand to a `(darken_t)
 ```c
 darken_entity_t e = DARKEN_SPAWN(&m);
 if (!e) return;
+
 e->update = enemy_walk_state;
 e->destroy = enemy_on_death;
 e->tag = ENEMY;
@@ -163,13 +166,13 @@ darken_state_t player_walk(struct Player *p) { ... }
 ## DIRECT mode (**#define DARKEN_DIRECT**)
 
 ```c
-#define DARKEN_DIRECT // Enamble DIRECT mode
-#include "darken.h"
-
 void player_stop_state(darken_entity_t entity, struct Player *p)
 {
-    if (should_walk(p))
+    if (shoul_walk(p))
         entity->update = player_walk_state;
+
+    if (should_die(p))
+        darken_entity_delete(entity);
 }
 ```
 
@@ -218,7 +221,8 @@ During `darken_reset()`, `destroy()` callbacks should not mutate the ctx's pool 
 ## Iterating
 
 ```c
-DARKEN_FOREACH(&m, {
+DARKEN_FOREACH(&m,
+{
     DARKEN_DATA(struct MyComponent, data, _entity);
     data->hp -= 1;
 });
