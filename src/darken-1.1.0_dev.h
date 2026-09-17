@@ -18,10 +18,15 @@
  *    `#include <stdint.h>` or whatever equivalent your target already defines them through.
  *
  * 2. A GNU C compiler -- GCC or Clang. Darken relies on GNU C statement expressions (DARKEN_SPAWN),
- *    the __attribute__((aligned)) extension (DARKEN_DECLARE), and __alignof__. It will not build under
- *    a strict ISO-C-only compiler.
+ *    the __attribute__((aligned)) extension (DARKEN_DECLARE), __alignof__, and _Static_assert
+ *    (DARKEN_DECLARE). It will not build under a strict ISO-C-only compiler. Sentinel comparison in
+ *    state-machine mode (== / > against DARKEN_CONTINUE, DARKEN_DELETE, DARKEN_PAUSE) additionally
+ *    assumes function pointers can be meaningfully compared against small integer values, which holds
+ *    for flat-address targets but not for every platform.
  *
  * 3. CAPACITY must be greater than zero, and the computed entity stride must fit in uint16_t.
+ *    DARKEN_DECLARE() enforces both with _Static_assert; DARKEN_ALLOC() does not (it is an expression,
+ *    not a declaration), so dynamic-allocation callers must verify them manually.
  *
  * Beyond that, Darken makes no assumptions about the target: pointer width, struct alignment, and endianness
  * are all whatever the compiler says they are for the platform it's building for (see _DARKEN_ENTITY_ALIGN
@@ -121,6 +126,11 @@
  *     `destroy` uses the same callback type and the same (data)-only argument convention as `update`.
  *     Its return value is always ignored — darken_reset() and darken_entity_delete() only ever call it
  *     for its side effects.
+ *
+ *     `destroy` must not mutate the ctx's pool zones. Deleting, pausing, resuming, spawning, or otherwise
+ *     reordering entities from inside a destroy callback will corrupt the swap state and iteration that the
+ *     engine relies on. This restriction applies to every path that invokes destroy: darken_reset(),
+ *     darken_entity_delete(), and the DARKEN_DELETE branch inside darken_update().
  *
  *     Need the entity handle anyway (e.g. to read/write usr or tag)? Recover it with DARKEN_ENTITY(data).
  *
@@ -261,14 +271,16 @@ struct darken_entity_t
 //     DARKEN_FREE(free, &m);
 //
 // DARKEN_ALLOC() does not handle allocation failure or partial allocation cleanup.
-// CAPACITY must be > 0 and the computed stride must fit in uint16_t.
-#define DARKEN_ALLOC(ALLOC, CAPACITY, PAYLOAD)                                      \
-    (darken_t)                                                                      \
-    {                                                                               \
-        .pool = (darken_entity_t *)(ALLOC)((CAPACITY) * sizeof(darken_entity_t)),   \
-        .storage = (uint8_t *)(ALLOC)((CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)), \
-        .capacity = (CAPACITY),                                                     \
-        .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                                   \
+// CAPACITY must be > 0 and the computed stride must fit in uint16_t. Unlike DARKEN_DECLARE(), this macro
+// cannot enforce those two constraints with _Static_assert -- it expands to an expression, not a
+// declaration -- so the caller is responsible for verifying them.
+#define DARKEN_ALLOC(ALLOC, CAPACITY, PAYLOAD)                           \
+    (darken_t)                                                           \
+    {                                                                    \
+        .pool = (ALLOC)((CAPACITY) * sizeof(darken_entity_t)),           \
+        .storage = (ALLOC)((CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)), \
+        .capacity = (CAPACITY),                                          \
+        .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                        \
     }
 
 // Frees the pool and storage blocks previously allocated by DARKEN_ALLOC().
@@ -286,21 +298,27 @@ struct darken_entity_t
 //     darken_init(&m);
 //
 // CAPACITY must be > 0. The payload type used with DARKEN_DATA() must not require stricter alignment than
-// struct darken_entity_t.
-#define DARKEN_DECLARE(NAME, CAPACITY, PAYLOAD)                                                                   \
-    struct                                                                                                        \
-    {                                                                                                             \
-        uint16_t capacity;                                                                                        \
-        uint16_t stride;                                                                                          \
-        darken_entity_t pool[(CAPACITY)] __attribute__((aligned(_DARKEN_POOL_ALIGN)));                            \
-        uint8_t data[(CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)] __attribute__((aligned(_DARKEN_ENTITY_ALIGN))); \
-    } NAME = {                                                                                                    \
-        .capacity = (CAPACITY),                                                                                   \
-        .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                                                                 \
+// struct darken_entity_t. Both CAPACITY > 0 and stride <= UINT16_MAX are enforced at compile time via
+// _Static_assert.
+#define DARKEN_DECLARE(NAME, CAPACITY, PAYLOAD)                                                                           \
+    _Static_assert((CAPACITY) > 0, "DARKEN_DECLARE: CAPACITY must be > 0");                                               \
+    _Static_assert(_DARKEN_ENTITY_STRIDE(PAYLOAD) <= (uint16_t)-1, "DARKEN_DECLARE: entity stride must fit in uint16_t"); \
+    struct                                                                                                                \
+    {                                                                                                                     \
+        uint16_t capacity;                                                                                                \
+        uint16_t stride;                                                                                                  \
+        darken_entity_t pool[(CAPACITY)] __attribute__((aligned(_DARKEN_POOL_ALIGN)));                                    \
+        uint8_t data[(CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)] __attribute__((aligned(_DARKEN_ENTITY_ALIGN)));         \
+    } NAME = {                                                                                                            \
+        .capacity = (CAPACITY),                                                                                           \
+        .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                                                                         \
     }
 
 // Static/global initialization: compile-time constants.
-// Use when the storage is defined at file scope and you want static initialization
+// Use when the storage is defined at file scope and you want static initialization.
+// NOTE: DARKEN_INIT expands to a compound literal, which is not a constant expression in strict C99 -- it
+// requires C11 (or the GNU C extension) to initialize an object with static storage duration. This matches
+// the GNU C requirement already documented at the top of this file.
 #define DARKEN_INIT(STORAGE)                                                                   \
     (darken_t)                                                                                 \
     {                                                                                          \
@@ -354,9 +372,13 @@ struct darken_entity_t
 // Recover the entity handle from a pointer to its data payload (Mostly useful in STATE-MACHINE mode where
 // callbacks only receive data).
 // DATA must point to the beginning of an entity's data[] payload.
+// Note: uses the standard "offsetof-via-null-pointer" idiom, which is formally undefined behaviour but
+// works on GCC/Clang (already required by this header).
 #define DARKEN_ENTITY(DATA) ((darken_entity_t)((uint8_t *)(DATA) - (uintptr_t)&((darken_entity_t)0)->data))
 
-// Zone membership tests
+// Zone membership tests.
+// Note: ENTITY is evaluated multiple times per test (up to four times for DARKEN_ENTITY_IN_FREE). Do not
+// pass expressions with side effects.
 #define DARKEN_ENTITY_IN_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->owner->size)
 #define DARKEN_ENTITY_IN_FREE(ENTITY) (!DARKEN_ENTITY_IN_ACTIVE(ENTITY) && !DARKEN_ENTITY_IN_PAUSED(ENTITY))
 #define DARKEN_ENTITY_IN_PAUSED(ENTITY) ((ENTITY)->slot >= (ENTITY)->owner->paused)
@@ -408,6 +430,8 @@ static inline void darken_entity_resume(darken_entity_t entity)
 
 // Note: darken_entity_delete() only calls destroy() if the entity is active.
 // If the entity is paused, it's moved to the free zone without calling destroy().
+// destroy() must not mutate the ctx's pool zones (delete/pause/resume/spawn) while it runs -- see the big
+// header comment above.
 static inline void darken_entity_delete(darken_entity_t entity)
 {
     if (DARKEN_ENTITY_IN_ACTIVE(entity))
@@ -482,7 +506,8 @@ static inline void darken_update(darken_t *ctx)
 // them: silently, without their destroy() ever running.
 //
 // destroy() callbacks used by darken_reset() must not mutate the ctx's pool zones by deleting, pausing,
-// resuming, spawning, or otherwise reordering entities during the reset iteration.
+// resuming, spawning, or otherwise reordering entities during the reset iteration. (This is a specific
+// case of the general restriction documented in the big header comment above.)
 static inline void darken_reset(darken_t *ctx)
 {
     DARKEN_FOREACH(ctx, {
