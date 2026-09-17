@@ -1,7 +1,5 @@
 #include <genesis.h>
 
-// #define DARKEN_DIRECT
-
 int main(void)
 {
     // bench_dsmap0_compare();

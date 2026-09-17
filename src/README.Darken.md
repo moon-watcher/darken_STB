@@ -25,15 +25,10 @@ Current version: **darken-1.1.0_dev**
 
 Two things are required of whoever includes `darken.h`:
 
-1. **Fixed-width integer types visible before including the header.** Darken uses `uint8_t`/`uint16_t`/`uint32_t`/`uintptr_t` and deliberately does **not** `#include <stdint.h>` itself — the including project must provide them, whether via a plain `#include <stdint.h>` or whatever equivalent your target already defines them through.
+1. **`uint8_t`/`uint16_t`/`uint32_t`/`uintptr_t` visible before including the header.** Darken deliberately does **not** `#include <stdint.h>` itself — the including project must provide them, whether via a plain `#include <stdint.h>` or whatever equivalent your target already defines them through. Even on bare-metal/freestanding targets without a full C library, GCC ships its own self-contained `<stdint.h>` — so a plain `#include <stdint.h>` typically works regardless of whether your platform's own headers define these types themselves.
 2. **A GNU C compiler — GCC or Clang.** Darken relies on GNU C statement expressions (`DARKEN_SPAWN`, `DARKEN_FOREACH`) and the `__attribute__((aligned))` extension (`DARKEN_DECLARE`). It will not build under a strict ISO-C-only compiler.
 
-Darken originates from, and ships in production on, GCC targeting the Motorola 68000 — that heritage shows up only in a couple of tuning choices, kept here as notes rather than requirements:
-
-- Entity storage alignment floors at 4 bytes, matching m68k pointer width; it's raised automatically on hosts where pointers are wider.
-- Struct fields prefer 16-bit members where the value range allows it, since that's the m68k's cheapest word size.
-
-Nothing else is 68k-specific: on any other GCC/Clang target this is just a plain, generic single-header entity manager.
+Beyond that, Darken makes no assumptions about the target: pointer width, struct alignment, and endianness are all whatever the compiler says they are for the platform it's building for — entity storage alignment is computed with `__alignof__` rather than any hardcoded value.
 
 ## Core idea
 

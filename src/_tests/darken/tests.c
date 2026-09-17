@@ -1,4 +1,5 @@
 #include <genesis.h>
+#include <stdint.h>
 #include "../../darken-1.1.0_dev.h"
 #include "tests.h"
 
