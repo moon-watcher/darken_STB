@@ -22,15 +22,9 @@
  *    DARKEN_FOREACH) and the __attribute__((aligned)) extension (DARKEN_DECLARE). It will not build under
  *    a strict ISO-C-only compiler.
  *
- * Darken originates from, and ships in production on, GCC targeting the Motorola 68000 (Sega Genesis /
- * Mega Drive) -- that heritage shows up only in a couple of tuning choices, kept here as notes rather 
- * than requirements:
- *   - Entity storage alignment floors at 4 bytes, matching m68k pointer width (see _DARKEN_ENTITY_ALIGN
- *     below); it's raised automatically on hosts where pointers are wider.
- *   - Struct fields prefer 16-bit members where the value range allows it, since that's the m68k's
- *     cheapest word size.
- * Nothing else is 68k-specific: on any other GCC/Clang target this is just a plain, generic single-header
- * entity manager.
+ * Beyond that, Darken makes no assumptions about the target: pointer width, struct alignment, and endianness
+ * are all whatever the compiler says they are for the platform it's building for (see _DARKEN_ENTITY_ALIGN
+ * below, computed via __alignof__ rather than any hardcoded value).
  *
  *
  * Entity: Base entity managed by the entity ctx
@@ -126,7 +120,7 @@
  *     Need the entity handle anyway (e.g. to read/write usr or tag)? Recover it with DARKEN_ENTITY(data).
  *
  *     Comparing a darken_state value against the sentinels with `==`/`>` relies on GNU C's permissive
- *     pointer/integer handling (see the GNU C note above).
+ *     pointer/integer handling (see requirement 2 in PORTABILITY / REQUIREMENTS above).
  *
  * 2) DIRECT mode — DARKEN_DIRECT defined
  * ---------------------------------------------------------
@@ -235,11 +229,13 @@ struct darken_entity_t
 #endif
 
 #define _DARKEN_ALIGN(X, A) (((X) + (uintptr_t)(A) - 1) & ~((uintptr_t)(A) - 1))
-// Floored at 4 to preserve the original m68k-only behavior exactly (m68k pointers are 4 bytes there).
-// Raised above 4 on hosts (e.g. x86-64) where pointers -- and therefore struct darken_entity_t's
-// update/destroy/owner members -- are wider than 4 bytes, which UBSan will otherwise flag as misaligned
-// access.
-#define _DARKEN_ENTITY_ALIGN (sizeof(void *) > 4 ? sizeof(void *) : 4)
+// Alignment is asked from the compiler itself via __alignof__ (a GNU C extension already required -- see
+// PORTABILITY / REQUIREMENTS above) rather than assumed from any particular pointer width or target. This
+// is what keeps every entity's address correctly aligned on any platform: whatever struct darken_entity_t's
+// or darken_entity_t's natural alignment turns out to be there, that's what gets used -- no guessing, no
+// magic numbers, nothing to update when porting to a new target.
+#define _DARKEN_POOL_ALIGN __alignof__(darken_entity_t)
+#define _DARKEN_ENTITY_ALIGN __alignof__(struct darken_entity_t)
 #define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN(sizeof(struct darken_entity_t) + (PAYLOAD), _DARKEN_ENTITY_ALIGN)
 
 /* ============================================================================
@@ -253,10 +249,10 @@ struct darken_entity_t
 #define DARKEN_PAUSE ((darken_state_t)2)
 
 // Dynamic allocation: use with malloc/calloc or custom allocator
-//     darken_t m = DARKEN_ALLOC(MEM_alloc, 5, sizeof(struct MyComponent));
+//     darken_t m = DARKEN_ALLOC(malloc, 5, sizeof(struct MyComponent));
 //     darken_init(&m);
 //     ...
-//     DARKEN_FREE(MEM_free, &m);
+//     DARKEN_FREE(free, &m);
 #define DARKEN_ALLOC(ALLOC, CAPACITY, PAYLOAD)                                      \
     (darken_t)                                                                      \
     {                                                                               \
@@ -283,7 +279,7 @@ struct darken_entity_t
     {                                                                                                             \
         uint16_t capacity;                                                                                        \
         uint16_t stride;                                                                                          \
-        darken_entity_t pool[(CAPACITY)] __attribute__((aligned(4)));                                             \
+        darken_entity_t pool[(CAPACITY)] __attribute__((aligned(_DARKEN_POOL_ALIGN)));                            \
         uint8_t data[(CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)] __attribute__((aligned(_DARKEN_ENTITY_ALIGN))); \
     } NAME = {                                                                                                    \
         .capacity = (CAPACITY),                                                                                   \
@@ -414,10 +410,10 @@ static inline void darken_entity_delete(darken_entity_t entity)
 // USAGE EXAMPLES:
 //
 // DYNAMIC:
-//     darken_t m = DARKEN_ALLOC(MEM_alloc, 5, sizeof(struct MyComponent));
+//     darken_t m = DARKEN_ALLOC(malloc, 5, sizeof(struct MyComponent));
 //     darken_init(&m);
 //     ...
-//     DARKEN_FREE(MEM_free, &m);
+//     DARKEN_FREE(free, &m);
 //
 // STATIC (Runtime binding):
 // Runtime: locals, reassignment, any context
@@ -435,9 +431,9 @@ static inline void darken_entity_delete(darken_entity_t entity)
 //         ...
 //     }
 // Walks the capacity-sized storage block once, handing each pool slot a permanent address. The loop counts
-// down (capacity-1 to 0) rather than up purely because that's the cheaper direction to test on m68k (DBRA)
-//  -- it does not imply slot i lives at storage offset i*stride. Only ->slot and ->owner, not array position,
-// are guaranteed to track an entity afterward.
+// down (capacity-1 to 0) rather than up; the direction itself is not significant and does not imply slot i
+// lives at storage offset i*stride. Only ->slot and ->owner, not array position, are guaranteed to track an
+// entity afterward.
 static inline void darken_init(darken_t *ctx)
 {
     ctx->size = 0;
