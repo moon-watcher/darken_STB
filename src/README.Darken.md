@@ -170,9 +170,6 @@ void player_stop_state(darken_entity_t entity, struct Player *p)
 {
     if (shoul_walk(p))
         entity->update = player_walk_state;
-
-    if (should_die(p))
-        darken_entity_delete(entity);
 }
 ```
 
