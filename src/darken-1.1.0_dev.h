@@ -13,10 +13,9 @@
  * platform, engine, or toolchain. It operates over plain caller-provided storage and pointers, so it drops
  * into any C project. Two things are required of whoever includes it, though:
  *
- * 1. Fixed-width integer types must already be visible BEFORE this header is included. Darken uses
- *    uint8_t/uint16_t/uint32_t/uintptr_t and deliberately does NOT #include <stdint.h> itself -- the
- *    including project must provide them, whether via a plain `#include <stdint.h>` or whatever equivalent
- *    your target already defines them through.
+ * 1. Fixed-width integer types must already be visible BEFORE this header is included. Darken deliberately
+ *    does NOT #include <stdint.h> itself -- the including project must provide them, whether via a plain
+ *    `#include <stdint.h>` or whatever equivalent your target already defines them through.
  *
  * 2. A GNU C compiler -- GCC or Clang. Darken relies on GNU C statement expressions (DARKEN_SPAWN,
  *    DARKEN_FOREACH) and the __attribute__((aligned)) extension (DARKEN_DECLARE). It will not build under
@@ -431,9 +430,9 @@ static inline void darken_entity_delete(darken_entity_t entity)
 //         ...
 //     }
 // Walks the capacity-sized storage block once, handing each pool slot a permanent address. The loop counts
-// down (capacity-1 to 0) rather than up; the direction itself is not significant and does not imply slot i
-// lives at storage offset i*stride. Only ->slot and ->owner, not array position, are guaranteed to track an
-// entity afterward.
+// down (capacity-1 to 0) rather than up; the direction itself is not significant and does not imply slot
+// i lives at storage offset i*stride. Only ->slot and ->owner, not array position, are guaranteed to track
+// an entity afterward.
 static inline void darken_init(darken_t *ctx)
 {
     ctx->size = 0;

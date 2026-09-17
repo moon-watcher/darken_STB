@@ -25,7 +25,7 @@ Current version: **darken-1.1.0_dev**
 
 Two things are required of whoever includes `darken.h`:
 
-1. **`uint8_t`/`uint16_t`/`uint32_t`/`uintptr_t` visible before including the header.** Darken deliberately does **not** `#include <stdint.h>` itself — the including project must provide them, whether via a plain `#include <stdint.h>` or whatever equivalent your target already defines them through. Even on bare-metal/freestanding targets without a full C library, GCC ships its own self-contained `<stdint.h>` — so a plain `#include <stdint.h>` typically works regardless of whether your platform's own headers define these types themselves.
+1. **Fixed-width integer types visible before including the header.** Darken deliberately does **not** `#include <stdint.h>` itself — the including project must provide them, whether via a plain `#include <stdint.h>` or whatever equivalent your target already defines them through. Even on bare-metal/freestanding targets without a full C library, GCC ships its own self-contained `<stdint.h>` — so a plain `#include <stdint.h>` typically works regardless of whether your platform's own headers define these types themselves.
 2. **A GNU C compiler — GCC or Clang.** Darken relies on GNU C statement expressions (`DARKEN_SPAWN`, `DARKEN_FOREACH`) and the `__attribute__((aligned))` extension (`DARKEN_DECLARE`). It will not build under a strict ISO-C-only compiler.
 
 Beyond that, Darken makes no assumptions about the target: pointer width, struct alignment, and endianness are all whatever the compiler says they are for the platform it's building for — entity storage alignment is computed with `__alignof__` rather than any hardcoded value.
@@ -104,8 +104,8 @@ if (!e) return;
 
 e->update = enemy_walk_state;
 e->destroy = enemy_on_death;
-e->tag = 0;
-e->usr = 0;
+e->tag = ENEMY;
+e->usr = WHATEVER;
 
 DARKEN_DATA(struct MyComponent, data, e);
 data->hp = 10;
