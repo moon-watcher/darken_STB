@@ -19,14 +19,14 @@
  *
  * 2. A GNU C compiler -- GCC or Clang. Darken relies on GNU C statement expressions (DARKEN_SPAWN),
  *    the __attribute__((aligned)) extension (DARKEN_DECLARE), __alignof__, and _Static_assert
- *    (DARKEN_DECLARE). It will not build under a strict ISO-C-only compiler. Sentinel comparison in
+ *    (DARKEN_DECLARE). It will not build under a strict ISO-C-only compiler. Sentinel handling in
  *    state-machine mode (== / > against DARKEN_CONTINUE, DARKEN_DELETE, DARKEN_PAUSE) additionally
- *    assumes function pointers can be meaningfully compared against small integer values, which holds
- *    for flat-address targets but not for every platform.
+ *    relies on GNU C / target-ABI behavior for converting small integer values to function pointers and
+ *    comparing function-pointer values with those sentinels.
  *
- * 3. CAPACITY must be greater than zero, and the computed entity stride must fit in uint16_t.
- *    DARKEN_DECLARE() enforces both with _Static_assert; DARKEN_ALLOC() does not (it is an expression,
- *    not a declaration), so dynamic-allocation callers must verify them manually.
+ * 3. CAPACITY must satisfy 1 <= CAPACITY <= 65535, and the computed entity stride must fit in uint16_t.
+ *    DARKEN_DECLARE() enforces these constraints with _Static_assert; DARKEN_ALLOC() does not (it is an
+ *    expression, not a declaration), so dynamic-allocation callers must verify them manually.
  *
  * Beyond that, Darken makes no assumptions about the target: pointer width, struct alignment, and endianness
  * are all whatever the compiler says they are for the platform it's building for (see _DARKEN_ENTITY_ALIGN
@@ -134,8 +134,8 @@
  *
  *     Need the entity handle anyway (e.g. to read/write usr or tag)? Recover it with DARKEN_ENTITY(data).
  *
- *     Comparing a darken_state_t value against the sentinels with `==`/`>` relies on GNU C's permissive
- *     pointer/integer handling (see requirement 2 in PORTABILITY / REQUIREMENTS above).
+ *     Comparing a darken_state_t value against the sentinels with `==`/`>` relies on GNU C / target-ABI
+ *     behavior for the function-pointer sentinel representation described in requirement 2 above.
  *
  * 2) DIRECT mode — DARKEN_DIRECT defined
  * ---------------------------------------------------------
@@ -271,9 +271,9 @@ struct darken_entity_t
 //     DARKEN_FREE(free, &m);
 //
 // DARKEN_ALLOC() does not handle allocation failure or partial allocation cleanup.
-// CAPACITY must be > 0 and the computed stride must fit in uint16_t. Unlike DARKEN_DECLARE(), this macro
-// cannot enforce those two constraints with _Static_assert -- it expands to an expression, not a
-// declaration -- so the caller is responsible for verifying them.
+// CAPACITY must satisfy 1 <= CAPACITY <= 65535, and the computed stride must fit in uint16_t. Unlike
+// DARKEN_DECLARE(), this macro cannot enforce those constraints with _Static_assert because it expands to
+// an expression, not a declaration, so the caller is responsible for verifying them.
 #define DARKEN_ALLOC(ALLOC, CAPACITY, PAYLOAD)                           \
     (darken_t)                                                           \
     {                                                                    \
@@ -292,16 +292,17 @@ struct darken_entity_t
         (FREE)((CTX)->storage); \
     } while (0)
 
-// Static allocation with automatic storage duration (stack or global)
+// Static storage declaration (stack or global)
 //     DARKEN_DECLARE(storage, 5, sizeof(struct MyComponent));
 //     darken_t m = DARKEN_BIND(storage);
 //     darken_init(&m);
 //
-// CAPACITY must be > 0. The payload type used with DARKEN_DATA() must not require stricter alignment than
-// struct darken_entity_t. Both CAPACITY > 0 and stride <= UINT16_MAX are enforced at compile time via
-// _Static_assert.
+// CAPACITY must satisfy 1 <= CAPACITY <= 65535. The payload type used with DARKEN_DATA() must not require
+// stricter alignment than struct darken_entity_t. Both CAPACITY and the computed stride are checked at
+// compile time via _Static_assert.
 #define DARKEN_DECLARE(NAME, CAPACITY, PAYLOAD)                                                                           \
     _Static_assert((CAPACITY) > 0, "DARKEN_DECLARE: CAPACITY must be > 0");                                               \
+    _Static_assert((CAPACITY) <= (uint16_t)-1, "DARKEN_DECLARE: CAPACITY must fit in uint16_t");                          \
     _Static_assert(_DARKEN_ENTITY_STRIDE(PAYLOAD) <= (uint16_t)-1, "DARKEN_DECLARE: entity stride must fit in uint16_t"); \
     struct                                                                                                                \
     {                                                                                                                     \
