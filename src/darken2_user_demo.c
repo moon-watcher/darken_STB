@@ -91,14 +91,14 @@ struct game_obj
  * el motor
  * ============================================================================ */
 
-#define GAME_DISPATCH()                                                        \
-    do                                                                          \
-    {                                                                            \
-        darken_state_t _next = _entity->update(_entity->data);                    \
-        if ((uintptr_t)_next <= (uintptr_t)darken_free_zone(_entity->owner))        \
-            darken_entity_set_zone(_entity->data, (int)(uintptr_t)_next);            \
-        else                                                                          \
-            _entity->update = _next;                                                  \
+#define GAME_DISPATCH()                                                      \
+    do                                                                       \
+    {                                                                        \
+        darken_state_t _next = _entity->update(_entity->data);               \
+        if ((uintptr_t)_next <= (uintptr_t)darken_free_zone(_entity->owner)) \
+            darken_entity_set_zone(_entity->data, (int)(uintptr_t)_next);    \
+        else                                                                 \
+            _entity->update = _next;                                         \
     } while (0)
 
 static void game_update(darken_t *ctx)
@@ -221,29 +221,34 @@ int darken2_user_demo_main(bool hardReset)
 
     darken_entity_t enemy = DARKEN_SPAWN(&ctx, Z_ENEMIES);
     enemy->update = enemy_walk;
-    ((struct game_obj *)enemy->data)->kind = KIND_ENEMY;
-    ((struct game_obj *)enemy->data)->as.enemy.x = 0;
-    ((struct game_obj *)enemy->data)->as.enemy.hp = 5;
-    ((struct game_obj *)enemy->data)->as.enemy.stun_frames_left = 0;
+
+    DARKEN_DATA(struct game_obj, data_enemy, enemy);
+    data_enemy->kind = KIND_ENEMY;
+    data_enemy->as.enemy.x = 0;
+    data_enemy->as.enemy.hp = 5;
+    data_enemy->as.enemy.stun_frames_left = 0;
 
     darken_entity_t player = DARKEN_SPAWN(&ctx, Z_PLAYERS);
     player->update = player_update;
-    ((struct game_obj *)player->data)->kind = KIND_PLAYER;
-    ((struct game_obj *)player->data)->as.player.x = 0;
-    ((struct game_obj *)player->data)->as.player.hp = 3;
+    DARKEN_DATA(struct game_obj, data_player, player);
+    data_player->kind = KIND_PLAYER;
+    data_player->as.player.x = 0;
+    data_player->as.player.hp = 3;
 
     darken_entity_t bullet = DARKEN_SPAWN(&ctx, Z_ENEMY_BULLETS);
     bullet->update = bullet_update;
-    ((struct game_obj *)bullet->data)->kind = KIND_BULLET;
-    ((struct game_obj *)bullet->data)->as.bullet.x = 0;
-    ((struct game_obj *)bullet->data)->as.bullet.dx = 1;
-    ((struct game_obj *)bullet->data)->as.bullet.ttl = 3;
+    DARKEN_DATA(struct game_obj, data_bullet, bullet);
+    data_bullet->kind = KIND_BULLET;
+    data_bullet->as.bullet.x = 0;
+    data_bullet->as.bullet.dx = 1;
+    data_bullet->as.bullet.ttl = 3;
 
     darken_entity_t bonus = DARKEN_SPAWN(&ctx, Z_BONUS_ITEMS);
     bonus->update = bonus_update;
-    ((struct game_obj *)bonus->data)->kind = KIND_BONUS;
-    ((struct game_obj *)bonus->data)->as.bonus.x = 0;
-    ((struct game_obj *)bonus->data)->as.bonus.value = 2;
+    DARKEN_DATA(struct game_obj, data_bonus, bonus);
+    data_bonus->kind = KIND_BONUS;
+    data_bonus->as.bonus.x = 0;
+    data_bonus->as.bonus.value = 2;
 
     kprintf("zones para este ctx: %d (libre = %d)", ctx.zones, darken_free_zone(&ctx));
 
@@ -257,5 +262,3 @@ int darken2_user_demo_main(bool hardReset)
 
     return 0;
 }
-
-

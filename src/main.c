@@ -27,8 +27,8 @@ int main(void)
     // r = darken_bench_delete(1000);       kprintf("darken_bench_delete: %d", r);
 
     // darken_sgdk_tests_c();
-    darken2_storage_smoke_test_main();
-    // darken2_user_demo_main();
+    // darken2_storage_smoke_test_main();
+    darken2_user_demo_main();
 
     return 0;
 }
