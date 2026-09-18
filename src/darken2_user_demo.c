@@ -1,198 +1,261 @@
-// user_demo.c — implementación de usuario sobre darken2.h
+// user_demo.c — implementación de usuario sobre darken2.h, para SGDK (Sega
+// Mega Drive / Genesis).
 //
-// Escenario de juguete: 3 zonas de usuario + la libre implícita.
+// Solo se usan headers de SGDK: <genesis.h> da u8/u16/u32, uint8_t/uint16_t/
+// uint32_t (los mapea a los suyos), kprintf() y MEM_alloc()/MEM_free(). SGDK
+// no define uintptr_t -- como el m68k del Genesis es de 32 bits, un
+// `typedef u32 uintptr_t;` es exacto y evita tirar de cualquier header ajeno
+// a SGDK solo por ese tipo.
 //
-//   Z_ACTIVE     -- se tickea cada frame como máquina de estados
-//   Z_STUNNED    -- también se tickea (para poder contar el tiempo de aturdido
-//                   y decidir cuándo volver a Z_ACTIVE), pero es una zona
-//                   aparte para poder filtrarla en otros sitios (renderizado,
-//                   colisiones, etc. -- no se ve en este demo)
-//   Z_OFFSCREEN  -- NUNCA se tickea: equivalente al "paused" del Darken original,
-//                   pero aquí es una decisión explícita del usuario, no un
-//                   nombre reservado del motor
+// Un único ctx con 4 zonas de USUARIO, cada una una categoría de objeto de
+// juego (no una etapa de vida):
 //
-// Todo esto (cuántas zonas hay, cuáles se actualizan y cómo) es responsabilidad
-// del usuario: darken2.h no impone ni un darken_update() global ni nombres de
-// zona especiales más allá de la libre.
+//   Z_ENEMIES        -- enemigos
+//   Z_PLAYERS        -- jugadores
+//   Z_ENEMY_BULLETS  -- proyectiles enemigos
+//   Z_BONUS_ITEMS    -- objetos de bonificación
+//
+// Todas viven en el mismo pool (mismo stride: el payload es una unión
+// etiquetada, struct game_obj), pero cada categoría se recorre y actualiza
+// por separado con su propio DARKEN_FOREACH_ZONE.
+//
+// Dentro de cada categoría, las entidades usan DOS sentinels distintos en el
+// valor de retorno de update() -- exactamente como en darken.h original, solo
+// que ahí eran 3 constantes fijas (CONTINUE/PAUSE/DELETE) y aquí son "cuántas
+// zonas tenga este ctx, más la libre":
+//
+//   - devolver una ZONA (0..zones, incluida la libre) mueve la entidad a esa
+//     zona y NO toca su update() -- así se expresa tanto "quédate donde estás"
+//     (devolver tu propia zona) como "muérete/expira" (devolver la libre).
+//   - devolver una FUNCIÓN (un puntero de verdad, no un entero pequeño) NO
+//     mueve de zona -- solo instala esa función como el próximo update(). Así
+//     es como un enemigo pasa de "caminando" a "aturdido" sin salir nunca de
+//     Z_ENEMIES.
+//
+// GAME_DISPATCH() es quien decide, mirando el valor devuelto, cuál de las dos
+// cosas ha pasado -- eso es lo que en darken.h original hacía _DARKEN_UPDATE,
+// y que ahora es responsabilidad de esta aplicación, no del motor.
 
-#include <stdint.h>
+#include <genesis.h>
 
+typedef u32 uintptr_t; // SGDK no lo define; en m68k un puntero mide 32 bits
 
-#define DARKEN_ZONES 3
-enum
-{
-    Z_ACTIVE = 0,
-    Z_STUNNED = 1,
-    Z_OFFSCREEN = 2,
-};
+#define Z_ENEMIES 0
+#define Z_PLAYERS 1
+#define Z_ENEMY_BULLETS 2
+#define Z_BONUS_ITEMS 3
+#define GAME_ZONES 4 // cuántas zonas de usuario tiene ESTE ctx concreto
 
 #include "darken2.h"
 
 /* ============================================================================
- * Payload de usuario
+ * Payload: una unión etiquetada, porque todas las entidades de este ctx
+ * comparten el mismo stride
  * ============================================================================ */
 
-struct enemy
+enum obj_kind
 {
-    int x;
-    int stun_frames_left;
+    KIND_ENEMY,
+    KIND_PLAYER,
+    KIND_BULLET,
+    KIND_BONUS,
+};
+
+struct game_obj
+{
+    enum obj_kind kind;
+    union
+    {
+        struct
+        {
+            s16 x, hp, stun_frames_left;
+        } enemy;
+        struct
+        {
+            s16 x, hp;
+        } player;
+        struct
+        {
+            s16 x, dx, ttl;
+        } bullet;
+        struct
+        {
+            s16 x, value;
+        } bonus;
+    } as;
 };
 
 /* ============================================================================
- * El propio "_DARKEN_UPDATE" del usuario
- * ============================================================================
- * darken2.h ya no impone ninguna convención sobre lo que devuelve update():
- * solo ofrece darken_entity_set_zone(data, zona) como comando de movimiento.
- * Aquí, en la aplicación, decidimos que 0..DARKEN_FREE_ZONE se interpreta como
- * "zona destino" y cualquier otro valor como "nuevo puntero a callback" --
- * exactamente lo que hacía _DARKEN_UPDATE en darken.h original, solo que ahora
- * es una convención de ESTA app, no del motor. Otra app sobre el mismo
- * darken2.h podría inventarse una completamente distinta.
- */
-#define GAME_DISPATCH()                                                   \
-    do                                                                    \
-    {                                                                     \
-        darken_state_t _next = _entity->update(_entity->data);            \
-        if ((uintptr_t)_next <= DARKEN_FREE_ZONE)                         \
-            darken_entity_set_zone(_entity->data, (int)(uintptr_t)_next); \
-        else                                                              \
-            _entity->update = _next;                                      \
+ * GAME_DISPATCH: la convención de ESTA app sobre el valor de retorno de
+ * update() -- análoga a _DARKEN_UPDATE en darken.h original, pero aquí, no en
+ * el motor
+ * ============================================================================ */
+
+#define GAME_DISPATCH()                                                        \
+    do                                                                          \
+    {                                                                            \
+        darken_state_t _next = _entity->update(_entity->data);                    \
+        if ((uintptr_t)_next <= (uintptr_t)darken_free_zone(_entity->owner))        \
+            darken_entity_set_zone(_entity->data, (int)(uintptr_t)_next);            \
+        else                                                                          \
+            _entity->update = _next;                                                  \
     } while (0)
 
-/* ============================================================================
- * El propio "darken_update()" del usuario
- * ============================================================================
- * darken2.h ya no ofrece un darken_update() de propósito general (con N zonas
- * arbitrarias, el motor no puede saber cuáles hay que tickear). El usuario lo
- * compone aquí a partir de DARKEN_FOREACH_ZONE + GAME_DISPATCH, zona a zona.
- */
 static void game_update(darken_t *ctx)
 {
-    DARKEN_FOREACH_ZONE(ctx, Z_ACTIVE, GAME_DISPATCH());
-    DARKEN_FOREACH_ZONE(ctx, Z_STUNNED, GAME_DISPATCH());
-    // Z_OFFSCREEN queda fuera a propósito: dormida hasta que algo externo
-    // (colisión, evento de gameplay, etc.) la mueva explícitamente.
+    DARKEN_FOREACH_ZONE(ctx, Z_ENEMIES, GAME_DISPATCH());
+    DARKEN_FOREACH_ZONE(ctx, Z_PLAYERS, GAME_DISPATCH());
+    DARKEN_FOREACH_ZONE(ctx, Z_ENEMY_BULLETS, GAME_DISPATCH());
+    DARKEN_FOREACH_ZONE(ctx, Z_BONUS_ITEMS, GAME_DISPATCH());
 }
 
 /* ============================================================================
- * Callbacks de estado (mismo idioma que darken.h original: devolver un
- * darken_state_t; aquí el valor se interpreta como índice de zona destino)
+ * Enemigos: dos estados (caminando / aturdido), transición por FUNCIÓN,
+ * ninguno de los dos cambia de zona -- el enemigo nunca sale de Z_ENEMIES
+ * hasta que muere de verdad
  * ============================================================================ */
 
 static void *enemy_stunned(void *data);
 
 static void *enemy_walk(void *data)
 {
-    struct enemy *e = (struct enemy *)data;
-    e->x++;
+    struct game_obj *obj = (struct game_obj *)data;
+    obj->as.enemy.x++;
+    kprintf("  [ENEMY]  slot=%d x=%d hp=%d", DARKEN_ENTITY(data)->slot, obj->as.enemy.x, obj->as.enemy.hp);
 
-    kprintf("  [ACTIVE] enemy slot=%u x=%d", DARKEN_ENTITY(data)->slot, e->x);
-
-    if (e->x >= 3)
+    if (obj->as.enemy.hp <= 0)
     {
-        darken_entity_t self = DARKEN_ENTITY(data);
-        kprintf("  [ACTIVE] slot=%u se aturde", self->slot);
-        e->stun_frames_left = 2;
-        // El valor de retorno SOLO mueve de zona. Si además queremos que la
-        // próxima llamada ejecute otra lógica, hay que asignar update() a
-        // mano, aquí mismo -- igual que ya se hace para cambiar de estado sin
-        // cambiar de zona.
-        self->update = enemy_stunned;
-        return /* (void *)(uintptr_t) */ Z_STUNNED;
+        kprintf("  [ENEMY]  slot=%d muere -> libre", DARKEN_ENTITY(data)->slot);
+        return (void *)(uintptr_t)DARKEN_FREE_ZONE(data); // sentinel de ZONA: fin de vida
     }
 
-    return /* (void *)(uintptr_t) */ Z_ACTIVE; // "continue", ya sin sentinela especial
+    if (obj->as.enemy.x >= 3)
+    {
+        obj->as.enemy.stun_frames_left = 2;
+        kprintf("  [ENEMY]  slot=%d se aturde", DARKEN_ENTITY(data)->slot);
+        return (void *)enemy_stunned; // sentinel de FUNCIÓN: cambia de estado, sigue en Z_ENEMIES
+    }
+
+    return (void *)(uintptr_t)Z_ENEMIES; // sentinel de ZONA (la propia): "continuar"
 }
 
 static void *enemy_stunned(void *data)
 {
-    struct enemy *e = (struct enemy *)data;
-    darken_entity_t self = DARKEN_ENTITY(data);
+    struct game_obj *obj = (struct game_obj *)data;
+    obj->as.enemy.stun_frames_left--;
+    kprintf("  [ENEMY]  slot=%d aturdido, frames_left=%d", DARKEN_ENTITY(data)->slot, obj->as.enemy.stun_frames_left);
 
-    e->stun_frames_left--;
-    kprintf("  [STUNNED] slot=%u frames_left=%d", self->slot, e->stun_frames_left);
-
-    if (e->stun_frames_left <= 0)
+    if (obj->as.enemy.stun_frames_left <= 0)
     {
-        kprintf("  [STUNNED] slot=%u se recupera", self->slot);
-        self->update = enemy_walk;
-        return /* (void *)(uintptr_t) */ Z_ACTIVE;
+        kprintf("  [ENEMY]  slot=%d se recupera", DARKEN_ENTITY(data)->slot);
+        return (void *)enemy_walk; // vuelve a caminar -- otra vez, sentinel de FUNCIÓN
     }
 
-    return /* (void *)(uintptr_t) */ Z_STUNNED;
-}
-
-static void *enemy_die_next_tick(void *data)
-{
-    darken_entity_t self = DARKEN_ENTITY(data);
-    kprintf("  [ACTIVE] slot=%u se autodestruye -> libre", self->slot);
-    return /* (void *)(uintptr_t) */ DARKEN_FREE_ZONE;
+    return (void *)(uintptr_t)Z_ENEMIES; // sigue aturdido, sigue en su zona
 }
 
 /* ============================================================================
- * main: storage manual (los constructores ALLOC/DECLARE están pausados en
- * esta iteración), unos spawns, y unos cuantos frames de game_update()
+ * Jugador: un único estado en este demo, solo para mostrar la zona en acción
  * ============================================================================ */
 
-#define CAPACITY 4
-
-int darken2_user_demo_main(void)
+static void *player_update(void *data)
 {
-    uint16_t stride = _DARKEN_ENTITY_STRIDE(sizeof(struct enemy));
+    struct game_obj *obj = (struct game_obj *)data;
+    kprintf("  [PLAYER] slot=%d hp=%d", DARKEN_ENTITY(data)->slot, obj->as.player.hp);
+    return (void *)(uintptr_t)Z_PLAYERS; // continuar
+}
 
-    darken_entity_t pool_storage[CAPACITY];
-    static uint8_t entity_storage[CAPACITY * _DARKEN_ENTITY_STRIDE(sizeof(struct enemy))]
-        __attribute__((aligned(_DARKEN_ENTITY_ALIGN)));
+/* ============================================================================
+ * Bala enemiga: sin sub-estados, solo vuela hasta que expira -> libre
+ * ============================================================================ */
 
-    darken_t ctx = {
-        .pool = pool_storage,
-        .storage = entity_storage,
-        .capacity = CAPACITY,
-        .stride = stride,
-    };
+static void *bullet_update(void *data)
+{
+    struct game_obj *obj = (struct game_obj *)data;
+    obj->as.bullet.x += obj->as.bullet.dx;
+    obj->as.bullet.ttl--;
+    kprintf("  [BULLET] slot=%d x=%d ttl=%d", DARKEN_ENTITY(data)->slot, obj->as.bullet.x, obj->as.bullet.ttl);
 
-    darken_init(&ctx);
-
-    darken_entity_t a = DARKEN_SPAWN(&ctx, Z_ACTIVE);
-    darken_entity_t b = DARKEN_SPAWN(&ctx, Z_ACTIVE);
-    darken_entity_t c = DARKEN_SPAWN(&ctx, Z_OFFSCREEN); // nace directamente dormido
-
-    DARKEN_DATA(struct enemy, da, a);
-    da->x = 0;
-    da->stun_frames_left = 0;
-    a->update = enemy_walk;
-
-    DARKEN_DATA(struct enemy, db, b);
-    db->x = 0;
-    db->stun_frames_left = 0;
-    b->update = enemy_die_next_tick;
-
-    DARKEN_DATA(struct enemy, dc, c);
-    dc->x = 0;
-    dc->stun_frames_left = 0;
-    c->update = enemy_walk; // nunca se llamará mientras siga en Z_OFFSCREEN
-
-    kprintf("slots: a=%u b=%u c=%u (spawn order)", a->slot, b->slot, c->slot);
-
-    for (int frame = 1; frame <= 5; frame++)
+    if (obj->as.bullet.ttl <= 0)
     {
-        kprintf("-- frame %d -- (active=%d..%d, stunned=%d..%d, offscreen=%d..%d, free=%d..%d)",
-               frame,
-               0, ctx.bounds[Z_ACTIVE] - 1,
-               ctx.bounds[Z_ACTIVE], ctx.bounds[Z_STUNNED] - 1,
-               ctx.bounds[Z_STUNNED], ctx.bounds[Z_OFFSCREEN] - 1,
-               ctx.bounds[Z_OFFSCREEN], ctx.capacity - 1);
-        game_update(&ctx);
+        kprintf("  [BULLET] slot=%d expira -> libre", DARKEN_ENTITY(data)->slot);
+        return (void *)(uintptr_t)DARKEN_FREE_ZONE(data);
     }
 
-    // Comprobación manual, fuera de un update(): mover `c` de vuelta a activo
-    // sin pasar por ningún callback ni por GAME_DISPATCH -- demuestra
-    // darken_entity_set_zone() como comando público de la app, invocable desde
-    // cualquier sitio (aquí, desde fuera del bucle de update), no solo desde
-    // dentro de la convención de retorno que definimos en GAME_DISPATCH.
-    kprintf("-- despertando a c manualmente --");
-    darken_entity_set_zone(c->data, Z_ACTIVE);
-    kprintf("zona de c ahora: %d (Z_ACTIVE=%d)", darken_entity_zone(c), Z_ACTIVE);
+    return (void *)(uintptr_t)Z_ENEMY_BULLETS;
+}
+
+/* ============================================================================
+ * Objeto de bonificación: se recoge (simulado) tras un par de frames -> libre
+ * ============================================================================ */
+
+static void *bonus_update(void *data)
+{
+    struct game_obj *obj = (struct game_obj *)data;
+    obj->as.bonus.value--;
+    kprintf("  [BONUS]  slot=%d value=%d", DARKEN_ENTITY(data)->slot, obj->as.bonus.value);
+
+    if (obj->as.bonus.value <= 0)
+    {
+        kprintf("  [BONUS]  slot=%d recogido -> libre", DARKEN_ENTITY(data)->slot);
+        return (void *)(uintptr_t)DARKEN_FREE_ZONE(data);
+    }
+
+    return (void *)(uintptr_t)Z_BONUS_ITEMS;
+}
+
+/* ============================================================================
+ * main: storage estático vía DARKEN_DECLARE + DARKEN_BIND. Firma y bucle
+ * idiomáticos de SGDK: int main(bool hardReset) y un while(TRUE) que termina
+ * en SYS_doVBlankProcess() en cada vuelta -- un programa de SGDK nunca
+ * "vuelve" del main().
+ * ============================================================================ */
+
+#define CAPACITY 8
+
+int darken2_user_demo_main(bool hardReset)
+{
+    DARKEN_DECLARE(storage, CAPACITY, GAME_ZONES, sizeof(struct game_obj));
+    darken_t ctx = DARKEN_BIND(storage);
+    darken_init(&ctx);
+
+    darken_entity_t enemy = DARKEN_SPAWN(&ctx, Z_ENEMIES);
+    enemy->update = enemy_walk;
+    ((struct game_obj *)enemy->data)->kind = KIND_ENEMY;
+    ((struct game_obj *)enemy->data)->as.enemy.x = 0;
+    ((struct game_obj *)enemy->data)->as.enemy.hp = 5;
+    ((struct game_obj *)enemy->data)->as.enemy.stun_frames_left = 0;
+
+    darken_entity_t player = DARKEN_SPAWN(&ctx, Z_PLAYERS);
+    player->update = player_update;
+    ((struct game_obj *)player->data)->kind = KIND_PLAYER;
+    ((struct game_obj *)player->data)->as.player.x = 0;
+    ((struct game_obj *)player->data)->as.player.hp = 3;
+
+    darken_entity_t bullet = DARKEN_SPAWN(&ctx, Z_ENEMY_BULLETS);
+    bullet->update = bullet_update;
+    ((struct game_obj *)bullet->data)->kind = KIND_BULLET;
+    ((struct game_obj *)bullet->data)->as.bullet.x = 0;
+    ((struct game_obj *)bullet->data)->as.bullet.dx = 1;
+    ((struct game_obj *)bullet->data)->as.bullet.ttl = 3;
+
+    darken_entity_t bonus = DARKEN_SPAWN(&ctx, Z_BONUS_ITEMS);
+    bonus->update = bonus_update;
+    ((struct game_obj *)bonus->data)->kind = KIND_BONUS;
+    ((struct game_obj *)bonus->data)->as.bonus.x = 0;
+    ((struct game_obj *)bonus->data)->as.bonus.value = 2;
+
+    kprintf("zones para este ctx: %d (libre = %d)", ctx.zones, darken_free_zone(&ctx));
+
+    while (TRUE)
+    {
+        game_update(&ctx);
+
+        // siempre al final del frame
+        SYS_doVBlankProcess();
+    }
 
     return 0;
 }
+
+

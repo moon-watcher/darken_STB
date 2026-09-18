@@ -1,32 +1,50 @@
 /**
  * darken2.h — MOCKUP de diseño, no producción todavía.
  *
- * Requiere, definidos por el usuario ANTES de este #include:
+ * Requiere que uint8_t/uint16_t/uint32_t/uintptr_t sean visibles ya (igual que
+ * darken.h original: no incluye ningún header por sí mismo, ni siquiera
+ * <stdint.h>). Bajo SGDK, <genesis.h> ya expone uint8_t/uint16_t/uint32_t
+ * (los mapea a sus propios u8/u16/u32); solo falta uintptr_t, que SGDK no
+ * define -- como el m68k del Genesis es de 32 bits, un simple
+ * `typedef u32 uintptr_t;` antes de este include es exacto y evita tirar de
+ * cualquier header ajeno a SGDK solo por ese tipo.
  *
- *   DARKEN_ZONES   -- número de zonas "de usuario" (>0). La zona libre NO cuenta
- *                     aquí: vive implícita justo después de la última zona de
- *                     usuario, hasta `capacity`.
- *   Z_...          -- un enum/defines con las zonas de usuario, valores 0..DARKEN_ZONES-1,
- *                     ordenadas de izquierda a derecha tal y como se quiera que
- *                     queden dentro de pool[].
+ * A diferencia de la primera iteración de este mockup, YA NO hace falta
+ * `#define DARKEN_ZONES N` antes del include: el número de zonas es un dato de
+ * cada darken_t (campo `zones`), fijado al construirlo (DARKEN_DECLARE/ALLOC),
+ * no una constante global de compilación. Dos ctx distintos en el mismo
+ * programa pueden tener cada uno su propio número de zonas.
  *
- * También requiere que uint8_t/uint16_t/uint32_t/uintptr_t sean visibles ya
- * (igual que darken.h original: no incluye <stdint.h> por sí mismo).
+ * DARKEN_MAX_ZONES sigue siendo una constante de compilación (por defecto 8,
+ * redefinible antes del include): es solo el tamaño físico reservado para
+ * bounds[] dentro de darken_t; `zones` (en tiempo de ejecución, por instancia)
+ * dice cuántas de esas posiciones están realmente en uso para un ctx dado.
  *
- * Pendiente de esta iteración (a propósito, fuera de alcance del mockup):
- *   - Macros constructoras de storage (ALLOC/DECLARE/INIT/BIND) -- pausadas.
- *   - destroy() -- ya no lo gestiona el motor, es responsabilidad del usuario.
- *   - Validación en runtime de zonas/bounds -- cero checks, como el original.
+ * Las zonas de usuario van de 0 a zones-1, en el orden en que el usuario las
+ * declare. La zona libre no tiene índice propio: es siempre `zones` para ese
+ * ctx (ver DARKEN_FREE_ZONE), justo después de la última zona de usuario,
+ * hasta `capacity`.
  *
  * El motor NO interpreta el valor de retorno de update(): solo ofrece el
  * comando darken_entity_set_zone(data, zona) para moverla. Qué significa lo
  * que devuelve update() -- y cuándo llamar a ese comando -- es responsabilidad
- * de cada aplicación (ver GAME_DISPATCH en user_demo.c).
+ * de cada aplicación (ver GAME_DISPATCH en user_demo.c). Ahí, las zonas hacen
+ * de sentinels (como DARKEN_CONTINUE/PAUSE/DELETE en darken.h original): un
+ * valor de retorno pequeño (0..zona_libre) es una zona destino, cualquier otro
+ * valor es un puntero a la siguiente función de estado.
+ *
+ * Pendiente de esta iteración (a propósito, fuera de alcance del mockup):
+ *   - destroy() -- ya no lo gestiona el motor, es responsabilidad del usuario.
+ *   - Validación en runtime de zonas/bounds -- cero checks, como el original.
  */
 
 #pragma once
 
-_Static_assert(DARKEN_ZONES > 0, "darken2.h: DARKEN_ZONES debe estar definido y ser > 0 antes de este include");
+#ifndef DARKEN_MAX_ZONES
+#define DARKEN_MAX_ZONES 8
+#endif
+
+_Static_assert(DARKEN_MAX_ZONES > 0 && DARKEN_MAX_ZONES <= 255, "darken2.h: DARKEN_MAX_ZONES fuera de rango");
 
 // Callback de update: recibe solo el payload (data), nunca el handle directamente.
 // Si hace falta el handle dentro del callback, se recupera con DARKEN_ENTITY(data).
@@ -40,7 +58,8 @@ typedef struct darken_t
     uint8_t *storage;
     uint16_t capacity;
     uint16_t stride;
-    uint16_t bounds[DARKEN_ZONES]; // bounds[z] = frontera derecha de la zona z (usuario)
+    uint16_t zones;                    // cuántas zonas de usuario tiene ESTE ctx (1..DARKEN_MAX_ZONES)
+    uint16_t bounds[DARKEN_MAX_ZONES]; // solo bounds[0..zones-1] son significativos
 } darken_t;
 
 struct darken_entity_t
@@ -63,13 +82,92 @@ struct darken_entity_t
 #define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN(sizeof(struct darken_entity_t) + (PAYLOAD), _DARKEN_ENTITY_ALIGN)
 
 /* ============================================================================
- * Zona libre implícita
+ * Storage: construcción de un darken_t y su almacenamiento (mismo patrón que
+ * darken.h original, con ZONES como parámetro adicional junto a CAPACITY)
  * ============================================================================ */
 
-// La libre no tiene índice propio en el enum del usuario ni entrada dedicada en
-// bounds[]: es, por definición, la zona DARKEN_ZONES (la que va justo después de
-// la última zona de usuario). DARKEN_FREE_ZONE es solo azúcar de lectura.
-#define DARKEN_FREE_ZONE DARKEN_ZONES
+// Asignación dinámica: usar con malloc/calloc o un allocador propio.
+//     darken_t m = DARKEN_ALLOC(malloc, 32, 4, sizeof(struct game_obj));
+//     if (!m.pool || !m.storage) return;
+//     darken_init(&m);
+//     ...
+//     DARKEN_FREE(free, &m);
+//
+// DARKEN_ALLOC() no gestiona fallos de asignación ni limpieza parcial.
+// CAPACITY debe cumplir 1 <= CAPACITY <= 65535, ZONES debe cumplir
+// 1 <= ZONES <= DARKEN_MAX_ZONES, y el stride calculado debe caber en uint16_t.
+// Al ser una expresión (no una declaración), DARKEN_ALLOC() no puede forzar
+// estas restricciones con _Static_assert -- responsabilidad del llamador.
+#define DARKEN_ALLOC(ALLOC, CAPACITY, ZONES, PAYLOAD)                    \
+    (darken_t)                                                           \
+    {                                                                    \
+        .pool = (ALLOC)((CAPACITY) * sizeof(darken_entity_t)),           \
+        .storage = (ALLOC)((CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)), \
+        .capacity = (CAPACITY),                                          \
+        .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                        \
+        .zones = (ZONES),                                                \
+    }
+
+// Libera pool y storage reservados con DARKEN_ALLOC(). bounds[]/zones van
+// embebidos en el propio darken_t: no hay nada más que liberar.
+#define DARKEN_FREE(FREE, CTX)  \
+    do                          \
+    {                           \
+        (FREE)((CTX)->pool);    \
+        (FREE)((CTX)->storage); \
+    } while (0)
+
+// Declaración de almacenamiento estático (pila o global).
+//     DARKEN_DECLARE(storage, 32, 4, sizeof(struct game_obj));
+//     darken_t m = DARKEN_BIND(storage);
+//     darken_init(&m);
+//
+// CAPACITY y ZONES se comprueban en tiempo de compilación via _Static_assert.
+#define DARKEN_DECLARE(NAME, CAPACITY, ZONES, PAYLOAD)                                                                    \
+    /*                                                                                                                    \
+    _Static_assert((CAPACITY) > 0, "DARKEN_DECLARE: CAPACITY must be > 0");                                               \
+    _Static_assert((CAPACITY) <= (uint16_t)-1, "DARKEN_DECLARE: CAPACITY must fit in uint16_t");                          \
+    _Static_assert((ZONES) > 0, "DARKEN_DECLARE: ZONES must be > 0");                                                     \
+    _Static_assert((ZONES) <= DARKEN_MAX_ZONES, "DARKEN_DECLARE: ZONES exceeds DARKEN_MAX_ZONES");                        \
+    _Static_assert(_DARKEN_ENTITY_STRIDE(PAYLOAD) <= (uint16_t)-1, "DARKEN_DECLARE: entity stride must fit in uint16_t"); \
+    */                                                                                                                    \
+    struct                                                                                                                \
+    {                                                                                                                     \
+        uint16_t capacity;                                                                                                \
+        uint16_t stride;                                                                                                  \
+        uint16_t zones;                                                                                                   \
+        darken_entity_t pool[(CAPACITY)] __attribute__((aligned(_DARKEN_POOL_ALIGN)));                                    \
+        uint8_t data[(CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)] __attribute__((aligned(_DARKEN_ENTITY_ALIGN)));         \
+    } NAME = {                                                                                                            \
+        .capacity = (CAPACITY),                                                                                           \
+        .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                                                                         \
+        .zones = (ZONES),                                                                                                 \
+    }
+
+// Inicialización estática/global con constantes de compilación. ZONES se pide
+// explícito (no se puede derivar de STORAGE con sizeof() como capacity/stride,
+// porque zones es un escalar, no el tamaño de un array) -- debe coincidir con
+// el que se usó al declarar STORAGE.
+#define DARKEN_INIT(STORAGE, ZONES)                                                            \
+    (darken_t)                                                                                 \
+    {                                                                                          \
+        .pool = (STORAGE).pool,                                                                \
+        .storage = (STORAGE).data,                                                             \
+        .capacity = sizeof((STORAGE).pool) / sizeof(darken_entity_t),                          \
+        .stride = sizeof((STORAGE).data) / (sizeof((STORAGE).pool) / sizeof(darken_entity_t)), \
+        .zones = (ZONES),                                                                      \
+    }
+
+// Vinculación en tiempo de ejecución: locales, reasignación, cualquier contexto.
+#define DARKEN_BIND(NAME)            \
+    (darken_t)                       \
+    {                                \
+        .pool = (NAME).pool,         \
+        .storage = (NAME).data,      \
+        .capacity = (NAME).capacity, \
+        .stride = (NAME).stride,     \
+        .zones = (NAME).zones,       \
+    }
 
 /* ============================================================================
  * Núcleo: pertenencia a zona y movimiento entre zonas
@@ -94,16 +192,16 @@ static inline uint16_t _darken_zone_lo(darken_t *ctx, int zone)
 
 static inline uint16_t _darken_zone_hi(darken_t *ctx, int zone)
 {
-    return zone < DARKEN_ZONES ? ctx->bounds[zone] : ctx->capacity;
+    return zone < ctx->zones ? ctx->bounds[zone] : ctx->capacity;
 }
 
-// Devuelve 0..DARKEN_ZONES-1 para zonas de usuario, o DARKEN_ZONES (== DARKEN_FREE_ZONE)
-// si la entidad está en la libre.
+// Devuelve 0..zones-1 para zonas de usuario, o `zones` (== la libre para ese
+// ctx) si la entidad está en la libre.
 static inline int darken_entity_zone(darken_entity_t entity)
 {
     darken_t *ctx = entity->owner;
     int z = 0;
-    while (z < DARKEN_ZONES && entity->slot >= ctx->bounds[z])
+    while (z < ctx->zones && entity->slot >= ctx->bounds[z])
         z++;
     return z;
 }
@@ -111,6 +209,16 @@ static inline int darken_entity_zone(darken_entity_t entity)
 // Recupera el handle a partir de un puntero a su payload (lo único que un
 // update() recibe). Mismo idioma offsetof-via-null-pointer que darken.h original.
 #define DARKEN_ENTITY(DATA) ((darken_entity_t)((uint8_t *)(DATA) - (uintptr_t)&((darken_entity_t)0)->data))
+
+// El índice de la zona libre de un ctx concreto -- ya no es una constante
+// global (cada ctx puede tener un `zones` distinto), así que hace falta
+// resolverlo por instancia. DARKEN_FREE_ZONE(DATA) es la versión cómoda para
+// usar dentro de un callback update(), que solo tiene `data` en la mano.
+static inline int darken_free_zone(darken_t *ctx)
+{
+    return (int)ctx->zones;
+}
+#define DARKEN_FREE_ZONE(DATA) darken_free_zone(DARKEN_ENTITY(DATA)->owner)
 
 // Privado: el movimiento real, sobre el handle. La API pública opera sobre
 // `data` (ver darken_entity_set_zone) porque es lo único que un callback
@@ -127,14 +235,12 @@ static inline void _darken_move_zone(darken_entity_t entity, int target)
 }
 
 // Único comando de movimiento que expone el motor. Mueve la entidad a la zona
-// `target` (0..DARKEN_ZONES-1 para zonas de usuario, DARKEN_FREE_ZONE para la
-// libre). No-op si ya está ahí.
+// `target` (0..zones-1 para zonas de usuario de su ctx, o el valor de
+// darken_free_zone()/DARKEN_FREE_ZONE(DATA) para la libre). No-op si ya está ahí.
 //
 // El motor NO decide cuándo llamar a esto ni qué significa el valor que
-// devuelve un update() -- eso (la relación entre "lo que retorna la entidad" y
-// "a qué zona se mueve") lo establece cada aplicación en su propia
-// implementación, análogo a _DARKEN_UPDATE en darken.h original pero ahora
-// fuera del motor. Ver GAME_DISPATCH en user_demo.c para un ejemplo.
+// devuelve un update() -- eso lo establece cada aplicación en su propia
+// implementación (ver GAME_DISPATCH en user_demo.c).
 static inline void darken_entity_set_zone(void *data, int target)
 {
     _darken_move_zone(DARKEN_ENTITY(data), target);
@@ -147,7 +253,7 @@ static inline void darken_entity_set_zone(void *data, int target)
 // El usuario indica a qué zona nace la entidad. La cantera siempre es la libre.
 #define DARKEN_SPAWN(CTX, ZONE) ({                                                \
     darken_t *_ctx = (CTX);                                                       \
-    uint16_t _free_start = _ctx->bounds[DARKEN_ZONES - 1];                        \
+    uint16_t _free_start = _ctx->bounds[_ctx->zones - 1];                         \
     darken_entity_t _e = (_free_start < _ctx->capacity) ? _ctx->pool[_free_start] \
                                                         : (darken_entity_t)0;     \
     if (_e)                                                                       \
@@ -159,8 +265,8 @@ static inline void darken_entity_set_zone(void *data, int target)
  * Iteración
  * ============================================================================ */
 
-// Recorre UNA zona (0..DARKEN_ZONES, incluyendo la libre) en reversa -- igual que
-// el DARKEN_FOREACH original, pero sobre la zona que se le indique explícitamente.
+// Recorre UNA zona (0..zones, incluyendo la libre) en reversa -- igual que el
+// DARKEN_FOREACH original, pero sobre la zona que se le indique explícitamente.
 // Ya no hay una zona "activa" implícita: si el usuario quiere tickear varias
 // zonas, llama a esto una vez por zona.
 #define DARKEN_FOREACH_ZONE(CTX, ZONE, CODE)             \
@@ -190,10 +296,11 @@ static inline void darken_entity_set_zone(void *data, int target)
  * ============================================================================ */
 
 // Debe llamarse solo sobre storage sin usar / no inicializado, o tras darken_reset()
-// si se descarta la población actual a propósito.
+// si se descarta la población actual a propósito. Asume ctx->capacity, ->stride,
+// ->zones y ->storage ya rellenos (por las macros de storage de arriba).
 static inline void darken_init(darken_t *ctx)
 {
-    for (int z = 0; z < DARKEN_ZONES; z++)
+    for (int z = 0; z < ctx->zones; z++)
         ctx->bounds[z] = 0;
 
     uint16_t i = ctx->capacity;
@@ -209,11 +316,12 @@ static inline void darken_init(darken_t *ctx)
     }
 }
 
-// Ya no llama a destroy() (responsabilidad del usuario, ver cabecera del archivo):
-// resetear es solo devolver todas las fronteras a 0, sin swaps -- O(DARKEN_ZONES)
-// en vez de O(n).
+// Ya no llama a destroy() (responsabilidad del usuario): resetear es solo
+// devolver todas las fronteras a 0, sin swaps -- O(zones) en vez de O(n). No
+// toca ->zones: el número de zonas de un ctx no cambia con reset, solo su
+// población.
 static inline void darken_reset(darken_t *ctx)
 {
-    for (int z = 0; z < DARKEN_ZONES; z++)
+    for (int z = 0; z < ctx->zones; z++)
         ctx->bounds[z] = 0;
 }
