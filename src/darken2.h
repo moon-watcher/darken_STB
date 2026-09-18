@@ -123,25 +123,18 @@ struct darken_entity_t
 //     darken_init(&m);
 //
 // CAPACITY y ZONES se comprueban en tiempo de compilación via _Static_assert.
-#define DARKEN_DECLARE(NAME, CAPACITY, ZONES, PAYLOAD)                                                                    \
-    /*                                                                                                                    \
-    _Static_assert((CAPACITY) > 0, "DARKEN_DECLARE: CAPACITY must be > 0");                                               \
-    _Static_assert((CAPACITY) <= (uint16_t)-1, "DARKEN_DECLARE: CAPACITY must fit in uint16_t");                          \
-    _Static_assert((ZONES) > 0, "DARKEN_DECLARE: ZONES must be > 0");                                                     \
-    _Static_assert((ZONES) <= DARKEN_MAX_ZONES, "DARKEN_DECLARE: ZONES exceeds DARKEN_MAX_ZONES");                        \
-    _Static_assert(_DARKEN_ENTITY_STRIDE(PAYLOAD) <= (uint16_t)-1, "DARKEN_DECLARE: entity stride must fit in uint16_t"); \
-    */                                                                                                                    \
-    struct                                                                                                                \
-    {                                                                                                                     \
-        uint16_t capacity;                                                                                                \
-        uint16_t stride;                                                                                                  \
-        uint16_t zones;                                                                                                   \
-        darken_entity_t pool[(CAPACITY)] __attribute__((aligned(_DARKEN_POOL_ALIGN)));                                    \
-        uint8_t data[(CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)] __attribute__((aligned(_DARKEN_ENTITY_ALIGN)));         \
-    } NAME = {                                                                                                            \
-        .capacity = (CAPACITY),                                                                                           \
-        .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                                                                         \
-        .zones = (ZONES),                                                                                                 \
+#define DARKEN_DECLARE(NAME, CAPACITY, ZONES, PAYLOAD)                                                            \
+    struct                                                                                                        \
+    {                                                                                                             \
+        uint16_t capacity;                                                                                        \
+        uint16_t stride;                                                                                          \
+        uint16_t zones;                                                                                           \
+        darken_entity_t pool[(CAPACITY)] __attribute__((aligned(_DARKEN_POOL_ALIGN)));                            \
+        uint8_t data[(CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)] __attribute__((aligned(_DARKEN_ENTITY_ALIGN))); \
+    } NAME = {                                                                                                    \
+        .capacity = (CAPACITY),                                                                                   \
+        .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                                                                 \
+        .zones = (ZONES),                                                                                         \
     }
 
 // Inicialización estática/global con constantes de compilación. ZONES se pide

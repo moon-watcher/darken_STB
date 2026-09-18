@@ -84,22 +84,22 @@ struct bonus
  * el motor
  * ============================================================================ */
 
-#define GAME_DISPATCH()                                                      \
-    do                                                                       \
-    {                                                                        \
-        darken_state_t _next = _entity->update(_entity->data);               \
-        if ((uintptr_t)_next <= (uintptr_t)darken_free_zone(_entity->owner)) \
-            darken_entity_set_zone(_entity->data, (int)(uintptr_t)_next);    \
-        else                                                                 \
-            _entity->update = _next;                                         \
+#define GAME_DISPATCH(E)                                              \
+    do                                                                \
+    {                                                                 \
+        darken_state_t next = E->update(E->data);                     \
+        if ((uintptr_t)next <= (uintptr_t)darken_free_zone(E->owner)) \
+            darkenE_set_zone(E->data, (int)(uintptr_t)next);          \
+        else                                                          \
+            E->update = next;                                         \
     } while (0)
 
 static void game_update(darken_t *ctx)
 {
-    DARKEN_FOREACH(ctx, Z_ENEMIES, GAME_DISPATCH());
-    DARKEN_FOREACH(ctx, Z_PLAYERS, GAME_DISPATCH());
-    DARKEN_FOREACH(ctx, Z_ENEMY_BULLETS, GAME_DISPATCH());
-    DARKEN_FOREACH(ctx, Z_BONUS_ITEMS, GAME_DISPATCH());
+    DARKEN_FOREACH(ctx, Z_ENEMIES, GAME_DISPATCH(_entity));
+    DARKEN_FOREACH(ctx, Z_PLAYERS, GAME_DISPATCH(_entity));
+    DARKEN_FOREACH(ctx, Z_ENEMY_BULLETS, GAME_DISPATCH(_entity));
+    DARKEN_FOREACH(ctx, Z_BONUS_ITEMS, GAME_DISPATCH(_entity));
 }
 
 /* ============================================================================
