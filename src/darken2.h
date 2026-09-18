@@ -251,25 +251,24 @@ static inline void darken_entity_set_zone(void *data, int target)
  * ============================================================================ */
 
 // El usuario indica a qué zona nace la entidad. La cantera siempre es la libre.
-#define DARKEN_SPAWN(CTX, ZONE) ({                                                \
-    darken_t *_ctx = (CTX);                                                       \
-    uint16_t _free_start = _ctx->bounds[_ctx->zones - 1];                         \
-    darken_entity_t _e = (_free_start < _ctx->capacity) ? _ctx->pool[_free_start] \
-                                                        : (darken_entity_t)0;     \
-    if (_e)                                                                       \
-        _darken_move_zone(_e, (ZONE));                                            \
-    _e;                                                                           \
+#define DARKEN_SPAWN(CTX, ZONE) ({                                                     \
+    darken_t *_ctx = (CTX);                                                            \
+    uint16_t _free_start = _ctx->bounds[_ctx->zones - 1];                              \
+    darken_entity_t _e = (_free_start < _ctx->capacity) ? _ctx->pool[_free_start] : 0; \
+    if (_e)                                                                            \
+        _darken_move_zone(_e, (ZONE));                                                 \
+    _e;                                                                                \
 })
 
 /* ============================================================================
  * Iteración
  * ============================================================================ */
 
-// Recorre UNA zona (0..zones, incluyendo la libre) en reversa -- igual que el
-// DARKEN_FOREACH original, pero sobre la zona que se le indique explícitamente.
+// Recorre UNA zona (0..zones, incluyendo la libre) en reversa sobre la zona que
+// se le indique explícitamente.
 // Ya no hay una zona "activa" implícita: si el usuario quiere tickear varias
 // zonas, llama a esto una vez por zona.
-#define DARKEN_FOREACH_ZONE(CTX, ZONE, CODE)             \
+#define DARKEN_FOREACH(CTX, ZONE, CODE)                  \
     do                                                   \
     {                                                    \
         darken_t *_ctx = (CTX);                          \

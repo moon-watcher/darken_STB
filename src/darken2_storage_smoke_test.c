@@ -37,7 +37,7 @@ static void test_init_path(void)
     ((struct payload *)e->data)->v = 0;
 
     kprintf("[INIT] capacity=%d stride=%d zones=%d", g_ctx.capacity, g_ctx.stride, g_ctx.zones);
-    DARKEN_FOREACH_ZONE(&g_ctx, Z_A, {
+    DARKEN_FOREACH(&g_ctx, Z_A, {
         darken_state_t next = _entity->update(_entity->data);
         darken_entity_set_zone(_entity->data, (int)(uintptr_t)next);
     });

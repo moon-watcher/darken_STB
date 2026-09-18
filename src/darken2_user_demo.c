@@ -17,7 +17,7 @@
 //
 // Todas viven en el mismo pool (mismo stride: el payload es una unión
 // etiquetada, struct game_obj), pero cada categoría se recorre y actualiza
-// por separado con su propio DARKEN_FOREACH_ZONE.
+// por separado con su propio DARKEN_FOREACH.
 //
 // Dentro de cada categoría, las entidades usan DOS sentinels distintos en el
 // valor de retorno de update() -- exactamente como en darken.h original, solo
@@ -61,28 +61,21 @@ enum obj_kind
     KIND_BONUS,
 };
 
-struct game_obj
+struct enemy
 {
-    enum obj_kind kind;
-    union
-    {
-        struct
-        {
-            s16 x, hp, stun_frames_left;
-        } enemy;
-        struct
-        {
-            s16 x, hp;
-        } player;
-        struct
-        {
-            s16 x, dx, ttl;
-        } bullet;
-        struct
-        {
-            s16 x, value;
-        } bonus;
-    } as;
+    s16 x, hp, stun_frames_left;
+};
+struct player
+{
+    s16 x, hp;
+};
+struct bullet
+{
+    s16 x, dx, ttl;
+};
+struct bonus
+{
+    s16 x, value;
 };
 
 /* ============================================================================
@@ -103,10 +96,10 @@ struct game_obj
 
 static void game_update(darken_t *ctx)
 {
-    DARKEN_FOREACH_ZONE(ctx, Z_ENEMIES, GAME_DISPATCH());
-    DARKEN_FOREACH_ZONE(ctx, Z_PLAYERS, GAME_DISPATCH());
-    DARKEN_FOREACH_ZONE(ctx, Z_ENEMY_BULLETS, GAME_DISPATCH());
-    DARKEN_FOREACH_ZONE(ctx, Z_BONUS_ITEMS, GAME_DISPATCH());
+    DARKEN_FOREACH(ctx, Z_ENEMIES, GAME_DISPATCH());
+    DARKEN_FOREACH(ctx, Z_PLAYERS, GAME_DISPATCH());
+    DARKEN_FOREACH(ctx, Z_ENEMY_BULLETS, GAME_DISPATCH());
+    DARKEN_FOREACH(ctx, Z_BONUS_ITEMS, GAME_DISPATCH());
 }
 
 /* ============================================================================
@@ -115,93 +108,99 @@ static void game_update(darken_t *ctx)
  * hasta que muere de verdad
  * ============================================================================ */
 
-static void *enemy_stunned(void *data);
+static void *enemy_stunned();
 
-static void *enemy_walk(void *data)
+static void *enemy_walk(struct enemy *enemy)
 {
-    struct game_obj *obj = (struct game_obj *)data;
-    obj->as.enemy.x++;
-    kprintf("  [ENEMY]  slot=%d x=%d hp=%d", DARKEN_ENTITY(data)->slot, obj->as.enemy.x, obj->as.enemy.hp);
+    enemy->x++;
+    kprintf("  [ENEMY]  slot=%d x=%d hp=%d", DARKEN_ENTITY(enemy)->slot, enemy->x, enemy->hp);
 
-    if (obj->as.enemy.hp <= 0)
+    if (enemy->hp <= 0)
     {
-        kprintf("  [ENEMY]  slot=%d muere -> libre", DARKEN_ENTITY(data)->slot);
-        return (void *)(uintptr_t)DARKEN_FREE_ZONE(data); // sentinel de ZONA: fin de vida
+        kprintf("  [ENEMY]  slot=%d muere -> libre", DARKEN_ENTITY(enemy)->slot);
+
+        return DARKEN_FREE_ZONE(enemy); // sentinel de ZONA: fin de vida
+        // return (void *)(uintptr_t)DARKEN_FREE_ZONE(enemy); // sentinel de ZONA: fin de vida
     }
 
-    if (obj->as.enemy.x >= 3)
+    if (enemy->x >= 3)
     {
-        obj->as.enemy.stun_frames_left = 2;
-        kprintf("  [ENEMY]  slot=%d se aturde", DARKEN_ENTITY(data)->slot);
-        return (void *)enemy_stunned; // sentinel de FUNCIÓN: cambia de estado, sigue en Z_ENEMIES
+        enemy->stun_frames_left = 2;
+        kprintf("  [ENEMY]  slot=%d se aturde", DARKEN_ENTITY(enemy)->slot);
+        return enemy_stunned; // sentinel de FUNCIÓN: cambia de estado, sigue en Z_ENEMIES
+        // return (void *)enemy_stunned; // sentinel de FUNCIÓN: cambia de estado, sigue en Z_ENEMIES
     }
 
-    return (void *)(uintptr_t)Z_ENEMIES; // sentinel de ZONA (la propia): "continuar"
+    return Z_ENEMIES;
+    // return (void *)(uintptr_t)Z_ENEMIES; // sentinel de ZONA (la propia): "continuar"
 }
 
-static void *enemy_stunned(void *data)
+static void *enemy_stunned(struct enemy *enemy)
 {
-    struct game_obj *obj = (struct game_obj *)data;
-    obj->as.enemy.stun_frames_left--;
-    kprintf("  [ENEMY]  slot=%d aturdido, frames_left=%d", DARKEN_ENTITY(data)->slot, obj->as.enemy.stun_frames_left);
+    enemy->stun_frames_left--;
+    kprintf("  [ENEMY]  slot=%d aturdido, frames_left=%d", DARKEN_ENTITY(enemy)->slot, enemy->stun_frames_left);
 
-    if (obj->as.enemy.stun_frames_left <= 0)
+    if (enemy->stun_frames_left <= 0)
     {
-        kprintf("  [ENEMY]  slot=%d se recupera", DARKEN_ENTITY(data)->slot);
-        return (void *)enemy_walk; // vuelve a caminar -- otra vez, sentinel de FUNCIÓN
+        kprintf("  [ENEMY]  slot=%d se recupera", DARKEN_ENTITY(enemy)->slot);
+        return enemy_walk; // vuelve a caminar -- otra vez, sentinel de FUNCIÓN
+        // return (void *)enemy_walk; // vuelve a caminar -- otra vez, sentinel de FUNCIÓN
     }
 
-    return (void *)(uintptr_t)Z_ENEMIES; // sigue aturdido, sigue en su zona
+    return Z_ENEMIES; // sigue aturdido, sigue en su zona
+    // return (void *)(uintptr_t)Z_ENEMIES; // sigue aturdido, sigue en su zona
 }
 
 /* ============================================================================
  * Jugador: un único estado en este demo, solo para mostrar la zona en acción
  * ============================================================================ */
 
-static void *player_update(void *data)
+static void *player_update(struct player *player)
 {
-    struct game_obj *obj = (struct game_obj *)data;
-    kprintf("  [PLAYER] slot=%d hp=%d", DARKEN_ENTITY(data)->slot, obj->as.player.hp);
-    return (void *)(uintptr_t)Z_PLAYERS; // continuar
+    kprintf("  [PLAYER] slot=%d hp=%d", DARKEN_ENTITY(player)->slot, player->hp);
+    return Z_PLAYERS; // continuar
+    // return (void *)(uintptr_t)Z_PLAYERS; // continuar
 }
 
 /* ============================================================================
  * Bala enemiga: sin sub-estados, solo vuela hasta que expira -> libre
  * ============================================================================ */
 
-static void *bullet_update(void *data)
+static void *bullet_update(struct bullet *bullet)
 {
-    struct game_obj *obj = (struct game_obj *)data;
-    obj->as.bullet.x += obj->as.bullet.dx;
-    obj->as.bullet.ttl--;
-    kprintf("  [BULLET] slot=%d x=%d ttl=%d", DARKEN_ENTITY(data)->slot, obj->as.bullet.x, obj->as.bullet.ttl);
+    bullet->x += bullet->dx;
+    bullet->ttl--;
+    kprintf("  [BULLET] slot=%d x=%d ttl=%d", DARKEN_ENTITY(bullet)->slot, bullet->x, bullet->ttl);
 
-    if (obj->as.bullet.ttl <= 0)
+    if (bullet->ttl <= 0)
     {
-        kprintf("  [BULLET] slot=%d expira -> libre", DARKEN_ENTITY(data)->slot);
-        return (void *)(uintptr_t)DARKEN_FREE_ZONE(data);
+        kprintf("  [BULLET] slot=%d expira -> libre", DARKEN_ENTITY(bullet)->slot);
+        return DARKEN_FREE_ZONE(bullet);
+        // return (void *)(uintptr_t)DARKEN_FREE_ZONE(bullet);
     }
 
-    return (void *)(uintptr_t)Z_ENEMY_BULLETS;
+    return Z_ENEMY_BULLETS;
+    // return (void *)(uintptr_t)Z_ENEMY_BULLETS;
 }
 
 /* ============================================================================
  * Objeto de bonificación: se recoge (simulado) tras un par de frames -> libre
  * ============================================================================ */
 
-static void *bonus_update(void *data)
+static void *bonus_update(struct bonus *bonus)
 {
-    struct game_obj *obj = (struct game_obj *)data;
-    obj->as.bonus.value--;
-    kprintf("  [BONUS]  slot=%d value=%d", DARKEN_ENTITY(data)->slot, obj->as.bonus.value);
+    bonus->value--;
+    kprintf("  [BONUS]  slot=%d value=%d", DARKEN_ENTITY(bonus)->slot, bonus->value);
 
-    if (obj->as.bonus.value <= 0)
+    if (bonus->value <= 0)
     {
-        kprintf("  [BONUS]  slot=%d recogido -> libre", DARKEN_ENTITY(data)->slot);
-        return (void *)(uintptr_t)DARKEN_FREE_ZONE(data);
+        kprintf("  [BONUS]  slot=%d recogido -> libre", DARKEN_ENTITY(bonus)->slot);
+        return DARKEN_FREE_ZONE(bonus);
+        // return (void *)(uintptr_t)DARKEN_FREE_ZONE(bonus);
     }
 
-    return (void *)(uintptr_t)Z_BONUS_ITEMS;
+    return Z_BONUS_ITEMS;
+    // return (void *)(uintptr_t)Z_BONUS_ITEMS;
 }
 
 /* ============================================================================
@@ -215,40 +214,30 @@ static void *bonus_update(void *data)
 
 int darken2_user_demo_main(bool hardReset)
 {
-    DARKEN_DECLARE(storage, CAPACITY, GAME_ZONES, sizeof(struct game_obj));
+    DARKEN_DECLARE(storage, CAPACITY, GAME_ZONES, max(sizeof(struct enemy), max(sizeof(struct player), max(sizeof(struct bullet), sizeof(struct bonus)))));
+
     darken_t ctx = DARKEN_BIND(storage);
     darken_init(&ctx);
 
     darken_entity_t enemy = DARKEN_SPAWN(&ctx, Z_ENEMIES);
-    enemy->update = enemy_walk;
-
-    DARKEN_DATA(struct game_obj, data_enemy, enemy);
-    data_enemy->kind = KIND_ENEMY;
-    data_enemy->as.enemy.x = 0;
-    data_enemy->as.enemy.hp = 5;
-    data_enemy->as.enemy.stun_frames_left = 0;
-
     darken_entity_t player = DARKEN_SPAWN(&ctx, Z_PLAYERS);
-    player->update = player_update;
-    DARKEN_DATA(struct game_obj, data_player, player);
-    data_player->kind = KIND_PLAYER;
-    data_player->as.player.x = 0;
-    data_player->as.player.hp = 3;
-
     darken_entity_t bullet = DARKEN_SPAWN(&ctx, Z_ENEMY_BULLETS);
-    bullet->update = bullet_update;
-    DARKEN_DATA(struct game_obj, data_bullet, bullet);
-    data_bullet->kind = KIND_BULLET;
-    data_bullet->as.bullet.x = 0;
-    data_bullet->as.bullet.dx = 1;
-    data_bullet->as.bullet.ttl = 3;
-
     darken_entity_t bonus = DARKEN_SPAWN(&ctx, Z_BONUS_ITEMS);
+
+    enemy->update = enemy_walk;
+    player->update = player_update;
+    bullet->update = bullet_update;
     bonus->update = bonus_update;
-    DARKEN_DATA(struct game_obj, data_bonus, bonus);
-    data_bonus->kind = KIND_BONUS;
-    data_bonus->as.bonus.x = 0;
-    data_bonus->as.bonus.value = 2;
+
+    DARKEN_DATA(struct enemy, data_enemy, enemy);
+    DARKEN_DATA(struct player, data_player, player);
+    DARKEN_DATA(struct bullet, data_bullet, bullet);
+    DARKEN_DATA(struct bonus, data_bonus, bonus);
+
+    *data_enemy = (struct enemy){0, 5, 0};
+    *data_player = (struct player){0, 3};
+    *data_bullet = (struct bullet){0, 1, 3};
+    *data_bonus = (struct bonus){0, 0, 2};
 
     kprintf("zones para este ctx: %d (libre = %d)", ctx.zones, darken_free_zone(&ctx));
 
