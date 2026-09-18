@@ -18,15 +18,15 @@
  *    `#include <stdint.h>` or whatever equivalent your target already defines them through.
  *
  * 2. A GNU C compiler -- GCC or Clang. Darken relies on GNU C statement expressions (DARKEN_SPAWN), the
- *    __attribute__((aligned)) extension (DARKEN_DECLARE), __alignof__, and _Static_assert (DARKEN_DECLARE).
- *    It will not build under a strict ISO-C-only compiler. Sentinel handling in state-machine mode 
+ *    __attribute__((aligned)) extension (DARKEN_DECLARE), and __alignof__.
+ *    It will not build under a strict ISO-C-only compiler. Sentinel handling in state-machine mode
  *    (== / > against DARKEN_CONTINUE, DARKEN_DELETE, DARKEN_PAUSE) additionally relies on GNU C / target-ABI
  *    behavior for converting small integer values to function pointers and comparing function-pointer values
  *    with those sentinels.
  *
- * 3. CAPACITY must satisfy 1 <= CAPACITY <= 65535, and the computed entity stride must fit in uint16_t.
- *    DARKEN_DECLARE() enforces these constraints with _Static_assert; DARKEN_ALLOC() does not (it is an
- *    expression, not a declaration), so dynamic-allocation callers must verify them manually.
+ * 3. CAPACITY must satisfy 1 <= CAPACITY <= UINT16_MAX, and the computed entity stride must fit in uint16_t.
+ *    These are API requirements; DARKEN_DECLARE() only rejects CAPACITY == 0 with a compile-time
+ *    negative-size array. The caller is responsible for keeping CAPACITY and stride within uint16_t limits.
  *
  * Beyond that, Darken makes no assumptions about the target: pointer width, struct alignment, and endianness
  * are all whatever the compiler says they are for the platform it's building for (see _DARKEN_ENTITY_ALIGN
@@ -108,8 +108,7 @@
  *         DARKEN_CONTINUE: stay active, keep the same update callback
  *         DARKEN_DELETE:   call destroy (if set), then delete the entity
  *         DARKEN_PAUSE:    move the entity straight to the paused zone
- *         (anything else): treated as a new update callback pointer; installed as entity->update for next
- *                          frame
+ *         (anything else): treated as a new update callback pointer; installed as entity->update for next frame
  *
  *         void *player_walk_state(struct player *data)
  *         {
@@ -272,9 +271,9 @@ struct darken_entity_t
 //     DARKEN_FREE(free, &m);
 //
 // DARKEN_ALLOC() does not handle allocation failure or partial allocation cleanup.
-// CAPACITY must satisfy 1 <= CAPACITY <= 65535, and the computed stride must fit in uint16_t. Unlike
-// DARKEN_DECLARE(), this macro cannot enforce those constraints with _Static_assert because it expands to
-// an expression, not a declaration, so the caller is responsible for verifying them.
+// CAPACITY must satisfy 1 <= CAPACITY <= UINT16_MAX, and the computed stride must fit in uint16_t.
+// DARKEN_ALLOC() does not perform explicit validation of these requirements, so the caller is
+// responsible for providing valid values.
 #define DARKEN_ALLOC(ALLOC, CAPACITY, PAYLOAD)                           \
     (darken_t)                                                           \
     {                                                                    \
@@ -298,22 +297,20 @@ struct darken_entity_t
 //     darken_t m = DARKEN_BIND(storage);
 //     darken_init(&m);
 //
-// CAPACITY must satisfy 1 <= CAPACITY <= 65535. The payload type used with DARKEN_DATA() must not require
-// stricter alignment than struct darken_entity_t. Both CAPACITY and the computed stride are checked at
-// compile time via _Static_assert.
-#define DARKEN_DECLARE(NAME, CAPACITY, PAYLOAD)                                                                           \
-    _Static_assert((CAPACITY) > 0, "DARKEN_DECLARE: CAPACITY must be > 0");                                               \
-    _Static_assert((CAPACITY) <= (uint16_t)-1, "DARKEN_DECLARE: CAPACITY must fit in uint16_t");                          \
-    _Static_assert(_DARKEN_ENTITY_STRIDE(PAYLOAD) <= (uint16_t)-1, "DARKEN_DECLARE: entity stride must fit in uint16_t"); \
-    struct                                                                                                                \
-    {                                                                                                                     \
-        uint16_t capacity;                                                                                                \
-        uint16_t stride;                                                                                                  \
-        darken_entity_t pool[(CAPACITY)] __attribute__((aligned(_DARKEN_POOL_ALIGN)));                                    \
-        uint8_t data[(CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)] __attribute__((aligned(_DARKEN_ENTITY_ALIGN)));         \
-    } NAME = {                                                                                                            \
-        .capacity = (CAPACITY),                                                                                           \
-        .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                                                                         \
+// CAPACITY must satisfy 1 <= CAPACITY <= UINT16_MAX. The payload type used with DARKEN_DATA() must not
+// require stricter alignment than struct darken_entity_t. DARKEN_DECLARE() rejects CAPACITY == 0 with a
+// compile-time negative-size array. The caller is responsible for keeping CAPACITY and the computed
+// entity stride within their uint16_t limits.
+#define DARKEN_DECLARE(NAME, CAPACITY, PAYLOAD)                                                                   \
+    struct                                                                                                        \
+    {                                                                                                             \
+        uint16_t capacity;                                                                                        \
+        uint16_t stride;                                                                                          \
+        darken_entity_t pool[(CAPACITY) ? (CAPACITY) : -1] __attribute__((aligned(_DARKEN_POOL_ALIGN)));          \
+        uint8_t data[(CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)] __attribute__((aligned(_DARKEN_ENTITY_ALIGN))); \
+    } NAME = {                                                                                                    \
+        .capacity = (CAPACITY),                                                                                   \
+        .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                                                                 \
     }
 
 // Static/global initialization: compile-time constants.
