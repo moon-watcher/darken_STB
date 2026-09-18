@@ -26,7 +26,8 @@ int main(void)
     // r = darken_bench_pause_resume(1000); kprintf("darken_bench_pause_resume: %d", r);
     // r = darken_bench_delete(1000);       kprintf("darken_bench_delete: %d", r);
 
-    darken_sgdk_tests_c();
+    // darken_sgdk_tests_c();
+    darken2_user_demo_main();
 
     return 0;
 }
