@@ -211,6 +211,7 @@ static inline int darken_free_zone(darken_t *ctx)
 {
     return (int)ctx->zones;
 }
+
 #define DARKEN_FREE_ZONE(DATA) darken_free_zone(DARKEN_ENTITY(DATA)->owner)
 
 // Privado: el movimiento real, sobre el handle. La API pública opera sobre

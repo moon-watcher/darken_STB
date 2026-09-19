@@ -19,22 +19,25 @@
 // etiquetada, struct game_obj), pero cada categoría se recorre y actualiza
 // por separado con su propio DARKEN_FOREACH.
 //
-// Dentro de cada categoría, las entidades usan DOS sentinels distintos en el
-// valor de retorno de update() -- exactamente como en darken.h original, solo
-// que ahí eran 3 constantes fijas (CONTINUE/PAUSE/DELETE) y aquí son "cuántas
-// zonas tenga este ctx, más la libre":
+// Dentro de cada categoría, las entidades usan DOS sentinels reservados en el
+// valor de retorno de update():
 //
-//   - devolver una ZONA (0..zones, incluida la libre) mueve la entidad a esa
-//     zona y NO toca su update() -- así se expresa tanto "quédate donde estás"
-//     (devolver tu propia zona) como "muérete/expira" (devolver la libre).
+//   - devolver 0 elimina la entidad, moviéndola a la zona libre.
+//   - devolver 1 no hace nada: conserva zona y estado.
+//   - devolver 2..zones+1 cambia a una zona de usuario:
+//       2 = Z_ENEMIES
+//       3 = Z_PLAYERS
+//       4 = Z_ENEMY_BULLETS
+//       5 = Z_BONUS_ITEMS
 //   - devolver una FUNCIÓN (un puntero de verdad, no un entero pequeño) NO
 //     mueve de zona -- solo instala esa función como el próximo update(). Así
 //     es como un enemigo pasa de "caminando" a "aturdido" sin salir nunca de
 //     Z_ENEMIES.
 //
-// GAME_DISPATCH() es quien decide, mirando el valor devuelto, cuál de las dos
-// cosas ha pasado -- eso es lo que en darken.h original hacía _DARKEN_UPDATE,
-// y que ahora es responsabilidad de esta aplicación, no del motor.
+// GAME_DISPATCH() es quien decide, mirando el valor devuelto, cuál de las
+// cuatro cosas ha pasado -- eso es lo que en darken.h original hacía
+// _DARKEN_UPDATE, y que ahora es responsabilidad de esta aplicación, no del
+// motor.
 
 #include <genesis.h>
 
@@ -79,19 +82,36 @@ struct bonus
 };
 
 /* ============================================================================
+ * Sentinels del protocolo de ESTA app
+ *
+ * 0 = eliminar
+ * 1 = continuar sin cambiar estado ni zona
+ * 2.. = zona de usuario codificada como zona + 2
+ * ============================================================================ */
+
+#define GAME_DELETE ((void *)(uintptr_t)0)
+#define GAME_CONTINUE ((void *)(uintptr_t)1)
+#define GAME_ZONE(ZONE) ((void *)(uintptr_t)(ZONE + 2))
+
+/* ============================================================================
  * GAME_DISPATCH: la convención de ESTA app sobre el valor de retorno de
  * update() -- análoga a _DARKEN_UPDATE en darken.h original, pero aquí, no en
  * el motor
  * ============================================================================ */
 
-#define GAME_DISPATCH(E)                                              \
-    do                                                                \
-    {                                                                 \
-        darken_state_t next = E->update(E->data);                     \
-        if ((uintptr_t)next <= (uintptr_t)darken_free_zone(E->owner)) \
-            darkenE_set_zone(E->data, (int)(uintptr_t)next);          \
-        else                                                          \
-            E->update = next;                                         \
+#define GAME_DISPATCH(E)                                                 \
+    do                                                                   \
+    {                                                                    \
+        darken_state_t next = E->update(E->data);                        \
+        uintptr_t r = (uintptr_t)next;                                   \
+        if (r == 0)                                                      \
+            darken_entity_set_zone(E->data, darken_free_zone(E->owner)); \
+        else if (r == 1)                                                 \
+            ;                                                            \
+        else if (r >= 2 && r < 2 + E->owner->zones)                      \
+            darken_entity_set_zone(E->data, (int)(r - 2));               \
+        else                                                             \
+            E->update = next;                                            \
     } while (0)
 
 static void game_update(darken_t *ctx)
@@ -119,20 +139,17 @@ static void *enemy_walk(struct enemy *enemy)
     {
         kprintf("  [ENEMY]  slot=%d muere -> libre", DARKEN_ENTITY(enemy)->slot);
 
-        return DARKEN_FREE_ZONE(enemy); // sentinel de ZONA: fin de vida
-        // return (void *)(uintptr_t)DARKEN_FREE_ZONE(enemy); // sentinel de ZONA: fin de vida
+        return GAME_DELETE;
     }
 
     if (enemy->x >= 3)
     {
         enemy->stun_frames_left = 2;
         kprintf("  [ENEMY]  slot=%d se aturde", DARKEN_ENTITY(enemy)->slot);
-        return enemy_stunned; // sentinel de FUNCIÓN: cambia de estado, sigue en Z_ENEMIES
-        // return (void *)enemy_stunned; // sentinel de FUNCIÓN: cambia de estado, sigue en Z_ENEMIES
+        return enemy_stunned;
     }
 
-    return Z_ENEMIES;
-    // return (void *)(uintptr_t)Z_ENEMIES; // sentinel de ZONA (la propia): "continuar"
+    return GAME_CONTINUE;
 }
 
 static void *enemy_stunned(struct enemy *enemy)
@@ -144,11 +161,9 @@ static void *enemy_stunned(struct enemy *enemy)
     {
         kprintf("  [ENEMY]  slot=%d se recupera", DARKEN_ENTITY(enemy)->slot);
         return enemy_walk; // vuelve a caminar -- otra vez, sentinel de FUNCIÓN
-        // return (void *)enemy_walk; // vuelve a caminar -- otra vez, sentinel de FUNCIÓN
     }
 
-    return Z_ENEMIES; // sigue aturdido, sigue en su zona
-    // return (void *)(uintptr_t)Z_ENEMIES; // sigue aturdido, sigue en su zona
+    return GAME_CONTINUE; // sigue aturdido, sigue en su zona
 }
 
 /* ============================================================================
@@ -158,8 +173,7 @@ static void *enemy_stunned(struct enemy *enemy)
 static void *player_update(struct player *player)
 {
     kprintf("  [PLAYER] slot=%d hp=%d", DARKEN_ENTITY(player)->slot, player->hp);
-    return Z_PLAYERS; // continuar
-    // return (void *)(uintptr_t)Z_PLAYERS; // continuar
+    return GAME_CONTINUE; // continuar sin cambiar zona ni estado
 }
 
 /* ============================================================================
@@ -175,12 +189,10 @@ static void *bullet_update(struct bullet *bullet)
     if (bullet->ttl <= 0)
     {
         kprintf("  [BULLET] slot=%d expira -> libre", DARKEN_ENTITY(bullet)->slot);
-        return DARKEN_FREE_ZONE(bullet);
-        // return (void *)(uintptr_t)DARKEN_FREE_ZONE(bullet);
+        return GAME_DELETE;
     }
 
-    return Z_ENEMY_BULLETS;
-    // return (void *)(uintptr_t)Z_ENEMY_BULLETS;
+    return GAME_CONTINUE; // continuar sin cambiar zona ni estado
 }
 
 /* ============================================================================
@@ -195,12 +207,10 @@ static void *bonus_update(struct bonus *bonus)
     if (bonus->value <= 0)
     {
         kprintf("  [BONUS]  slot=%d recogido -> libre", DARKEN_ENTITY(bonus)->slot);
-        return DARKEN_FREE_ZONE(bonus);
-        // return (void *)(uintptr_t)DARKEN_FREE_ZONE(bonus);
+        return GAME_DELETE;
     }
 
-    return Z_BONUS_ITEMS;
-    // return (void *)(uintptr_t)Z_BONUS_ITEMS;
+    return GAME_CONTINUE; // continuar sin cambiar zona ni estado
 }
 
 /* ============================================================================
