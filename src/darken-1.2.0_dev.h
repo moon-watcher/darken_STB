@@ -21,36 +21,39 @@
  *    (DARKEN_SPAWN*), the __attribute__((aligned)) extension (DARKEN_DECLARE*), and
  *    __alignof__. It will not build under a strict ISO-C-only compiler.
  *
- * 3. CAPACITY must satisfy 1 <= CAPACITY <= UINT16_MAX, and the computed entity
- *    stride must fit in uint16_t. These are API requirements; DARKEN_DECLARE()
- *    enforces them at compile time via a negative-size array. The caller is
- *    responsible for keeping CAPACITY and stride within uint16_t limits.
+ * 3. CAPACITY must satisfy 1 <= CAPACITY <= UINT16_MAX, ZONES must satisfy
+ *    1 <= ZONES <= DARKEN_MAX_ZONES, and the computed entity stride must fit in
+ *    uint16_t. These are API requirements; DARKEN_DECLARE()/DARKEN_DECLARE_ZONES()
+ *    enforce them at compile time via a negative-size array (see _darken_checks
+ *    below). DARKEN_ALLOC()/DARKEN_ALLOC_ZONES() do NOT enforce them -- they expand
+ *    to an expression, not a declaration -- so dynamic-allocation callers must
+ *    verify them manually.
  *
  * ============================================================================
  * VERSIONING NOTE (1.1 -> 1.2)
  * ============================================================================
  *
  * The public API of 1.1 is preserved:
- *   - `destroy` remains in darken_entity_t and is invoked from the same points as
+ *   - `destroy` is back in darken_entity_t and is invoked from the same points as
  *     in 1.1 (DARKEN_DELETE branch, darken_entity_delete, darken_reset).
  *   - DARKEN_ALLOC / DARKEN_DECLARE / DARKEN_INIT keep their original signatures
- *     and operate on DARKEN_DEFAULT_ZONE.
+ *     (single-zone: ZONES defaults to 1, matching 1.1's single active zone).
  *   - DARKEN_FOREACH iterates over every active entity (all user zones), reverse
  *     order, exactly as in 1.1.
  *   - darken_update(ctx) updates all user zones; darken_entity_delete destroys
  *     before recycling; darken_reset destroys everything before resetting.
  *
  * What is NOT coming back:
- *   - DARKEN_PAUSE. Update callbacks no longer return a third sentinel. "Pausing"
- *     an entity is now expressed by moving it to a user-defined zone with
- *     darken_entity_set_zone(). There is no universal notion of a paused zone
- *     in the engine.
- *   - DARKEN_ENTITY_IN_PAUSED / DARKEN_COUNT_PAUSED. Use
- *     DARKEN_ENTITY_IN_ZONE(entity, Z) and DARKEN_COUNT_ZONE(ctx, Z) for any
- *     user-defined zone.
- *   - darken_entity_pause() / darken_entity_resume(). There is no universal
- *     pause/resume semantic in the engine anymore; callers should use
- *     darken_entity_set_zone() with whatever zones their application defines.
+ *   - DARKEN_PAUSE. Update callbacks no longer return a third sentinel. There is
+ *     no universal notion of "paused" in the engine. If the application wants a
+ *     paused set, it defines a user zone and simply does not update that zone.
+ *     Moving an entity into such a zone is done with darken_entity_set_zone().
+ *   - DARKEN_ENTITY_IN_PAUSED / DARKEN_COUNT_PAUSED. There is no universal notion
+ *     of "paused" in the engine; use DARKEN_ENTITY_IN_ZONE(entity, Z) and
+ *     DARKEN_COUNT_ZONE(ctx, Z).
+ *   - darken_entity_pause / darken_entity_resume. Zone meaning belongs entirely
+ *     to the application, so there is no universal pause/resume operation in the
+ *     engine.
  *
  * Zone-aware variants are exposed as `*_zone` / `*_ZONE` / `*_ZONES`:
  *   DARKEN_ALLOC_ZONES, DARKEN_DECLARE_ZONES, DARKEN_SPAWN_ZONE,
@@ -89,8 +92,8 @@
  *    0            b[0]             b[1]              b[N-1]         capacity
  *
  * "size" (the number of active entities across all user zones) is derived from
- * bounds[zones-1] and is never stored separately, so it cannot desync from the
- * actual layout.
+ * bounds[zones-1] via _darken_size() and is never stored separately, so it
+ * cannot desync from the actual layout.
  *
  * ============================================================================
  * Update / lifecycle control — two selectable modes
@@ -138,9 +141,6 @@
 #ifndef DARKEN_DEFAULT_ZONE
 #define DARKEN_DEFAULT_ZONE 0
 #endif
-
-_Static_assert(DARKEN_MAX_ZONES > 0 && DARKEN_MAX_ZONES <= 255, "darken.h: DARKEN_MAX_ZONES fuera de rango");
-_Static_assert(DARKEN_DEFAULT_ZONE >= 0 && DARKEN_DEFAULT_ZONE < DARKEN_MAX_ZONES, "darken.h: DARKEN_DEFAULT_ZONE fuera de rango");
 
 #ifdef DARKEN_DIRECT
 typedef void (*darken_state_t)();
@@ -223,6 +223,11 @@ static inline uint16_t _darken_size(darken_t *ctx)
     return ctx->bounds[ctx->zones - 1];
 }
 
+// NOTE: moved here (right after _darken_size, before any of the functions
+// below that call them) because these two are used inside darken_entity_zone(),
+// _darken_move_zone(), _darken_move_from_free() and _darken_move_free(), all
+// defined further down in this same PRIVATE section. A macro must be #defined
+// before its point of use in the file.
 #define DARKEN_ENTITY_IN_ACTIVE(ENTITY) ((ENTITY)->slot < _darken_size((ENTITY)->owner))
 #define DARKEN_ENTITY_IN_FREE(ENTITY) ((ENTITY)->slot >= _darken_size((ENTITY)->owner))
 
@@ -340,10 +345,14 @@ static inline void _darken_move_free(darken_entity_t entity)
 //     static DARKEN_DECLARE(storage, 5, sizeof(struct Foo));
 //     static DARKEN_DECLARE_ZONES(storage, 5, 4, sizeof(struct Foo));
 //
-// Compile-time checks are encoded as the size of the _darken_checks[] array
-// (negative size => error). This is why _Static_assert is not used here: it
-// cannot be prefixed by `static`, and putting it outside the struct would break
-// the single-declaration requirement.
+// Compile-time checks (_darken_checks[]) use a negative-size array rather than
+// _Static_assert: _Static_assert cannot be prefixed with `static`, and putting
+// it outside the struct would break the single-declaration requirement.
+//
+// _darken_zones_marker[] exists ONLY so DARKEN_INIT() can recover ZONES via
+// sizeof() -- a genuine compile-time constant, since sizeof of an array member
+// depends on its TYPE, not its runtime value. The scalar `zones` field is kept
+// for DARKEN_BIND(), which runs at runtime and has no such restriction.
 #define DARKEN_DECLARE_ZONES(NAME, CAPACITY, ZONES, PAYLOAD)                                                      \
     struct                                                                                                        \
     {                                                                                                             \
@@ -352,6 +361,7 @@ static inline void _darken_move_free(darken_entity_t entity)
         uint16_t zones;                                                                                           \
         darken_entity_t pool[(CAPACITY) ? (CAPACITY) : -1] __attribute__((aligned(_DARKEN_POOL_ALIGN)));          \
         uint8_t data[(CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)] __attribute__((aligned(_DARKEN_ENTITY_ALIGN))); \
+        uint8_t _darken_zones_marker[(ZONES) > 0 ? (ZONES) : 1];                                                  \
         uint8_t _darken_checks[((ZONES) > 0 && (ZONES) <= DARKEN_MAX_ZONES) &&                                    \
                                        ((CAPACITY) <= (uint16_t)-1) &&                                            \
                                        (_DARKEN_ENTITY_STRIDE(PAYLOAD) <= (uint16_t)-1)                           \
@@ -363,7 +373,7 @@ static inline void _darken_move_free(darken_entity_t entity)
         .zones = (ZONES),                                                                                         \
     }
 
-// 1.1-compatible: zones is taken from the storage block.
+// 1.1-compatible: zones is recovered from the storage block via sizeof().
 #define DARKEN_INIT(STORAGE)                                                                   \
     (darken_t)                                                                                 \
     {                                                                                          \
@@ -371,7 +381,7 @@ static inline void _darken_move_free(darken_entity_t entity)
         .storage = (STORAGE).data,                                                             \
         .capacity = sizeof((STORAGE).pool) / sizeof(darken_entity_t),                          \
         .stride = sizeof((STORAGE).data) / (sizeof((STORAGE).pool) / sizeof(darken_entity_t)), \
-        .zones = (STORAGE).zones,                                                              \
+        .zones = sizeof((STORAGE)._darken_zones_marker),                                       \
     }
 
 // Runtime binding: locals, reassignment, any context.
@@ -423,10 +433,7 @@ static inline void _darken_move_free(darken_entity_t entity)
         }                                                \
     } while (0)
 
-// Zone-restricted iteration. Reverse order within [lo, hi). Moving the current entity
-// to FREE (delete) is safe. Moving entities between user zones during this iteration can
-// change the visited set because the zone boundaries move; callers that need strict one-
-// pass semantics should not reorder entities between user zones from inside CODE.
+// Zone-restricted iteration. Reverse order within [lo, hi).
 #define DARKEN_FOREACH_ZONE(CTX, ZONE, CODE)             \
     do                                                   \
     {                                                    \
@@ -613,7 +620,7 @@ static inline void darken_reset_zone(darken_t *ctx, int zone)
  *   equivalent to the old behavior. With multiple zones, the cost is bounded by
  *   the number of zones and is paid only on spawn, not per frame.
  *
- * - darken_entity_set_zone is not O(1): it walks the zone boundaries to reach the
+ * - darken_entity_set_zone is not O(1): it walks the zone bounds to reach the
  *   target zone. The cost is bounded by the number of zones and is paid only when
  *   an entity changes zone, not during a normal update of a zone.
  *
