@@ -38,8 +38,10 @@
  *     in 1.1 (DARKEN_DELETE branch, darken_entity_delete, darken_reset).
  *   - DARKEN_ALLOC / DARKEN_DECLARE / DARKEN_INIT keep their original signatures
  *     (single-zone: ZONES defaults to 1, matching 1.1's single active zone).
- *   - DARKEN_FOREACH iterates over every active entity (all user zones), reverse
- *     order, exactly as in 1.1.
+ *   - DARKEN_FOREACH iterates over the entities in zone 0 (the default zone),
+ *     reverse order. With a single-zone ctx this is the whole active set,
+ *     matching 1.1. Multi-zone callers iterate other zones with
+ *     DARKEN_FOREACH_ZONE.
  *   - darken_update(ctx) updates all user zones; darken_entity_delete destroys
  *     before recycling; darken_reset destroys everything before resetting.
  *
@@ -60,6 +62,11 @@
  *   DARKEN_FOREACH_ZONE, darken_update_zone, darken_reset_zone,
  *   darken_entity_zone, darken_entity_set_zone, darken_count_zone,
  *   DARKEN_ENTITY_IN_ZONE, DARKEN_COUNT_ZONE.
+ *
+ * PERFORMANCE NOTE: DARKEN_SPAWN and darken_entity_delete special-case
+ * `ctx->zones == 1` to bypass the generic zone-movement machinery, restoring
+ * the O(1) single-swap behavior of 1.1 for the common single-zone case.
+ * Multi-zone ctxs still pay the zone-movement cost.
  *
  * ============================================================================
  * Entity: Base entity managed by the ctx
@@ -389,6 +396,10 @@ static inline void _darken_move_free(darken_entity_t entity)
 // 1.1-compatible: spawns into the default zone.
 #define DARKEN_SPAWN(CTX) DARKEN_SPAWN_ZONE((CTX), 0)
 
+// Fast path: with a single user zone, moving the entity from the free zone
+// into zone 0 is just `bounds[0]++` (the entity already sits at pool[size],
+// which is pool[bounds[0]]). Bypassing _darken_move_from_free() recovers
+// essentially all of 1.1's spawn cost for single-zone contexts.
 #define DARKEN_SPAWN_ZONE(CTX, ZONE) ({                                 \
     darken_t *_ctx = (CTX);                                             \
     uint16_t _zone = (ZONE);                                            \
@@ -396,7 +407,12 @@ static inline void _darken_move_free(darken_entity_t entity)
     darken_entity_t _entity = _s < _ctx->capacity ? _ctx->pool[_s] : 0; \
                                                                         \
     if (_entity)                                                        \
-        _darken_move_from_free(_entity, _zone);                         \
+    {                                                                   \
+        if (_ctx->zones == 1)                                           \
+            _ctx->bounds[0]++;                                          \
+        else                                                            \
+            _darken_move_from_free(_entity, _zone);                     \
+    }                                                                   \
                                                                         \
     _entity;                                                            \
 })
@@ -455,6 +471,11 @@ static inline uint16_t darken_count_zone(darken_t *ctx, uint16_t zone)
 
 // 1.1-compatible: destroys the entity (if destroy is set) and moves it back to
 // the free zone. No-op if the entity is already free.
+//
+// Fast path: with a single user zone, moving the entity out of zone 0 into the
+// free zone is a single swap against bounds[0]-1, exactly as 1.1 did. Bypassing
+// _darken_move_free() (and therefore darken_entity_zone's bounds[] scan) recovers
+// essentially all of 1.1's delete cost for single-zone contexts.
 static inline void darken_entity_delete(darken_entity_t entity)
 {
     if (DARKEN_ENTITY_IN_FREE(entity))
@@ -463,7 +484,12 @@ static inline void darken_entity_delete(darken_entity_t entity)
     if (entity->destroy)
         entity->destroy(_DARKEN_ARGS(entity));
 
-    _darken_move_free(entity);
+    darken_t *ctx = entity->owner;
+
+    if (ctx->zones == 1)
+        darken_swap(ctx->pool, entity->slot, --ctx->bounds[0]);
+    else
+        _darken_move_free(entity);
 }
 
 // Zone-aware move. No-op if the entity is already in `zone`, or if it is in the
@@ -594,20 +620,33 @@ static inline void darken_reset_zone(darken_t *ctx, uint16_t zone)
  * NOTES
  * ============================================================================
  *
- * - DARKEN_SPAWN is more expensive than in pure 1.1 because it now goes through
- *   _darken_move_from_free. With one zone (the 1.1 default) it is a single swap,
- *   equivalent to the old behavior. With multiple zones, the cost is bounded by
- *   the number of zones and is paid only on spawn, not per frame.
+ * - DARKEN_SPAWN special-cases zones == 1: instead of routing through
+ *   _darken_move_from_free, it does bounds[0]++ directly. That recovers almost
+ *   all of 1.1's spawn cost for single-zone contexts. Multi-zone ctxs pay the
+ *   generic zone-movement cost, bounded by the number of zones.
+ *
+ * - darken_entity_delete special-cases zones == 1 the same way: a single swap
+ *   against bounds[0]-1 instead of the generic scan + swap loop. Multi-zone
+ *   ctxs still pay the generic cost.
  *
  * - darken_entity_set_zone is not O(1): it walks the zone bounds to reach the
- *   target zone. The cost is bounded by the number of zones and is paid only when
- *   an entity changes zone, not during a normal update of a zone.
+ *   target zone. The cost is bounded by the number of zones and is paid only
+ *   when an entity changes zone, not during a normal update of a zone.
+ *   Adjacent-zone moves cost 1 swap regardless of how many zones the ctx has;
+ *   far moves scale linearly with the distance.
  *
- * - DARKEN_FOREACH_ZONE() is safe for deleting / moving the current entity to FREE.
- *   Moving entities between user zones during the iteration can change the visited
- *   set because the zone boundaries move; callers that need strict one-pass semantics
- *   should not reorder entities between user zones from inside CODE.
+ * - DARKEN_FOREACH_ZONE() is safe for deleting / moving the current entity to
+ *   FREE. Moving entities between user zones during the iteration can change the
+ *   visited set because the zone boundaries move; callers that need strict
+ *   one-pass semantics should not reorder entities between user zones from
+ *   inside CODE.
  *
- * - darken_entity_delete destroys the entity regardless of which user zone it was in.
- *   Since 1.2 has no universal "paused" concept, every user zone is treated equally.
+ * - darken_entity_delete destroys the entity regardless of which user zone it
+ *   was in. Since 1.2 has no universal "paused" concept, every user zone is
+ *   treated equally.
+ *
+ * - CROSS-ZONE SLOT MOVEMENT: no operation guarantees that entity->slot stays
+ *   fixed across a zone crossing. A single-zone ctx is the only case where
+ *   slot changes are confined to "one entity out, another in" without touching
+ *   other entities' slots.
  */
