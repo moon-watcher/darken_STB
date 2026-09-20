@@ -207,23 +207,22 @@ struct darken_entity_t
 #define _DARKEN_UPDATE _entity->update(_DARKEN_ARGS(_entity))
 #else
 #define _DARKEN_ARGS(ENTITY) (ENTITY)->data
-#define _DARKEN_UPDATE                                                 \
-    darken_state_t state = _entity->update(_DARKEN_ARGS(_entity));     \
-                                                                       \
-    if (state == DARKEN_CONTINUE)                                      \
-        continue;                                                      \
-                                                                       \
-    if (state == DARKEN_DELETE)                                        \
-    {                                                                  \
-        if (_entity->destroy)                                          \
-            _entity->destroy(_DARKEN_ARGS(_entity));                   \
-                                                                       \
-        darken_swap(ctx->pool, _entity->slot, --_entity->owner->size); \
-        continue;                                                      \
-    }                                                                  \
-                                                                       \
-    _entity->update = state;                                           \
-    continue;
+#define _DARKEN_UPDATE                                             \
+    darken_state_t state = _entity->update(_DARKEN_ARGS(_entity)); \
+                                                                   \
+    if (state == DARKEN_CONTINUE)                                  \
+        continue;                                                  \
+                                                                   \
+    if (state > DARKEN_CONTINUE)                                   \
+    {                                                              \
+        _entity->update = state;                                   \
+        continue;                                                  \
+    }                                                              \
+                                                                   \
+    if (_entity->destroy)                                          \
+        _entity->destroy(_DARKEN_ARGS(_entity));                   \
+                                                                   \
+    darken_swap(ctx->pool, _entity->slot, --_entity->owner->size);
 #endif
 
 #define _DARKEN_ALIGN(X, A) (((X) + (uintptr_t)(A) - 1) & ~((uintptr_t)(A) - 1))
@@ -323,10 +322,7 @@ struct darken_entity_t
 // Spawn a new entity from the free zone. Returns the entity or NULL if no free slots.
 // The returned entity may contain garbage from a previous occupant — always initialize all fields you care
 // about (update, destroy, tag, usr, and data).
-#define DARKEN_SPAWN(CTX) ({                                    \
-    darken_t *_ctx = (CTX);                                     \
-    _ctx->size < _ctx->capacity ? _ctx->pool[_ctx->size++] : 0; \
-})
+#define DARKEN_SPAWN(CTX) ({ (CTX)->size < (CTX)->capacity ? (CTX)->pool[(CTX)->size++] : 0; })
 
 // Iterate over all active entities in REVERSE order (from size-1 down to 0).
 // Reverse iteration makes deleting the currently visited entity safe.
@@ -334,11 +330,10 @@ struct darken_entity_t
 #define DARKEN_FOREACH(CTX, CODE)                        \
     do                                                   \
     {                                                    \
-        darken_t *_ctx = (CTX);                          \
-        uint16_t _index = _ctx->size;                    \
+        uint16_t _index = (CTX)->size;                   \
         if (_index)                                      \
         {                                                \
-            darken_entity_t *_pool = _ctx->pool;         \
+            darken_entity_t *_pool = (CTX)->pool;        \
             while (_index--)                             \
             {                                            \
                 darken_entity_t _entity = _pool[_index]; \
@@ -432,11 +427,12 @@ static inline darken_entity_t darken_transfer(darken_entity_t entity, darken_t *
     uint16_t dst_slot = dst->size++;
     darken_entity_t moved = dst->pool[dst_slot];
 
-    uint16_t n = src->stride < dst->stride ? src->stride : dst->stride;
     uint8_t *src_bytes = (uint8_t *)entity;
     uint8_t *dst_bytes = (uint8_t *)moved;
-    for (uint16_t i = 0; i < n; i++)
-        dst_bytes[i] = src_bytes[i];
+    uint16_t stride = src->stride < dst->stride ? src->stride : dst->stride;
+
+    while (stride--)
+        dst_bytes[stride] = src_bytes[stride];
 
     moved->slot = dst_slot;
     moved->owner = dst;
