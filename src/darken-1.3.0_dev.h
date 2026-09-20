@@ -20,9 +20,9 @@
  * 2. A GNU C compiler -- GCC or Clang. Darken relies on GNU C statement expressions (DARKEN_SPAWN), the
  *    __attribute__((aligned)) extension (DARKEN_DECLARE), and __alignof__.
  *    It will not build under a strict ISO-C-only compiler. Sentinel handling in state-machine mode
- *    (comparisons against DARKEN_CONTINUE and DARKEN_DELETE) additionally relies on GNU C / target-ABI behavior
- *    for converting small integer values to function pointers and comparing function-pointer values with those
- *    sentinels.
+ *    (== against DARKEN_CONTINUE and DARKEN_DELETE) additionally relies on GNU C / target-ABI
+ *    behavior for converting small integer values to function pointers and comparing function-pointer values
+ *    with those sentinels.
  *
  * 3. CAPACITY must satisfy 1 <= CAPACITY <= UINT16_MAX, and the computed entity stride must fit in uint16_t.
  *    These are API requirements; DARKEN_DECLARE() only rejects CAPACITY == 0 with a compile-time
@@ -46,9 +46,9 @@
  * O(1) access by index comes from `pool[]` itself being a flat array of pointers -- stride plays no part in
  * any lookup after init.
  *
- * An entity's own memory address (this struct) never moves once allocated by darken_init(). What moves
- * inside the ctx's pool is only the *pointer* to it. This is what makes it safe to keep a raw pointer into
- * entity->data even while the entity gets reordered.
+ * An entity's own memory address (this struct) never moves once allocated by darken_init(). What moves between
+ * the ctx's zones is only the *pointer* to it inside darken.pool[]. This is what makes it safe to keep a raw
+ * pointer into entity->data even while the entity gets reordered.
  *
  * The ctx itself needs the same guarantee, for the same reason: darken_init() bakes the address it was given
  * into every entity's ->owner, so the darken_t instance must already be sitting at its final address before
@@ -57,7 +57,7 @@
  * dangling into a stack frame that no longer exists. Build it in place, or pass a `darken_t *` in.
  *
  *
- * Ctx: Entity container and lifecycle ctx. Maintains the pointer array in two zones:
+ * Ctx: Entity container and lifecycle ctx. Maintains the pointer array in two logical zones:
  *
  * Array Layout:
  *    [ active entities ][   free slots    ]
@@ -75,10 +75,10 @@
  *     from, and where an active entity's slot goes right after it's deleted.
  *
  * Neither darken_init(), nor DARKEN_SPAWN(), nor deletion (whichever path triggers it) initializes or clears
- * update/destroy/tag/usr. An entity handed out by DARKEN_SPAWN() — whether fresh from darken_init() or
- * recycled after a previous entity in that slot was deleted — may still carry whatever values that slot's
- * previous occupant left behind. Setting these fields to the values your entity actually needs (including
- * clearing any you don't want carried over) is the caller's responsibility on every spawn.
+ * update/destroy/tag/usr. An entity handed out by DARKEN_SPAWN() — whether fresh from darken_init() or recycled
+ * after a previous entity in that slot was deleted — may still carry whatever values that slot's previous
+ * occupant left behind. Setting these fields to the values your entity actually needs (including clearing
+ * any you don't want carried over) is the caller's responsibility on every spawn.
  *
  *
  * Update / lifecycle control — two selectable modes
@@ -87,70 +87,79 @@
  * STATE-MACHINE mode is the default. Define DARKEN_DIRECT before including this header to opt into direct
  * mode instead.
  *
- * Each mode has a fixed callback contract.
+ * Each mode has one fixed callback signature — there is no separate configuration macro for the argument list.
+ * The signature is chosen per mode to match how that mode is actually used: state-machine callbacks rarely need
+ * the entity handle, since the return value drives the lifecycle; direct-mode callbacks almost always need it,
+ * since they call darken_entity_delete() themselves.
  *
  * 1) STATE-MACHINE mode — default
  * ---------------------------------------------------------
- *     update:  darken_state_t callback(void *data)
- *     destroy: void callback(void *data)
+ *     Signature: darken_state_t callback(void *data)
  *
- *     Only the entity's payload is passed to the callbacks. darken_update() reads update()'s return value
- *     and drives the lifecycle itself:
+ *     Only the entity's payload is passed — never the entity handle. darken_update() reads update()'s return
+ *     value and drives the lifecycle itself:
  *
  *         DARKEN_CONTINUE: stay active, keep the same update callback
  *         DARKEN_DELETE:   call destroy (if set), then delete the entity
  *         (anything else): treated as a new update callback pointer; installed as entity->update for next frame
  *
- *         void *player_walk_state(void *data)
+ *         void *player_walk_state(struct player *data)
  *         {
- *             struct player *player = (struct player *)data;
- *             player->x++;
+ *             data->x++;
  *
- *             if (should_stop(player))
+ *             if (should_stop(data))
  *                 return player_stop_state;
  *
- *             if (should_die(player))
+ *             if (should_die(data))
  *                 return DARKEN_DELETE;
  *
  *             return DARKEN_CONTINUE;
  *         }
  *
- *     `destroy` has a void return value because its return value is never interpreted.
+ *     `destroy` uses the same callback type and the same (data)-only argument convention as `update`.
+ *     Its return value is always ignored — darken_reset() and darken_entity_delete() only ever call it
+ *     for its side effects.
  *
- *     `destroy` must not mutate the ctx's pool. Deleting, spawning, or otherwise reordering entities
+ *     `destroy` must not mutate the ctx's pool zones. Deleting, spawning, or otherwise reordering entities
  *     from inside a destroy callback will corrupt the swap state and iteration that the engine relies on.
  *     This restriction applies to every path that invokes destroy: darken_reset(), darken_entity_delete(),
  *     and the DARKEN_DELETE branch inside darken_update().
  *
- *     Need the entity handle anyway? Recover it with DARKEN_ENTITY(data).
+ *     Need the entity handle anyway (e.g. to read/write usr or tag)? Recover it with DARKEN_ENTITY(data).
+ *
+ *     Comparing a darken_state_t value against the sentinels with `==` relies on GNU C / target-ABI
+ *     behavior for the function-pointer sentinel representation described in requirement 2 above.
  *
  * 2) DIRECT mode — DARKEN_DIRECT defined
  * ---------------------------------------------------------
- *     update:  void callback(darken_entity_t entity, void *data)
- *     destroy: void callback(darken_entity_t entity, void *data)
+ *     Signature: void callback(darken_entity_t entity)
+ *                void callback(darken_entity_t entity, void *data)
  *
- *     Both the entity handle and its payload are passed in that order. darken_update() invokes update()
- *     every frame and ignores any return value; darken_reset() and darken_entity_delete() invoke destroy()
- *     the same way.
+ *     Both the entity handle and its payload are passed, in that order. darken_update() just calls
+ *     entity->update(entity, entity->data) every frame and ignores any return value; entity->destroy(entity,
+ *     entity->data) is called the same way by darken_reset() and darken_entity_delete(). The callback is in
+ *     full control of the entity's lifecycle: it changes state by assigning directly to entity->update
+ *     (and/or entity->destroy), and it deletes itself by calling darken_entity_delete() — which takes the
+ *     handle it was just given directly, no DARKEN_ENTITY(data) lookup needed.
  *
- *     The callback is in full control of the entity's lifecycle: it changes state by assigning directly to
- *     entity->update and deletes itself by calling darken_entity_delete().
- *
- *         void player_walk_state(darken_entity_t entity, void *data) {
- *             struct player *player = (struct player *)data;
- *             player->x++;
+ *         void player_walk_state(darken_entity_t entity) {
+ *             DARKEN_DATA(struct player, data, entity);
+ *             data->x++;
  *         }
  *
- *         void player_walk_events_state(darken_entity_t entity, void *data) {
- *             struct player *player = (struct player *)data;
- *             player->x++;
+ *         void player_walk_events_state(darken_entity_t entity, struct player *data) {
+ *             data->x++;
  *
- *             if (should_stop(player))
+ *             if (should_stop(data))
  *                 entity->update = player_stop_state;
  *
- *             if (should_die(player))
+ *             if (should_die(data))
  *                 darken_entity_delete(entity);
  *         }
+ *
+ *     A callback that only declares the entity parameter (e.g. `void f(darken_entity_t entity)`) still works:
+ *     darken_state_t has no prototype, so the callee just reads however many leading arguments it declares and
+ *     the rest are pushed and ignored. This is a GNU-C/ABI-oriented convenience, not a general ISO-C rule.
  */
 
 #pragma once
@@ -159,16 +168,13 @@
 // Make sure uint8_t/uint16_t/uint32_t/uintptr_t are visible before this point: either `#include <stdint.h>`
 // yourself, or rely on whatever your platform already provides in its place.
 
-typedef struct darken_entity_t *darken_entity_t;
-
 #ifdef DARKEN_DIRECT
-typedef void (*darken_update_t)(darken_entity_t entity, void *data);
-typedef void (*darken_destroy_t)(darken_entity_t entity, void *data);
+typedef void (*darken_state_t)();
 #else
-typedef void *(*darken_state_t)(void *data);
-typedef darken_state_t darken_update_t;
-typedef void (*darken_destroy_t)(void *data);
+typedef void *(*darken_state_t)();
 #endif
+
+typedef struct darken_entity_t *darken_entity_t;
 
 typedef struct darken_t
 {
@@ -181,13 +187,13 @@ typedef struct darken_t
 
 struct darken_entity_t
 {
-    uint16_t slot;            // Private: Index in the ctx's pool array
-    uint16_t usr;             // User-defined field for custom data
-    darken_update_t update;   // User-defined update callback
-    darken_destroy_t destroy; // User-defined destroy callback
-    uint32_t tag;             // User-defined tag for identification or categorization
-    darken_t *owner;          // Private: Pointer to the owning ctx
-    uint8_t data[];           // Payload
+    uint16_t slot;          // Private: Index in the ctx's pool array
+    uint16_t usr;           // User-defined field for custom data
+    darken_state_t update;  // User-defined update callback
+    darken_state_t destroy; // User-defined destroy callback
+    uint32_t tag;           // User-defined tag for identification or categorization
+    darken_t *owner;        // Private: Pointer to the owning ctx
+    uint8_t data[];         // Payload
 };
 
 /* ============================================================================
@@ -211,6 +217,7 @@ struct darken_entity_t
     {                                                                  \
         if (_entity->destroy)                                          \
             _entity->destroy(_DARKEN_ARGS(_entity));                   \
+                                                                       \
         darken_swap(ctx->pool, _entity->slot, --_entity->owner->size); \
         continue;                                                      \
     }                                                                  \
@@ -234,7 +241,7 @@ struct darken_entity_t
  * ============================================================================ */
 
 // Sentinel return values for update() callbacks in state-machine mode.
-// Any return value other than DARKEN_CONTINUE or DARKEN_DELETE is treated as the next update callback.
+// Any other darken_state value returned is treated as the next update callback.
 #define DARKEN_CONTINUE ((darken_state_t)1)
 #define DARKEN_DELETE ((darken_state_t)0)
 
@@ -316,7 +323,10 @@ struct darken_entity_t
 // Spawn a new entity from the free zone. Returns the entity or NULL if no free slots.
 // The returned entity may contain garbage from a previous occupant — always initialize all fields you care
 // about (update, destroy, tag, usr, and data).
-#define DARKEN_SPAWN(CTX) ({ (CTX)->size < (CTX)->capacity ? (CTX)->pool[(CTX)->size++] : 0; })
+#define DARKEN_SPAWN(CTX) ({                                    \
+    darken_t *_ctx = (CTX);                                     \
+    _ctx->size < _ctx->capacity ? _ctx->pool[_ctx->size++] : 0; \
+})
 
 // Iterate over all active entities in REVERSE order (from size-1 down to 0).
 // Reverse iteration makes deleting the currently visited entity safe.
@@ -347,8 +357,9 @@ struct darken_entity_t
 // works on GCC/Clang (already required by this header).
 #define DARKEN_ENTITY(DATA) ((darken_entity_t)((uint8_t *)(DATA) - (uintptr_t)&((darken_entity_t)0)->data))
 
-// Zone membership test.
-// Note: ENTITY is evaluated multiple times. Do not pass expressions with side effects.
+// Zone membership tests.
+// Note: ENTITY is evaluated multiple times per test (up to two times for DARKEN_ENTITY_IS_FREE). Do not
+// pass expressions with side effects.
 #define DARKEN_ENTITY_IS_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->owner->size)
 #define DARKEN_ENTITY_IS_FREE(ENTITY) (!DARKEN_ENTITY_IS_ACTIVE(ENTITY))
 
@@ -372,24 +383,72 @@ static inline void darken_swap(darken_entity_t pool[], uint16_t i, uint16_t j)
     pool[j]->slot = j;
 }
 
-// Note: darken_entity_delete() is a no-op if the entity is already free.
-// destroy() must not mutate the ctx's pool (delete/spawn) while it runs -- see the big header comment
-// above.
+// Note: darken_entity_delete() only calls destroy() if the entity is active.
+// destroy() must not mutate the ctx's pool zones (delete/spawn) while it runs -- see the big
+// header comment above.
 static inline void darken_entity_delete(darken_entity_t entity)
 {
-    if (DARKEN_ENTITY_IS_FREE(entity))
-        return;
+    if (DARKEN_ENTITY_IS_ACTIVE(entity))
+    {
+        if (entity->destroy)
+            entity->destroy(_DARKEN_ARGS(entity));
 
-    if (entity->destroy)
-        entity->destroy(_DARKEN_ARGS(entity));
-
-    darken_swap(entity->owner->pool, entity->slot, --entity->owner->size);
+        darken_swap(entity->owner->pool, entity->slot, --entity->owner->size);
+    }
 }
 
-/* ============================================================================
- * USAGE EXAMPLES:
- */
+// Move `entity` from its current ctx into `dst`, WITHOUT calling destroy(). Useful for moving an entity
+// into (or out of) a ctx that darken_update() isn't called on every frame -- e.g. a dormant/inactive set
+// kept separate from the one that runs every frame. Neither direction is special-cased -- see below.
+//
+// Returns the entity as it now lives in `dst`, or NULL if:
+//   - entity is not active in its source ctx
+//   - dst is full
+//
+// `src` and `dst` do NOT need the same stride. Exactly min(src->stride, dst->stride) bytes are copied, so
+// the transfer can never read past the source's storage nor write past the destination's slot, regardless
+// of which one is smaller:
+//
+//   - dst->stride < src->stride (shrinking, e.g. moving into a ctx that only keeps a compact
+//     representation): the payload is TRUNCATED to what fits. The header fields (slot/owner/
+//     update/destroy/tag/usr) always survive intact -- every valid stride is at least
+//     sizeof(struct darken_entity_t) after alignment, so only the tail of data[] can ever be cut.
+//   - dst->stride > src->stride (growing, e.g. moving back out of that compact ctx into a fuller one): only
+//     the first src->stride bytes are restored; the rest of the destination's data[] is whatever garbage
+//     was already sitting in that recycled slot. Same convention as DARKEN_SPAWN() -- initialize whatever
+//     extra fields you need after the call.
+//
+// This is why there is no separate rule per direction: a single min()-bounded copy is safe and correct
+// both ways at once, as long as the application keeps the fields that must survive the round trip at the
+// FRONT of both payload structs (the smaller one being a literal prefix of the larger).
+// update/destroy/tag/usr are always copied as-is; only slot and owner are rewritten to match `dst`.
+static inline darken_entity_t darken_transfer(darken_entity_t entity, darken_t *dst)
+{
+    darken_t *src = entity->owner;
 
+    if (src == dst || !DARKEN_ENTITY_IS_ACTIVE(entity) || dst->size >= dst->capacity)
+        return NULL;
+
+    uint16_t dst_slot = dst->size++;
+    darken_entity_t moved = dst->pool[dst_slot];
+
+    uint16_t n = src->stride < dst->stride ? src->stride : dst->stride;
+    uint8_t *src_bytes = (uint8_t *)entity;
+    uint8_t *dst_bytes = (uint8_t *)moved;
+    for (uint16_t i = 0; i < n; i++)
+        dst_bytes[i] = src_bytes[i];
+
+    moved->slot = dst_slot;
+    moved->owner = dst;
+
+    darken_swap(src->pool, entity->slot, --src->size);
+
+    return moved;
+}
+
+//
+// USAGE EXAMPLES:
+//
 // DYNAMIC:
 //     darken_t m = DARKEN_ALLOC(malloc, 5, sizeof(struct MyComponent));
 //     if (!m.pool || !m.storage) return;
@@ -397,13 +456,13 @@ static inline void darken_entity_delete(darken_entity_t entity)
 //     ...
 //     darken_reset(&m);
 //     DARKEN_FREE(free, &m);
-
+//
 // STATIC (Runtime binding):
 // Runtime: locals, reassignment, any context
 //     DARKEN_DECLARE(storage, 5, sizeof(struct MyComponent));
 //     darken_t m = DARKEN_BIND(storage);
 //     darken_init(&m);
-
+//
 // STATIC (Compile-time initialization):
 // Static/global initialization: compile-time constants
 //     DARKEN_DECLARE(storage, 5, sizeof(struct MyComponent));
@@ -413,7 +472,7 @@ static inline void darken_entity_delete(darken_entity_t entity)
 //         darken_init(&m);
 //         ...
 //     }
-
+//
 // darken_init() must only be called on unused/uninitialized storage, or after darken_reset() when the
 // current population is intentionally being discarded. It does not call destroy() for the entities already
 // managed by the ctx.
@@ -446,8 +505,8 @@ static inline void darken_update(darken_t *ctx)
 // Calls destroy() on every currently active entity, then drops the whole pool back to the free zone
 // (size = 0).
 //
-// destroy() callbacks used by darken_reset() must not mutate the ctx's pool by deleting, spawning, or
-// otherwise reordering entities during the reset iteration. (This is a specific case of the general
+// destroy() callbacks used by darken_reset() must not mutate the ctx's pool zones by deleting, spawning,
+// or otherwise reordering entities during the reset iteration. (This is a specific case of the general
 // restriction documented in the big header comment above.)
 static inline void darken_reset(darken_t *ctx)
 {
@@ -457,53 +516,4 @@ static inline void darken_reset(darken_t *ctx)
     });
 
     ctx->size = 0;
-}
-
-// Move `entity` from its current ctx into `dst`, WITHOUT calling destroy(). This is a general
-// transfer operation between entity contexts; neither direction is special-cased.
-//
-// Returns the entity as it now lives in `dst`, or NULL if:
-//   - entity is not active in its source ctx
-//   - dst is full
-//
-// `src` and `dst` do NOT need the same stride. Exactly min(src->stride, dst->stride) bytes are copied, so
-// the transfer can never read past the source's storage nor write past the destination's slot, regardless
-// of which one is smaller:
-//
-//   - dst->stride < src->stride (shrinking, e.g. moving into a smaller destination ctx that only keeps a
-//     compact representation): the payload is TRUNCATED to what fits. The header fields (slot/owner/
-//     update/destroy/tag/usr) always survive intact -- every valid stride is at least
-//     sizeof(struct darken_entity_t) after alignment, so only the tail of data[] can ever be cut.
-//   - dst->stride > src->stride (growing, e.g. moving into a larger destination ctx): only
-//     the first src->stride bytes are restored; the rest of the destination's data[] is whatever garbage
-//     was already sitting in that recycled slot. Same convention as DARKEN_SPAWN() -- initialize whatever
-//     extra fields you need after the call.
-//
-// A single min()-bounded copy is safe in both directions as long as the application keeps the fields
-// that must survive the transfer at the FRONT of both payload structs (the smaller one being a literal prefix
-// of the larger).
-// update/destroy/tag/usr are always copied as-is; only slot and owner are rewritten to match `dst`.
-static inline darken_entity_t darken_transfer(darken_entity_t entity, darken_t *dst)
-{
-    darken_t *src = entity->owner;
-
-    if (src == dst || !DARKEN_ENTITY_IS_ACTIVE(entity) || dst->size >= dst->capacity)
-        return NULL;
-
-    uint16_t dst_slot = dst->size++;
-    darken_entity_t moved = dst->pool[dst_slot];
-
-    uint16_t stride = src->stride < dst->stride ? src->stride : dst->stride;
-    uint8_t *src_bytes = (uint8_t *)entity;
-    uint8_t *dst_bytes = (uint8_t *)moved;
-
-    for (uint16_t i = 0; i < stride; i++)
-        dst_bytes[i] = src_bytes[i];
-
-    moved->slot = dst_slot;
-    moved->owner = dst;
-
-    darken_swap(src->pool, entity->slot, --src->size);
-
-    return moved;
 }
