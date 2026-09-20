@@ -379,17 +379,17 @@ static inline void darken_swap(darken_entity_t pool[], uint16_t i, uint16_t j)
 }
 
 // Note: darken_entity_delete() only calls destroy() if the entity is active.
-// destroy() must not mutate the ctx's pool zones (delete/spawn) while it runs -- see the big
-// header comment above.
+// destroy() must not mutate the ctx's pool zones (delete/spawn) while it runs -- see the big header comment
+// above.
 static inline void darken_entity_delete(darken_entity_t entity)
 {
-    if (DARKEN_ENTITY_IS_ACTIVE(entity))
-    {
-        if (entity->destroy)
-            entity->destroy(_DARKEN_ARGS(entity));
+    if (DARKEN_ENTITY_IS_FREE(entity))
+        return;
 
-        darken_swap(entity->owner->pool, entity->slot, --entity->owner->size);
-    }
+    if (entity->destroy)
+        entity->destroy(_DARKEN_ARGS(entity));
+
+    darken_swap(entity->owner->pool, entity->slot, --entity->owner->size);
 }
 
 // Move `entity` from its current ctx into `dst`, WITHOUT calling destroy(). Useful for moving an entity
@@ -417,7 +417,7 @@ static inline void darken_entity_delete(darken_entity_t entity)
 // both ways at once, as long as the application keeps the fields that must survive the round trip at the
 // FRONT of both payload structs (the smaller one being a literal prefix of the larger).
 // update/destroy/tag/usr are always copied as-is; only slot and owner are rewritten to match `dst`.
-static inline darken_entity_t darken_transfer(darken_entity_t entity, darken_t *dst)
+static inline darken_entity_t darken_entity_transfer(darken_entity_t entity, darken_t *dst)
 {
     darken_t *src = entity->owner;
 
@@ -429,10 +429,10 @@ static inline darken_entity_t darken_transfer(darken_entity_t entity, darken_t *
 
     uint8_t *src_bytes = (uint8_t *)entity;
     uint8_t *dst_bytes = (uint8_t *)moved;
-    uint16_t stride = src->stride < dst->stride ? src->stride : dst->stride;
+    uint16_t i = src->stride < dst->stride ? src->stride : dst->stride;
 
-    while (stride--)
-        dst_bytes[stride] = src_bytes[stride];
+    while (i--)
+        dst_bytes[i] = src_bytes[i];
 
     moved->slot = dst_slot;
     moved->owner = dst;
