@@ -20,9 +20,9 @@
  * 2. A GNU C compiler -- GCC or Clang. Darken relies on GNU C statement expressions (DARKEN_SPAWN), the
  *    __attribute__((aligned)) extension (DARKEN_DECLARE), and __alignof__.
  *    It will not build under a strict ISO-C-only compiler. Sentinel handling in state-machine mode
- *    (== against DARKEN_CONTINUE and DARKEN_DELETE) additionally relies on GNU C / target-ABI
- *    behavior for converting small integer values to function pointers and comparing function-pointer values
- *    with those sentinels.
+ *    (== against DARKEN_CONTINUE and > against DARKEN_CONTINUE to detect new callbacks) additionally relies
+ *    on GNU C / target-ABI behavior for converting small integer values to function pointers and comparing
+ *    function-pointer values with those sentinels.
  *
  * 3. CAPACITY must satisfy 1 <= CAPACITY <= UINT16_MAX, and the computed entity stride must fit in uint16_t.
  *    These are API requirements; DARKEN_DECLARE() only rejects CAPACITY == 0 with a compile-time
@@ -127,7 +127,7 @@
  *
  *     Need the entity handle anyway (e.g. to read/write usr or tag)? Recover it with DARKEN_ENTITY(data).
  *
- *     Comparing a darken_state_t value against the sentinels with `==` relies on GNU C / target-ABI
+ *     Comparing a darken_state_t value against the sentinels with `==`/`>` relies on GNU C / target-ABI
  *     behavior for the function-pointer sentinel representation described in requirement 2 above.
  *
  * 2) DIRECT mode — DARKEN_DIRECT defined
@@ -240,7 +240,7 @@ struct darken_entity_t
  * ============================================================================ */
 
 // Sentinel return values for update() callbacks in state-machine mode.
-// Any other darken_state value returned is treated as the next update callback.
+// Any value > DARKEN_CONTINUE is treated as the next update callback.
 #define DARKEN_CONTINUE ((darken_state_t)1)
 #define DARKEN_DELETE ((darken_state_t)0)
 
