@@ -138,10 +138,6 @@
 #define DARKEN_MAX_ZONES 8
 #endif
 
-#ifndef DARKEN_DEFAULT_ZONE
-#define DARKEN_DEFAULT_ZONE 0
-#endif
-
 #ifdef DARKEN_DIRECT
 typedef void (*darken_state_t)();
 #else
@@ -174,12 +170,6 @@ struct darken_entity_t
 /* ============================================================================
  * PRIVATE
  * ============================================================================ */
-
-#define _DARKEN_ALIGN(X, A) (((X) + (uintptr_t)(A) - 1) & ~((uintptr_t)(A) - 1))
-#define _DARKEN_POOL_ALIGN __alignof__(darken_entity_t)
-#define _DARKEN_ENTITY_ALIGN __alignof__(struct darken_entity_t)
-#define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN(sizeof(struct darken_entity_t) + (PAYLOAD), _DARKEN_ENTITY_ALIGN)
-
 #ifdef DARKEN_DIRECT
 #define _DARKEN_ARGS(ENTITY) (ENTITY), (ENTITY)->data
 #define _DARKEN_UPDATE _entity->update(_DARKEN_ARGS(_entity))
@@ -192,18 +182,22 @@ struct darken_entity_t
     if (state == DARKEN_CONTINUE)                                  \
         continue;                                                  \
                                                                    \
-    if (state == DARKEN_DELETE)                                    \
+    if (state > DARKEN_CONTINUE)                                   \
+        _entity->update = state;                                   \
+                                                                   \
+    else /* DARKEN_DELETE) */                                      \
     {                                                              \
         if (_entity->destroy)                                      \
             _entity->destroy(_DARKEN_ARGS(_entity));               \
-        _darken_move_free(_entity);                                \
-        continue;                                                  \
-    }                                                              \
                                                                    \
-    /* Any other value is treated as the next update callback. */  \
-    _entity->update = state;                                       \
-    continue;
+        _darken_move_free(_entity);                                \
+    }
 #endif
+
+#define _DARKEN_ALIGN(X, A) (((X) + (uintptr_t)(A) - 1) & ~((uintptr_t)(A) - 1))
+#define _DARKEN_POOL_ALIGN __alignof__(darken_entity_t)
+#define _DARKEN_ENTITY_ALIGN __alignof__(struct darken_entity_t)
+#define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN(sizeof(struct darken_entity_t) + (PAYLOAD), _DARKEN_ENTITY_ALIGN)
 
 static inline void darken_swap(darken_entity_t pool[], uint16_t i, uint16_t j)
 {
@@ -225,7 +219,7 @@ static inline uint16_t _darken_size(darken_t *ctx)
 
 // NOTE: moved here (right after _darken_size, before any of the functions
 // below that call them) because these two are used inside darken_entity_zone(),
-// _darken_move_zone(), _darken_move_from_free() and _darken_move_free(), all
+// darken_entity_set_zone(), _darken_move_from_free() and _darken_move_free(), all
 // defined further down in this same PRIVATE section. A macro must be #defined
 // before its point of use in the file.
 #define DARKEN_ENTITY_IN_ACTIVE(ENTITY) ((ENTITY)->slot < _darken_size((ENTITY)->owner))
@@ -253,26 +247,6 @@ static inline int darken_entity_zone(darken_entity_t entity)
         z++;
 
     return z;
-}
-
-static inline void _darken_move_zone(darken_entity_t entity, int target)
-{
-    darken_t *ctx = entity->owner;
-    int cur;
-
-    if (DARKEN_ENTITY_IN_FREE(entity))
-        return;
-
-    cur = darken_entity_zone(entity);
-
-    if (cur == target)
-        return;
-
-    while (cur < target)
-        darken_swap(ctx->pool, entity->slot, --ctx->bounds[cur++]);
-
-    while (cur > target)
-        darken_swap(ctx->pool, entity->slot, ctx->bounds[--cur]++);
 }
 
 static inline void _darken_move_from_free(darken_entity_t entity, int target)
@@ -318,7 +292,7 @@ static inline void _darken_move_free(darken_entity_t entity)
 #define DARKEN_ALLOC(ALLOC, CAPACITY, PAYLOAD) \
     DARKEN_ALLOC_ZONES((ALLOC), (CAPACITY), 1, (PAYLOAD))
 
-#define DARKEN_ALLOC_ZONES(ALLOC, CAPACITY, ZONES, PAYLOAD)              \
+#define DARKEN_ALLOC_ZONES(ALLOC, CAPACITY, PAYLOAD, ZONES)              \
     (darken_t)                                                           \
     {                                                                    \
         .pool = (ALLOC)((CAPACITY) * sizeof(darken_entity_t)),           \
@@ -343,7 +317,7 @@ static inline void _darken_move_free(darken_entity_t entity)
 // prefixed with `static` at file scope:
 //
 //     static DARKEN_DECLARE(storage, 5, sizeof(struct Foo));
-//     static DARKEN_DECLARE_ZONES(storage, 5, 4, sizeof(struct Foo));
+//     static DARKEN_DECLARE_ZONES(storage, 5, sizeof(struct Foo), 4);
 //
 // Compile-time checks (_darken_checks[]) use a negative-size array rather than
 // _Static_assert: _Static_assert cannot be prefixed with `static`, and putting
@@ -395,10 +369,7 @@ static inline void _darken_move_free(darken_entity_t entity)
         .zones = (NAME).zones,       \
     }
 
-/* --- SPAWN ----------------------------------------------------------------- */
-
-// 1.1-compatible: spawns into the default zone.
-#define DARKEN_SPAWN(CTX) DARKEN_SPAWN_ZONE((CTX), DARKEN_DEFAULT_ZONE)
+#define DARKEN_SPAWN(CTX) DARKEN_SPAWN_ZONE((CTX), 0)
 
 #define DARKEN_SPAWN_ZONE(CTX, ZONE)                                        \
     ({                                                                      \
@@ -500,7 +471,23 @@ static inline void darken_entity_delete(darken_entity_t entity)
 // free zone.
 static inline void darken_entity_set_zone(darken_entity_t entity, int zone)
 {
-    _darken_move_zone(entity, zone);
+    darken_t *ctx = entity->owner;
+    int cur;
+
+    if (DARKEN_ENTITY_IN_FREE(entity))
+        return;
+
+    cur = darken_entity_zone(entity);
+
+    if (cur == target)
+        return;
+
+    while (cur < target)
+        darken_swap(ctx->pool, entity->slot, --ctx->bounds[cur++]);
+
+    while (cur > target)
+        darken_swap(ctx->pool, entity->slot, ctx->bounds[--cur]++);
+}
 }
 
 /* --- CTX LIFECYCLE --------------------------------------------------------- */
