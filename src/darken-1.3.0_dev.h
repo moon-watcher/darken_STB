@@ -17,12 +17,11 @@
  *    does NOT #include <stdint.h> itself -- the including project must provide them, whether via a plain
  *    `#include <stdint.h>` or whatever equivalent your target already defines them through.
  *
- * 2. A GNU C compiler -- GCC or Clang. Darken relies on GNU C statement expressions (DARKEN_SPAWN), the
- *    __attribute__((aligned)) extension (DARKEN_DECLARE), and __alignof__.
- *    It will not build under a strict ISO-C-only compiler. Sentinel handling in state-machine mode
- *    (== against DARKEN_CONTINUE and > against DARKEN_CONTINUE to detect new callbacks) additionally relies
- *    on GNU C / target-ABI behavior for converting small integer values to function pointers and comparing
- *    function-pointer values with those sentinels.
+ * 2. A GNU C compiler -- GCC or Clang. Darken relies on the __attribute__((aligned)) extension
+ *    (DARKEN_DECLARE), and __alignof__. It will not build under a strict ISO-C-only compiler. Sentinel 
+ *    handling in state-machine mode (== against DARKEN_CONTINUE and > against DARKEN_CONTINUE to detect new
+ *    callbacks) additionally relies on GNU C / target-ABI behavior for converting small integer values to
+ *    function pointers and comparing function-pointer values with those sentinels.
  *
  * 3. CAPACITY must satisfy 1 <= CAPACITY <= UINT16_MAX, and the computed entity stride must fit in uint16_t.
  *    These are API requirements; DARKEN_DECLARE() only rejects CAPACITY == 0 with a compile-time
@@ -322,7 +321,7 @@ struct darken_entity_t
 // Spawn a new entity from the free zone. Returns the entity or NULL if no free slots.
 // The returned entity may contain garbage from a previous occupant — always initialize all fields you care
 // about (update, destroy, tag, usr, and data).
-#define DARKEN_SPAWN(CTX) ({ (CTX)->size < (CTX)->capacity ? (CTX)->pool[(CTX)->size++] : 0; })
+#define DARKEN_SPAWN(CTX) ((CTX)->size < (CTX)->capacity ? (CTX)->pool[(CTX)->size++] : 0)
 
 // Iterate over all active entities in REVERSE order (from size-1 down to 0).
 // Reverse iteration makes deleting the currently visited entity safe.
