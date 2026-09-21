@@ -449,41 +449,22 @@ static inline void darken_reset(darken_t *ctx)
     ctx->size = 0;
 }
 
-// Migrate `entity` from its current ctx into `dst`, WITHOUT calling destroy(). Useful for moving an entity
-// into (or out of) a ctx that darken_update() isn't called on every frame -- e.g. a dormant/inactive set
-// kept separate from the one that runs every frame. Neither direction is special-cased -- see below.
+// Migrate `entity` from its current ctx into `dst`, WITHOUT calling destroy().
+// Returns the entity as it now lives in `dst`, or 0 if the transfer cannot be performed.
 //
-// Returns the entity as it now lives in `dst`, or 0 if:
-//   - entity is not active in its source ctx
-//   - dst is full
+// `src` and `dst` may use different strides. Exactly min(src->stride, dst->stride) bytes are copied.
+// If dst is smaller, excess payload data is truncated; if dst is larger, the remaining payload is unchanged.
+// The common header fields are preserved, except slot and owner, which are updated for `dst`.
 //
-// `src` and `dst` do NOT need the same stride. Exactly min(src->stride, dst->stride) bytes are copied, so
-// the migration can never read past the source's storage nor write past the destination's slot, regardless
-// of which one is smaller:
-//
-//   - dst->stride < src->stride (shrinking, e.g. moving into a ctx that only keeps a compact
-//     representation): the payload is TRUNCATED to what fits. The header fields (slot/owner/
-//     update/destroy/tag/usr) always survive intact -- every valid stride is at least
-//     sizeof(struct darken_entity_t) after alignment, so only the tail of data[] can ever be cut.
-//   - dst->stride > src->stride (growing, e.g. moving back out of that compact ctx into a fuller one): only
-//     the first src->stride bytes are restored; the rest of the destination's data[] is whatever garbage
-//     was already sitting in that recycled slot. Same convention as DARKEN_SPAWN() -- initialize whatever
-//     extra fields you need after the call.
-//
-// This is why there is no separate rule per direction: a single min()-bounded copy is safe and correct
-// both ways at once, as long as the application keeps the fields that must survive the round trip at the
-// FRONT of both payload structs (the smaller one being a literal prefix of the larger).
-// update/destroy/tag/usr are always copied as-is; only slot and owner are rewritten to match `dst`.
+// If `entity` is active, it is removed from `src` after the copy. If it is free, its source slot remains free.
 static inline darken_entity_t darken_entity_migrate(darken_entity_t entity, darken_t *dst)
 {
-    if (DARKEN_ENTITY_IS_FREE(entity))
-        return 0;
-
     darken_t *src = entity->owner;
 
     if (src == dst || dst->size >= dst->capacity)
         return 0;
 
+    uint16_t active = DARKEN_ENTITY_IS_ACTIVE(entity);
     uint16_t dst_slot = dst->size++;
     darken_entity_t moved = dst->pool[dst_slot];
 
@@ -497,7 +478,8 @@ static inline darken_entity_t darken_entity_migrate(darken_entity_t entity, dark
     moved->slot = dst_slot;
     moved->owner = dst;
 
-    darken_swap(src, entity->slot, --src->size);
+    if (active)
+        darken_swap(src, entity->slot, --src->size);
 
     return moved;
 }
