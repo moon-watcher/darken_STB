@@ -18,7 +18,7 @@
  *    `#include <stdint.h>` or whatever equivalent your target already defines them through.
  *
  * 2. A GNU C compiler -- GCC or Clang. Darken relies on the __attribute__((aligned)) extension
- *    (DARKEN_DECLARE), and __alignof__. It will not build under a strict ISO-C-only compiler. Sentinel 
+ *    (DARKEN_DECLARE), and __alignof__. It will not build under a strict ISO-C-only compiler. Sentinel
  *    handling in state-machine mode (== against DARKEN_CONTINUE and > against DARKEN_CONTINUE to detect new
  *    callbacks) additionally relies on GNU C / target-ABI behavior for converting small integer values to
  *    function pointers and comparing function-pointer values with those sentinels.
