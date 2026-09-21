@@ -221,7 +221,7 @@ struct darken_entity_t
     if (_entity->destroy)                                          \
         _entity->destroy(_DARKEN_ARGS(_entity));                   \
                                                                    \
-    darken_entity_swap(_entity, _entity->owner->pool[--_entity->owner->size]);
+    darken_entity_swap(_entity, _ctx->pool[--_ctx->size]);
 #endif
 
 #define _DARKEN_ALIGN(X, A) (((X) + (uintptr_t)(A) - 1) & ~((uintptr_t)(A) - 1))
@@ -329,10 +329,11 @@ struct darken_entity_t
 #define DARKEN_FOREACH(CTX, CODE)                        \
     do                                                   \
     {                                                    \
-        uint16_t _index = (CTX)->size;                   \
+        darken_t *_ctx = (CTX);                          \
+        uint16_t _index = _ctx->size;                    \
         if (_index)                                      \
         {                                                \
-            darken_entity_t *_pool = (CTX)->pool;        \
+            darken_entity_t *_pool = _ctx->pool;         \
             while (_index--)                             \
             {                                            \
                 darken_entity_t _entity = _pool[_index]; \
@@ -365,36 +366,40 @@ struct darken_entity_t
  * FUNCTIONS
  * ============================================================================ */
 
-// Swap two entities within their shared ctx's pool. Both entities must belong to the same ctx; this is
-// always the case in Darken's internal usage (delete, update, migrate), where the two entities come from
-// the same pool array. Takes the entities themselves rather than (ctx, i, j) so callers cannot pass a
-// mismatched ctx or stale index: the ctx is recovered from ->owner, the indices from ->slot.
+// Swap two entities in their owners' pool arrays. The entities may belong to the same ctx or to different
+// ctx's. Each entity is exchanged with the pool slot it currently occupies in its own owner, then both owner
+// pointers and slot indices are exchanged with the pool entries. This keeps ->owner and ->slot consistent even
+// when the two entities cross ctx boundaries.
+//
+// Takes the entities themselves rather than (ctx, i, j) so callers cannot pass a mismatched ctx or stale index:
+// each ctx and index are recovered directly from the entity being moved.
 //
 // always_inline is not an optimisation nicety here -- it is required for the current numbers. Without it,
 // the extra prologue/epilogue and the fact that the compiler cannot fold the caller's already-loaded
 // entity->owner / entity->slot into the swap costs ~15% on the delete path. With it, the whole swap
 // collapses into four stores and two slot updates in the caller, matching the old (ctx, i, j) version.
-static inline __attribute__((always_inline))
-void darken_entity_swap(darken_entity_t e1, darken_entity_t e2)
+static inline void darken_entity_swap(darken_entity_t e1, darken_entity_t e2)
 {
     if (e1 == e2)
         return;
 
-    darken_t *ctx = e1->owner;
+    darken_t *ctx1 = e1->owner;
+    darken_t *ctx2 = e2->owner;
     uint16_t i = e1->slot;
     uint16_t j = e2->slot;
 
-    ctx->pool[i] = e2;
-    ctx->pool[j] = e1;
+    ctx1->pool[i] = e2;
+    ctx2->pool[j] = e1;
     e1->slot = j;
     e2->slot = i;
+    e1->owner = ctx2;
+    e2->owner = ctx1;
 }
 
 // Note: darken_entity_delete() only calls destroy() if the entity is active.
 // destroy() must not mutate the ctx's pool zones (delete/spawn) while it runs -- see the big header comment
 // above.
-static inline __attribute__((always_inline))
-void darken_entity_delete(darken_entity_t entity)
+static inline void darken_entity_delete(darken_entity_t entity)
 {
     if (DARKEN_ENTITY_IS_FREE(entity))
         return;
