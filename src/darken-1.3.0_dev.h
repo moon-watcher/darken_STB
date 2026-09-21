@@ -402,9 +402,9 @@ static inline void darken_entity_delete(darken_entity_t entity)
 // The copy runs in 32-bit words with a byte tail for the remainder. The uint32_t accesses are safe without
 // any runtime alignment check: entities are laid out at storage + i * stride, where storage is aligned to
 // _DARKEN_ENTITY_ALIGN and stride is a multiple of it. On 68000 a move.l only requires an even address, and
-// _DARKEN_ENTITY_ALIGN is at least 2 on every target Darken builds for. On any target with stricter
-// uint32_t alignment, _DARKEN_ENTITY_ALIGN would already be >= 4 (struct darken_entity_t contains a
-// uint32_t member), so the access remains aligned there too.
+// _DARKEN_ENTITY_ALIGN is at least 2 on every target Darken builds for. On any target with stricter uint32_t
+// alignment, _DARKEN_ENTITY_ALIGN would already be >= 4 (struct darken_entity_t contains a uint32_t member),
+// so the access remains aligned there too.
 static inline darken_entity_t darken_entity_migrate(darken_entity_t entity, darken_t *dst)
 {
     darken_t *src = entity->owner;
