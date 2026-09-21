@@ -203,25 +203,8 @@ struct darken_entity_t
 // The argument list is fixed per mode (see the big comment above), so there is nothing to configure here.
 #ifdef DARKEN_DIRECT
 #define _DARKEN_ARGS(ENTITY) (ENTITY), (ENTITY)->data
-#define _DARKEN_UPDATE _entity->update(_DARKEN_ARGS(_entity))
 #else
 #define _DARKEN_ARGS(ENTITY) (ENTITY)->data
-#define _DARKEN_UPDATE                                             \
-    darken_state_t state = _entity->update(_DARKEN_ARGS(_entity)); \
-                                                                   \
-    if (state == DARKEN_CONTINUE)                                  \
-        continue;                                                  \
-                                                                   \
-    if (state > DARKEN_CONTINUE)                                   \
-    {                                                              \
-        _entity->update = state;                                   \
-        continue;                                                  \
-    }                                                              \
-                                                                   \
-    if (_entity->destroy)                                          \
-        _entity->destroy(_DARKEN_ARGS(_entity));                   \
-                                                                   \
-    darken_entity_swap(_entity, _ctx->pool[--_ctx->size]);
 #endif
 
 #define _DARKEN_ALIGN(X, A) (((X) + (uintptr_t)(A) - 1) & ~((uintptr_t)(A) - 1))
@@ -463,7 +446,27 @@ static inline void darken_init(darken_t *ctx)
 
 static inline void darken_update(darken_t *ctx)
 {
-    DARKEN_FOREACH(ctx, _DARKEN_UPDATE);
+#ifdef DARKEN_DIRECT
+    DARKEN_FOREACH(ctx, _entity->update(_DARKEN_ARGS(_entity)));
+#else
+    DARKEN_FOREACH(ctx, {
+        darken_state_t state = _entity->update(_DARKEN_ARGS(_entity));
+
+        if (state == DARKEN_CONTINUE)
+            continue;
+
+        if (state > DARKEN_CONTINUE)
+        {
+            _entity->update = state;
+            continue;
+        }
+
+        if (_entity->destroy)
+            _entity->destroy(_DARKEN_ARGS(_entity));
+
+        darken_entity_swap(_entity, _ctx->pool[--_ctx->size]);
+    });
+#endif
 }
 
 // Calls destroy() on every currently active entity, then drops the whole pool back to the free zone
