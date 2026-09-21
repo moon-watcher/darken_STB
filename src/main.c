@@ -33,6 +33,8 @@ int main(void)
     bench_darken_1_1();
     bench_darken_1_2();
     bench_darken_1_3();
+    bench_migrate_variants();
+    bench_migrate();
     // darken2_user_demo_main();
 
     return 0;

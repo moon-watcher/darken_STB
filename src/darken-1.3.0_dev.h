@@ -468,12 +468,21 @@ static inline darken_entity_t darken_entity_migrate(darken_entity_t entity, dark
     uint16_t dst_slot = dst->size++;
     darken_entity_t moved = dst->pool[dst_slot];
 
-    uint8_t *src_bytes = (uint8_t *)entity;
-    uint8_t *dst_bytes = (uint8_t *)moved;
-    uint16_t i = src->stride < dst->stride ? src->stride : dst->stride;
+    uint16_t bytes = src->stride < dst->stride ? src->stride : dst->stride;
+    uint16_t words = bytes >> 2;
 
-    while (i--)
-        dst_bytes[i] = src_bytes[i];
+    uint32_t *s = (uint32_t *)entity;
+    uint32_t *d = (uint32_t *)moved;
+
+    while (words--)
+        *d++ = *s++;
+
+    uint8_t *sb = (uint8_t *)s;
+    uint8_t *db = (uint8_t *)d;
+    uint16_t tail = bytes & 3;
+
+    while (tail--)
+        *db++ = *sb++;
 
     moved->slot = dst_slot;
     moved->owner = dst;
@@ -482,18 +491,4 @@ static inline darken_entity_t darken_entity_migrate(darken_entity_t entity, dark
         darken_swap(src, entity->slot, --src->size);
 
     return moved;
-}
-
-// Note: darken_entity_delete() only calls destroy() if the entity is active.
-// destroy() must not mutate the ctx's pool zones (delete/spawn) while it runs -- see the big header comment
-// above.
-static inline void darken_entity_delete(darken_entity_t entity)
-{
-    if (DARKEN_ENTITY_IS_FREE(entity))
-        return;
-
-    if (entity->destroy)
-        entity->destroy(_DARKEN_ARGS(entity));
-
-    darken_swap(entity->owner, entity->slot, --entity->owner->size);
 }
