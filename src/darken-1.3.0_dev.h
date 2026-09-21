@@ -31,9 +31,6 @@
  * are all whatever the compiler says they are for the platform it's building for (see _DARKEN_ENTITY_ALIGN
  * below, computed via __alignof__ rather than any hardcoded value).
  *
- * The entity stride is aligned to both struct darken_entity_t and uint32_t because entity migration uses
- * 32-bit word copies.
- *
  * The payload type used with DARKEN_DATA() must not require stricter alignment than struct darken_entity_t
  * itself. Darken knows the payload size at storage declaration time, but not the payload type's alignment.
  *
@@ -48,9 +45,9 @@
  * O(1) access by index comes from `pool[]` itself being a flat array of pointers -- stride plays no part in
  * any lookup after init.
  *
- * Within a ctx, an entity's own memory address (this struct) never moves once allocated by darken_init().
- * What moves between the ctx's zones is only the *pointer* to it inside darken.pool[]. This is what makes it
- * safe to keep a raw pointer into entity->data even while the entity gets reordered.
+ * An entity's own memory address (this struct) never moves once allocated by darken_init(). What moves between
+ * the ctx's zones is only the *pointer* to it inside darken.pool[]. This is what makes it safe to keep a raw
+ * pointer into entity->data even while the entity gets reordered.
  *
  * The ctx itself needs the same guarantee, for the same reason: darken_init() bakes the address it was given
  * into every entity's ->owner, so the darken_t instance must already be sitting at its final address before
@@ -163,6 +160,7 @@
  *     darken_state_t has no prototype, so the callee just reads however many leading arguments it declares and
  *     the rest are pushed and ignored. This is a GNU-C/ABI-oriented convenience, not a general ISO-C rule.
  */
+
 #pragma once
 
 // Darken does NOT include <stdint.h> itself -- see "PORTABILITY / REQUIREMENTS" at the top of this file.
@@ -223,7 +221,7 @@ struct darken_entity_t
     if (_entity->destroy)                                          \
         _entity->destroy(_DARKEN_ARGS(_entity));                   \
                                                                    \
-    darken_swap(ctx, _entity->slot, --_entity->owner->size);
+    darken_entity_swap(_entity, _entity->owner->pool[--_entity->owner->size]);
 #endif
 
 #define _DARKEN_ALIGN(X, A) (((X) + (uintptr_t)(A) - 1) & ~((uintptr_t)(A) - 1))
@@ -234,9 +232,7 @@ struct darken_entity_t
 // to update when porting to a new target.
 #define _DARKEN_POOL_ALIGN __alignof__(darken_entity_t)
 #define _DARKEN_ENTITY_ALIGN __alignof__(struct darken_entity_t)
-#define _DARKEN_COPY_ALIGN __alignof__(uint32_t)
-#define _DARKEN_STORAGE_ALIGN (_DARKEN_ENTITY_ALIGN > _DARKEN_COPY_ALIGN ? _DARKEN_ENTITY_ALIGN : _DARKEN_COPY_ALIGN)
-#define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN(sizeof(struct darken_entity_t) + (PAYLOAD), _DARKEN_STORAGE_ALIGN)
+#define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN(sizeof(struct darken_entity_t) + (PAYLOAD), _DARKEN_ENTITY_ALIGN)
 
 /* ============================================================================
  * PUBLIC API
@@ -257,7 +253,7 @@ struct darken_entity_t
 // DARKEN_ALLOC() does not handle allocation failure or partial allocation cleanup.
 // CAPACITY must satisfy 1 <= CAPACITY <= UINT16_MAX, and the computed stride must fit in uint16_t.
 // DARKEN_ALLOC() does not perform explicit validation of these requirements, so the caller is
-// responsible for providing valid values. ALLOC must return suitably aligned memory.
+// responsible for providing valid values.
 #define DARKEN_ALLOC(ALLOC, CAPACITY, PAYLOAD)                           \
     (darken_t)                                                           \
     {                                                                    \
@@ -285,16 +281,16 @@ struct darken_entity_t
 // require stricter alignment than struct darken_entity_t. DARKEN_DECLARE() rejects CAPACITY == 0 with a
 // compile-time negative-size array. The caller is responsible for keeping CAPACITY and the computed
 // entity stride within their uint16_t limits.
-#define DARKEN_DECLARE(NAME, CAPACITY, PAYLOAD)                                                                    \
-    struct                                                                                                         \
-    {                                                                                                              \
-        uint16_t capacity;                                                                                         \
-        uint16_t stride;                                                                                           \
-        darken_entity_t pool[(CAPACITY) ? (CAPACITY) : -1] __attribute__((aligned(_DARKEN_POOL_ALIGN)));           \
-        uint8_t data[(CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)] __attribute__((aligned(_DARKEN_STORAGE_ALIGN))); \
-    } NAME = {                                                                                                     \
-        .capacity = (CAPACITY),                                                                                    \
-        .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                                                                  \
+#define DARKEN_DECLARE(NAME, CAPACITY, PAYLOAD)                                                                   \
+    struct                                                                                                        \
+    {                                                                                                             \
+        uint16_t capacity;                                                                                        \
+        uint16_t stride;                                                                                          \
+        darken_entity_t pool[(CAPACITY) ? (CAPACITY) : -1] __attribute__((aligned(_DARKEN_POOL_ALIGN)));          \
+        uint8_t data[(CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)] __attribute__((aligned(_DARKEN_ENTITY_ALIGN))); \
+    } NAME = {                                                                                                    \
+        .capacity = (CAPACITY),                                                                                   \
+        .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                                                                 \
     }
 
 // Static/global initialization: compile-time constants.
@@ -356,6 +352,8 @@ struct darken_entity_t
 #define DARKEN_ENTITY(DATA) ((darken_entity_t)((uint8_t *)(DATA) - (uintptr_t)&((darken_entity_t)0)->data))
 
 // Zone membership tests.
+// Note: ENTITY is evaluated multiple times per test (up to two times for DARKEN_ENTITY_IS_FREE). Do not
+// pass expressions with side effects.
 #define DARKEN_ENTITY_IS_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->owner->size)
 #define DARKEN_ENTITY_IS_FREE(ENTITY) (!DARKEN_ENTITY_IS_ACTIVE(ENTITY))
 
@@ -366,6 +364,46 @@ struct darken_entity_t
 /* ============================================================================
  * FUNCTIONS
  * ============================================================================ */
+
+// Swap two entities within their shared ctx's pool. Both entities must belong to the same ctx; this is
+// always the case in Darken's internal usage (delete, update, migrate), where the two entities come from
+// the same pool array. Takes the entities themselves rather than (ctx, i, j) so callers cannot pass a
+// mismatched ctx or stale index: the ctx is recovered from ->owner, the indices from ->slot.
+//
+// always_inline is not an optimisation nicety here -- it is required for the current numbers. Without it,
+// the extra prologue/epilogue and the fact that the compiler cannot fold the caller's already-loaded
+// entity->owner / entity->slot into the swap costs ~15% on the delete path. With it, the whole swap
+// collapses into four stores and two slot updates in the caller, matching the old (ctx, i, j) version.
+static inline __attribute__((always_inline))
+void darken_entity_swap(darken_entity_t e1, darken_entity_t e2)
+{
+    if (e1 == e2)
+        return;
+
+    darken_t *ctx = e1->owner;
+    uint16_t i = e1->slot;
+    uint16_t j = e2->slot;
+
+    ctx->pool[i] = e2;
+    ctx->pool[j] = e1;
+    e1->slot = j;
+    e2->slot = i;
+}
+
+// Note: darken_entity_delete() only calls destroy() if the entity is active.
+// destroy() must not mutate the ctx's pool zones (delete/spawn) while it runs -- see the big header comment
+// above.
+static inline __attribute__((always_inline))
+void darken_entity_delete(darken_entity_t entity)
+{
+    if (DARKEN_ENTITY_IS_FREE(entity))
+        return;
+
+    if (entity->destroy)
+        entity->destroy(_DARKEN_ARGS(entity));
+
+    darken_entity_swap(entity, entity->owner->pool[--entity->owner->size]);
+}
 
 //
 // USAGE EXAMPLES:
@@ -418,18 +456,6 @@ static inline void darken_init(darken_t *ctx)
     }
 }
 
-static inline void darken_swap(darken_t *ctx, uint16_t i, uint16_t j)
-{
-    if (i == j)
-        return;
-
-    darken_entity_t tmp = ctx->pool[i];
-    ctx->pool[i] = ctx->pool[j];
-    ctx->pool[j] = tmp;
-    ctx->pool[i]->slot = i;
-    ctx->pool[j]->slot = j;
-}
-
 static inline void darken_update(darken_t *ctx)
 {
     DARKEN_FOREACH(ctx, _DARKEN_UPDATE);
@@ -455,12 +481,17 @@ static inline void darken_reset(darken_t *ctx)
 // Returns the entity as it now lives in `dst`, or 0 if the transfer cannot be performed.
 //
 // `src` and `dst` may use different strides. Exactly min(src->stride, dst->stride) bytes are copied.
-// If dst is smaller, excess payload data is truncated; if dst is larger, the remaining bytes in the
-// destination slot keep their previous contents. The common header fields are preserved, except slot
-// and owner, which are updated for `dst`.
+// If dst is smaller, excess payload data is truncated; if dst is larger, the remaining payload is unchanged.
+// The common header fields are preserved, except slot and owner, which are updated for `dst`.
 //
-// If `entity` is active, it is removed from `src` after the copy. If it is free, its source slot
-// remains free.
+// If `entity` is active, it is removed from `src` after the copy. If it is free, its source slot remains free.
+//
+// The copy runs in 32-bit words with a byte tail for the remainder. The uint32_t accesses are safe without
+// any runtime alignment check: entities are laid out at storage + i * stride, where storage is aligned to
+// _DARKEN_ENTITY_ALIGN and stride is a multiple of it. On 68000 a move.l only requires an even address, and
+// _DARKEN_ENTITY_ALIGN is at least 2 on every target Darken builds for. On any target with stricter
+// uint32_t alignment, _DARKEN_ENTITY_ALIGN would already be >= 4 (struct darken_entity_t contains a
+// uint32_t member), so the access remains aligned there too.
 static inline darken_entity_t darken_entity_migrate(darken_entity_t entity, darken_t *dst)
 {
     darken_t *src = entity->owner;
@@ -489,21 +520,7 @@ static inline darken_entity_t darken_entity_migrate(darken_entity_t entity, dark
     moved->owner = dst;
 
     if (DARKEN_ENTITY_IS_ACTIVE(entity))
-        darken_swap(src, entity->slot, --src->size);
+        darken_entity_swap(entity, src->pool[--src->size]);
 
     return moved;
-}
-
-// Note: darken_entity_delete() only calls destroy() if the entity is active.
-// destroy() must not mutate the ctx's pool zones (delete/spawn) while it runs -- see the big header comment
-// above.
-static inline void darken_entity_delete(darken_entity_t entity)
-{
-    if (DARKEN_ENTITY_IS_FREE(entity))
-        return;
-
-    if (entity->destroy)
-        entity->destroy(_DARKEN_ARGS(entity));
-
-    darken_swap(entity->owner, entity->slot, --entity->owner->size);
 }
