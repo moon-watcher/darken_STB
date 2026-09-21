@@ -309,19 +309,17 @@ struct darken_entity_t
 // Iterate over all active entities in REVERSE order (from size-1 down to 0).
 // Reverse iteration makes deleting the currently visited entity safe.
 // Deleting or reordering other entities from inside CODE can affect which entities are visited in this pass.
-#define DARKEN_FOREACH(CTX, CODE)                        \
-    do                                                   \
-    {                                                    \
-        uint16_t _index = (CTX)->size;                   \
-        if (_index)                                      \
-        {                                                \
-            darken_entity_t *_pool = (CTX)->pool;        \
-            while (_index--)                             \
-            {                                            \
-                darken_entity_t _entity = _pool[_index]; \
-                CODE;                                    \
-            }                                            \
-        }                                                \
+#define DARKEN_FOREACH(CTX, CODE)                    \
+    do                                               \
+    {                                                \
+        uint16_t _index = (CTX)->size;               \
+        darken_entity_t *_pool = (CTX)->pool;        \
+                                                     \
+        while (_index--)                             \
+        {                                            \
+            darken_entity_t _entity = _pool[_index]; \
+            CODE;                                    \
+        }                                            \
     } while (0)
 
 // Declare a typed pointer to an entity's data payload
@@ -390,6 +388,54 @@ static inline void darken_entity_delete(darken_entity_t entity)
         entity->destroy(_DARKEN_ARGS(entity));
 
     darken_entity_swap(entity, entity->owner->pool[--entity->owner->size]);
+}
+
+// Migrate `entity` from its current ctx into `dst`, WITHOUT calling destroy().
+// Returns the entity as it now lives in `dst`, or 0 if the transfer cannot be performed.
+//
+// `src` and `dst` may use different strides. Exactly min(src->stride, dst->stride) bytes are copied.
+// If dst is smaller, excess payload data is truncated; if dst is larger, the remaining payload is unchanged.
+// The common header fields are preserved, except slot and owner, which are updated for `dst`.
+//
+// If `entity` is active, it is removed from `src` after the copy. If it is free, its source slot remains free.
+//
+// The copy runs in 32-bit words with a byte tail for the remainder. The uint32_t accesses are safe without
+// any runtime alignment check: entities are laid out at storage + i * stride, where storage is aligned to
+// _DARKEN_ENTITY_ALIGN and stride is a multiple of it. On 68000 a move.l only requires an even address, and
+// _DARKEN_ENTITY_ALIGN is at least 2 on every target Darken builds for. On any target with stricter
+// uint32_t alignment, _DARKEN_ENTITY_ALIGN would already be >= 4 (struct darken_entity_t contains a
+// uint32_t member), so the access remains aligned there too.
+static inline darken_entity_t darken_entity_migrate(darken_entity_t entity, darken_t *dst)
+{
+    darken_t *src = entity->owner;
+
+    if (src == dst || dst->size >= dst->capacity)
+        return 0;
+
+    uint16_t count = src->stride < dst->stride ? src->stride : dst->stride;
+    uint16_t words = count >> 2;
+    uint16_t dst_slot = dst->size++;
+    darken_entity_t moved = dst->pool[dst_slot];
+    uint32_t *d = (uint32_t *)moved;
+    uint32_t *s = (uint32_t *)entity;
+
+    while (words--)
+        *d++ = *s++;
+
+    uint8_t *sb = (uint8_t *)s;
+    uint8_t *db = (uint8_t *)d;
+
+    count &= 3;
+    while (count--)
+        *db++ = *sb++;
+
+    moved->slot = dst_slot;
+    moved->owner = dst;
+
+    if (DARKEN_ENTITY_IS_ACTIVE(entity))
+        darken_entity_swap(entity, src->pool[--src->size]);
+
+    return moved;
 }
 
 //
@@ -482,52 +528,4 @@ static inline void darken_reset(darken_t *ctx)
     });
 
     ctx->size = 0;
-}
-
-// Migrate `entity` from its current ctx into `dst`, WITHOUT calling destroy().
-// Returns the entity as it now lives in `dst`, or 0 if the transfer cannot be performed.
-//
-// `src` and `dst` may use different strides. Exactly min(src->stride, dst->stride) bytes are copied.
-// If dst is smaller, excess payload data is truncated; if dst is larger, the remaining payload is unchanged.
-// The common header fields are preserved, except slot and owner, which are updated for `dst`.
-//
-// If `entity` is active, it is removed from `src` after the copy. If it is free, its source slot remains free.
-//
-// The copy runs in 32-bit words with a byte tail for the remainder. The uint32_t accesses are safe without
-// any runtime alignment check: entities are laid out at storage + i * stride, where storage is aligned to
-// _DARKEN_ENTITY_ALIGN and stride is a multiple of it. On 68000 a move.l only requires an even address, and
-// _DARKEN_ENTITY_ALIGN is at least 2 on every target Darken builds for. On any target with stricter
-// uint32_t alignment, _DARKEN_ENTITY_ALIGN would already be >= 4 (struct darken_entity_t contains a
-// uint32_t member), so the access remains aligned there too.
-static inline darken_entity_t darken_entity_migrate(darken_entity_t entity, darken_t *dst)
-{
-    darken_t *src = entity->owner;
-
-    if (src == dst || dst->size >= dst->capacity)
-        return 0;
-
-    uint16_t count = src->stride < dst->stride ? src->stride : dst->stride;
-    uint16_t words = count >> 2;
-    uint16_t dst_slot = dst->size++;
-    darken_entity_t moved = dst->pool[dst_slot];
-    uint32_t *d = (uint32_t *)moved;
-    uint32_t *s = (uint32_t *)entity;
-
-    while (words--)
-        *d++ = *s++;
-
-    uint8_t *sb = (uint8_t *)s;
-    uint8_t *db = (uint8_t *)d;
-
-    count &= 3;
-    while (count--)
-        *db++ = *sb++;
-
-    moved->slot = dst_slot;
-    moved->owner = dst;
-
-    if (DARKEN_ENTITY_IS_ACTIVE(entity))
-        darken_entity_swap(entity, src->pool[--src->size]);
-
-    return moved;
 }
