@@ -128,19 +128,6 @@ static inline darken_entity_t migrate_u32(darken_entity_t entity, darken_t *dst)
     return moved;
 }
 
-// Note: darken_entity_delete() only calls destroy() if the entity is active.
-// destroy() must not mutate the ctx's pool zones (delete/spawn) while it runs -- see the big header comment
-// above.
-static inline void darken_entity_delete(darken_entity_t entity)
-{
-    if (DARKEN_ENTITY_IS_FREE(entity))
-        return;
-
-    if (entity->destroy)
-        entity->destroy(_DARKEN_ARGS(entity));
-
-    darken_swap(entity->owner, entity->slot, --entity->owner->size);
-}
 
 
 static void copy_u8(void *dst, const void *src, u16 bytes)
