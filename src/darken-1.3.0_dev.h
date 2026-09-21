@@ -468,30 +468,27 @@ static inline darken_entity_t darken_entity_migrate(darken_entity_t entity, dark
     if (src == dst || dst->size >= dst->capacity)
         return 0;
 
-    uint16_t active = DARKEN_ENTITY_IS_ACTIVE(entity);
+    uint16_t count = src->stride < dst->stride ? src->stride : dst->stride;
+    uint16_t words = count >> 2;
     uint16_t dst_slot = dst->size++;
     darken_entity_t moved = dst->pool[dst_slot];
-
-    uint16_t bytes = src->stride < dst->stride ? src->stride : dst->stride;
-    uint16_t words = bytes >> 2;
-
-    uint32_t *s = (uint32_t *)entity;
     uint32_t *d = (uint32_t *)moved;
+    uint32_t *s = (uint32_t *)entity;
 
     while (words--)
         *d++ = *s++;
 
     uint8_t *sb = (uint8_t *)s;
     uint8_t *db = (uint8_t *)d;
-    uint16_t tail = bytes & 3;
 
-    while (tail--)
+    count &= 3;
+    while (count--)
         *db++ = *sb++;
 
     moved->slot = dst_slot;
     moved->owner = dst;
 
-    if (active)
+    if (DARKEN_ENTITY_IS_ACTIVE(entity))
         darken_swap(src, entity->slot, --src->size);
 
     return moved;
