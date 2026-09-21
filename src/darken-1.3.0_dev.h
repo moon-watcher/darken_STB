@@ -312,11 +312,10 @@ struct darken_entity_t
 #define DARKEN_FOREACH(CTX, CODE)                        \
     do                                                   \
     {                                                    \
-        darken_t *_ctx = (CTX);                          \
-        uint16_t _index = _ctx->size;                    \
+        uint16_t _index = (CTX)->size;                   \
         if (_index)                                      \
         {                                                \
-            darken_entity_t *_pool = _ctx->pool;         \
+            darken_entity_t *_pool = (CTX)->pool;        \
             while (_index--)                             \
             {                                            \
                 darken_entity_t _entity = _pool[_index]; \
@@ -360,7 +359,7 @@ struct darken_entity_t
 // always_inline is not an optimisation nicety here -- it is required for the current numbers. Without it,
 // the extra prologue/epilogue and the fact that the compiler cannot fold the caller's already-loaded
 // entity->owner / entity->slot into the swap costs ~15% on the delete path. With it, the whole swap
-// collapses into four stores and two slot updates in the caller, matching the old (ctx, i, j) version.
+// stays as a small fixed sequence of stores and slot/owner updates in the caller.
 static inline void darken_entity_swap(darken_entity_t e1, darken_entity_t e2)
 {
     if (e1 == e2)
@@ -464,7 +463,7 @@ static inline void darken_update(darken_t *ctx)
         if (_entity->destroy)
             _entity->destroy(_DARKEN_ARGS(_entity));
 
-        darken_entity_swap(_entity, _ctx->pool[--_ctx->size]);
+        darken_entity_swap(_entity, ctx->pool[--ctx->size]);
     });
 #endif
 }
