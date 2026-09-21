@@ -221,7 +221,7 @@ struct darken_entity_t
     if (_entity->destroy)                                          \
         _entity->destroy(_DARKEN_ARGS(_entity));                   \
                                                                    \
-    darken_swap(ctx->pool, _entity->slot, --_entity->owner->size);
+    darken_swap(ctx, _entity->slot, --_entity->owner->size);
 #endif
 
 #define _DARKEN_ALIGN(X, A) (((X) + (uintptr_t)(A) - 1) & ~((uintptr_t)(A) - 1))
@@ -365,32 +365,6 @@ struct darken_entity_t
  * FUNCTIONS
  * ============================================================================ */
 
-static inline void darken_swap(darken_entity_t pool[], uint16_t i, uint16_t j)
-{
-    if (i == j)
-        return;
-
-    darken_entity_t tmp = pool[i];
-    pool[i] = pool[j];
-    pool[j] = tmp;
-    pool[i]->slot = i;
-    pool[j]->slot = j;
-}
-
-// Note: darken_entity_delete() only calls destroy() if the entity is active.
-// destroy() must not mutate the ctx's pool zones (delete/spawn) while it runs -- see the big header comment
-// above.
-static inline void darken_entity_delete(darken_entity_t entity)
-{
-    if (DARKEN_ENTITY_IS_FREE(entity))
-        return;
-
-    if (entity->destroy)
-        entity->destroy(_DARKEN_ARGS(entity));
-
-    darken_swap(entity->owner->pool, entity->slot, --entity->owner->size);
-}
-
 //
 // USAGE EXAMPLES:
 //
@@ -442,6 +416,18 @@ static inline void darken_init(darken_t *ctx)
     }
 }
 
+static inline void darken_swap(darken_t *ctx, uint16_t i, uint16_t j)
+{
+    if (i == j)
+        return;
+
+    darken_entity_t tmp = ctx->pool[i];
+    ctx->pool[i] = ctx->pool[j];
+    ctx->pool[j] = tmp;
+    ctx->pool[i]->slot = i;
+    ctx->pool[j]->slot = j;
+}
+
 static inline void darken_update(darken_t *ctx)
 {
     DARKEN_FOREACH(ctx, _DARKEN_UPDATE);
@@ -463,23 +449,23 @@ static inline void darken_reset(darken_t *ctx)
     ctx->size = 0;
 }
 
-// Migrate `entity` from its current ctx into `ctx`, WITHOUT calling destroy(). Useful for moving an entity
+// Migrate `entity` from its current ctx into `dst`, WITHOUT calling destroy(). Useful for moving an entity
 // into (or out of) a ctx that darken_update() isn't called on every frame -- e.g. a dormant/inactive set
 // kept separate from the one that runs every frame. Neither direction is special-cased -- see below.
 //
-// Returns the entity as it now lives in `ctx`, or 0 if:
+// Returns the entity as it now lives in `dst`, or 0 if:
 //   - entity is not active in its source ctx
-//   - ctx is full
+//   - dst is full
 //
-// `src` and `ctx` do NOT need the same stride. Exactly min(src->stride, ctx->stride) bytes are copied, so
+// `src` and `dst` do NOT need the same stride. Exactly min(src->stride, dst->stride) bytes are copied, so
 // the migration can never read past the source's storage nor write past the destination's slot, regardless
 // of which one is smaller:
 //
-//   - ctx->stride < src->stride (shrinking, e.g. moving into a ctx that only keeps a compact
+//   - dst->stride < src->stride (shrinking, e.g. moving into a ctx that only keeps a compact
 //     representation): the payload is TRUNCATED to what fits. The header fields (slot/owner/
 //     update/destroy/tag/usr) always survive intact -- every valid stride is at least
 //     sizeof(struct darken_entity_t) after alignment, so only the tail of data[] can ever be cut.
-//   - ctx->stride > src->stride (growing, e.g. moving back out of that compact ctx into a fuller one): only
+//   - dst->stride > src->stride (growing, e.g. moving back out of that compact ctx into a fuller one): only
 //     the first src->stride bytes are restored; the rest of the destination's data[] is whatever garbage
 //     was already sitting in that recycled slot. Same convention as DARKEN_SPAWN() -- initialize whatever
 //     extra fields you need after the call.
@@ -487,28 +473,45 @@ static inline void darken_reset(darken_t *ctx)
 // This is why there is no separate rule per direction: a single min()-bounded copy is safe and correct
 // both ways at once, as long as the application keeps the fields that must survive the round trip at the
 // FRONT of both payload structs (the smaller one being a literal prefix of the larger).
-// update/destroy/tag/usr are always copied as-is; only slot and owner are rewritten to match `ctx`.
-static inline darken_entity_t darken_migrate(darken_t *ctx, darken_entity_t entity)
+// update/destroy/tag/usr are always copied as-is; only slot and owner are rewritten to match `dst`.
+static inline darken_entity_t darken_entity_migrate(darken_entity_t entity, darken_t *dst)
 {
-    darken_t *src = entity->owner;
-
-    if (src == ctx || !DARKEN_ENTITY_IS_ACTIVE(entity) || ctx->size >= ctx->capacity)
+    if (DARKEN_ENTITY_IS_FREE(entity))
         return 0;
 
-    uint16_t dst_slot = ctx->size++;
-    darken_entity_t moved = ctx->pool[dst_slot];
+    darken_t *src = entity->owner;
+
+    if (src == dst || dst->size >= dst->capacity)
+        return 0;
+
+    uint16_t dst_slot = dst->size++;
+    darken_entity_t moved = dst->pool[dst_slot];
 
     uint8_t *src_bytes = (uint8_t *)entity;
     uint8_t *dst_bytes = (uint8_t *)moved;
-    uint16_t i = src->stride < ctx->stride ? src->stride : ctx->stride;
+    uint16_t i = src->stride < dst->stride ? src->stride : dst->stride;
 
     while (i--)
         dst_bytes[i] = src_bytes[i];
 
     moved->slot = dst_slot;
-    moved->owner = ctx;
+    moved->owner = dst;
 
-    darken_swap(src->pool, entity->slot, --src->size);
+    darken_swap(src, entity->slot, --src->size);
 
     return moved;
+}
+
+// Note: darken_entity_delete() only calls destroy() if the entity is active.
+// destroy() must not mutate the ctx's pool zones (delete/spawn) while it runs -- see the big header comment
+// above.
+static inline void darken_entity_delete(darken_entity_t entity)
+{
+    if (DARKEN_ENTITY_IS_FREE(entity))
+        return;
+
+    if (entity->destroy)
+        entity->destroy(_DARKEN_ARGS(entity));
+
+    darken_swap(entity->owner, entity->slot, --entity->owner->size);
 }
