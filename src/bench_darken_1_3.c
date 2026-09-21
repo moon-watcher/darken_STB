@@ -182,7 +182,7 @@ static void b_query_in_active(void)
     while (getTick() < end) {
         u32 acc = 0;
         for (u16 i = 0; i < BENCH_CAP; i++)
-            acc += DARKEN_ENTITY_IN_ACTIVE(g_ctx.pool[i]);
+            acc += DARKEN_ENTITY_IS_ACTIVE(g_ctx.pool[i]);
         g_sink = acc;
         n++;
     }
