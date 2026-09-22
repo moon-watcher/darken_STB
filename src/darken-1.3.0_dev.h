@@ -28,8 +28,8 @@
  *    negative-size array. The caller is responsible for keeping CAPACITY and stride within uint16_t limits.
  *
  * Beyond that, Darken makes no assumptions about the target: pointer width, struct alignment, and endianness
- * are all whatever the compiler says they are for the platform it's building for (see _DARKEN_ENTITY_ALIGN
- * below, computed via __alignof__ rather than any hardcoded value).
+ * are all whatever the compiler says they are for the platform it's building for (see __alignof__ in the
+ * storage declarations and stride calculation rather than any hardcoded value).
  *
  * The payload type used with DARKEN_DATA() must not require stricter alignment than struct darken_entity_t
  * itself. Darken knows the payload size at storage declaration time, but not the payload type's alignment.
@@ -207,15 +207,7 @@ struct darken_entity_t
 #define _DARKEN_ARGS(ENTITY) (ENTITY)->data
 #endif
 
-#define _DARKEN_ALIGN(X, A) (((X) + (uintptr_t)(A) - 1) & ~((uintptr_t)(A) - 1))
-// Alignment is asked from the compiler itself via __alignof__ (a GNU C extension already required -- see
-// PORTABILITY / REQUIREMENTS above) rather than assumed from any particular pointer width or target. This
-// is what keeps every entity's address correctly aligned on any platform: whatever struct darken_entity_t's
-// natural alignment turns out to be there, that's what gets used -- no guessing, no magic numbers, nothing
-// to update when porting to a new target.
-#define _DARKEN_POOL_ALIGN __alignof__(darken_entity_t)
-#define _DARKEN_ENTITY_ALIGN __alignof__(struct darken_entity_t)
-#define _DARKEN_ENTITY_STRIDE(PAYLOAD) _DARKEN_ALIGN(sizeof(struct darken_entity_t) + (PAYLOAD), _DARKEN_ENTITY_ALIGN)
+#define _DARKEN_ENTITY_STRIDE(PAYLOAD) (((sizeof(struct darken_entity_t) + (PAYLOAD)) + (uintptr_t)__alignof__(struct darken_entity_t) - 1) & ~((uintptr_t)__alignof__(struct darken_entity_t) - 1))
 
 /* ============================================================================
  * PUBLIC API
@@ -264,16 +256,16 @@ struct darken_entity_t
 // require stricter alignment than struct darken_entity_t. DARKEN_DECLARE() rejects CAPACITY == 0 with a
 // compile-time negative-size array. The caller is responsible for keeping CAPACITY and the computed
 // entity stride within their uint16_t limits.
-#define DARKEN_DECLARE(NAME, CAPACITY, PAYLOAD)                                                                   \
-    struct                                                                                                        \
-    {                                                                                                             \
-        uint16_t capacity;                                                                                        \
-        uint16_t stride;                                                                                          \
-        darken_entity_t pool[(CAPACITY) ? (CAPACITY) : -1] __attribute__((aligned(_DARKEN_POOL_ALIGN)));          \
-        uint8_t data[(CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)] __attribute__((aligned(_DARKEN_ENTITY_ALIGN))); \
-    } NAME = {                                                                                                    \
-        .capacity = (CAPACITY),                                                                                   \
-        .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                                                                 \
+#define DARKEN_DECLARE(NAME, CAPACITY, PAYLOAD)                                                                                  \
+    struct                                                                                                                       \
+    {                                                                                                                            \
+        uint16_t capacity;                                                                                                       \
+        uint16_t stride;                                                                                                         \
+        darken_entity_t pool[(CAPACITY) ? (CAPACITY) : -1] __attribute__((aligned(__alignof__(darken_entity_t))));               \
+        uint8_t data[(CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)] __attribute__((aligned(__alignof__(struct darken_entity_t)))); \
+    } NAME = {                                                                                                                   \
+        .capacity = (CAPACITY),                                                                                                  \
+        .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                                                                                \
     }
 
 // Static/global initialization: compile-time constants.
@@ -348,7 +340,7 @@ struct darken_entity_t
 
 // Swap two entities in their owners' pool arrays. The entities may belong to the same ctx or to different
 // ctx's. Each entity is exchanged with the pool slot it currently occupies in its own owner, then both owner
-// pointers and slot indices are exchanged with the pool entries. This keeps ->owner and ->slot consistent 
+// pointers and slot indices are exchanged with the pool entries. This keeps ->owner and ->slot consistent
 // even when the two entities cross ctx boundaries.
 //
 // Takes the entities themselves rather than (ctx, i, j) so callers cannot pass a mismatched ctx or stale
@@ -399,10 +391,10 @@ static inline void darken_entity_delete(darken_entity_t entity)
 //
 // The copy runs in 32-bit words with a byte tail for the remainder. The uint32_t accesses are safe without
 // any runtime alignment check: entities are laid out at storage + i * stride, where storage is aligned to
-// _DARKEN_ENTITY_ALIGN and stride is a multiple of it. On 68000 a move.l only requires an even address, and
-// _DARKEN_ENTITY_ALIGN is at least 2 on every target Darken builds for. On any target with stricter uint32_t
-// alignment, _DARKEN_ENTITY_ALIGN would already be >= 4 (struct darken_entity_t contains a uint32_t member),
-// so the access remains aligned there too.
+// __alignof__(struct darken_entity_t) and stride is a multiple of it. On 68000 a move.l only requires an
+// even address, and __alignof__(struct darken_entity_t) is at least 2 on every target Darken builds for.
+// On any target with stricter uint32_t alignment, __alignof__(struct darken_entity_t) would already be >= 4
+// because struct darken_entity_t contains a uint32_t member, so the access remains aligned there too.
 static inline darken_entity_t darken_entity_migrate(darken_entity_t entity, darken_t *dst)
 {
     darken_t *src = entity->owner;
