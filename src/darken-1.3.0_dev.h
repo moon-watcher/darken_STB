@@ -353,11 +353,6 @@ struct darken_entity_t
 //
 // Takes the entities themselves rather than (ctx, i, j) so callers cannot pass a mismatched ctx or stale index:
 // each ctx and index are recovered directly from the entity being moved.
-//
-// always_inline is not an optimisation nicety here -- it is required for the current numbers. Without it,
-// the extra prologue/epilogue and the fact that the compiler cannot fold the caller's already-loaded
-// entity->owner / entity->slot into the swap costs ~15% on the delete path. With it, the whole swap
-// stays as a small fixed sequence of stores and slot/owner updates in the caller.
 static inline void darken_entity_swap(darken_entity_t e1, darken_entity_t e2)
 {
     if (e1 == e2)
@@ -398,6 +393,9 @@ static inline void darken_entity_delete(darken_entity_t entity)
 // The common header fields are preserved, except slot and owner, which are updated for `dst`.
 //
 // If `entity` is active, it is removed from `src` after the copy. If it is free, its source slot remains free.
+// Note this is NOT a no-op when entity is free: dst still gains a new active entity, built from whatever
+// (already-recycled) bytes were sitting in entity's payload. Calling this on a free entity by mistake will
+// silently spend a slot in dst with garbage data, not return early.
 //
 // The copy runs in 32-bit words with a byte tail for the remainder. The uint32_t accesses are safe without
 // any runtime alignment check: entities are laid out at storage + i * stride, where storage is aligned to
