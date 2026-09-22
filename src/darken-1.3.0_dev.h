@@ -348,11 +348,11 @@ struct darken_entity_t
 
 // Swap two entities in their owners' pool arrays. The entities may belong to the same ctx or to different
 // ctx's. Each entity is exchanged with the pool slot it currently occupies in its own owner, then both owner
-// pointers and slot indices are exchanged with the pool entries. This keeps ->owner and ->slot consistent even
-// when the two entities cross ctx boundaries.
+// pointers and slot indices are exchanged with the pool entries. This keeps ->owner and ->slot consistent 
+// even when the two entities cross ctx boundaries.
 //
-// Takes the entities themselves rather than (ctx, i, j) so callers cannot pass a mismatched ctx or stale index:
-// each ctx and index are recovered directly from the entity being moved.
+// Takes the entities themselves rather than (ctx, i, j) so callers cannot pass a mismatched ctx or stale
+// index: each ctx and index are recovered directly from the entity being moved.
 static inline void darken_entity_swap(darken_entity_t e1, darken_entity_t e2)
 {
     if (e1 == e2)
