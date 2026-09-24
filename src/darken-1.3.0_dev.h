@@ -45,9 +45,9 @@
  * O(1) access by index comes from `pool[]` itself being a flat array of pointers -- stride plays no part in
  * any lookup after init.
  *
- * An entity's own memory address (this struct) never moves once allocated by darken_init(). What moves
- * between the ctx's zones is only the *pointer* to it inside darken.pool[]. This is what makes it safe to
- * keep a raw pointer into entity->data even while the entity gets reordered.
+ * An entity's own memory address (this struct) never moves once allocated by darken_init(). What moves between
+ * the ctx's zones is only the *pointer* to it inside darken.pool[]. This is what makes it safe to keep a raw
+ * pointer into entity->data even while the entity gets reordered.
  *
  * The ctx itself needs the same guarantee, for the same reason: darken_init() bakes the address it was given
  * into every entity's ->owner, so the darken_t instance must already be sitting at its final address before
@@ -74,10 +74,10 @@
  *     from, and where an active entity's slot goes right after it's deleted.
  *
  * Neither darken_init(), nor DARKEN_SPAWN(), nor deletion (whichever path triggers it) initializes or clears
- * update/destroy/tag/usr. An entity handed out by DARKEN_SPAWN() — whether fresh from darken_init() or
- * recycled after a previous entity in that slot was deleted — may still carry whatever values that slot's
- * previous occupant left behind. Setting these fields to the values your entity actually needs (including
- * clearing any you don't want carried over) is the caller's responsibility on every spawn.
+ * update/destroy/tag/usr. An entity handed out by DARKEN_SPAWN() — whether fresh from darken_init() or recycled
+ * after a previous entity in that slot was deleted — may still carry whatever values that slot's previous
+ * occupant left behind. Setting these fields to the values your entity actually needs (including clearing
+ * any you don't want carried over) is the caller's responsibility on every spawn.
  *
  *
  * Update / lifecycle control — two selectable modes
@@ -86,11 +86,10 @@
  * STATE-MACHINE mode is the default. Define DARKEN_DIRECT before including this header to opt into direct
  * mode instead.
  *
- * Each mode has one fixed callback signature — there is no separate configuration macro for the argument
- * list.
- * The signature is chosen per mode to match how that mode is actually used: state-machine callbacks rarely
- * need the entity handle, since the return value drives the lifecycle; direct-mode callbacks almost always
- * need it, since they call darken_entity_delete() themselves.
+ * Each mode has one fixed callback signature — there is no separate configuration macro for the argument list.
+ * The signature is chosen per mode to match how that mode is actually used: state-machine callbacks rarely need
+ * the entity handle, since the return value drives the lifecycle; direct-mode callbacks almost always need it,
+ * since they call darken_entity_delete() themselves.
  *
  * 1) STATE-MACHINE mode — default
  * ---------------------------------------------------------
