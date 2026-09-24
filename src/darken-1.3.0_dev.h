@@ -215,8 +215,10 @@ struct darken_entity_t
 
 // Sentinel return values for update() callbacks in state-machine mode.
 // Any value > DARKEN_CONTINUE is treated as the next update callback.
+#ifdef DARKEN_DIRECT
 #define DARKEN_CONTINUE ((darken_state_t)1)
 #define DARKEN_DELETE ((darken_state_t)0)
+#endif
 
 // Dynamic allocation: use with malloc/calloc or custom allocator
 //     darken_t m = DARKEN_ALLOC(malloc, 5, sizeof(struct MyComponent));
