@@ -20,7 +20,7 @@
  * 2. A GNU C compiler -- GCC or Clang. Darken relies on the __attribute__((aligned)) extension
  *    (DARKEN_DECLARE), and __alignof__. It will not build under a strict ISO-C-only compiler. Sentinel
  *    handling in state-machine mode (== against DARKEN_CONTINUE and > against DARKEN_CONTINUE to detect new
- *    callbacks) additionally relies on GNU C / target-ABI behavior for converting small integer values to
+ *    callbacks) additionally relies on GNU C / compiler-ABI behavior for converting small integer values to
  *    function pointers and comparing function-pointer values with those sentinels.
  *
  * 3. CAPACITY must satisfy 1 <= CAPACITY <= UINT16_MAX, and the computed entity stride must fit in uint16_t.
@@ -126,7 +126,7 @@
  *
  *     Need the entity handle anyway (e.g. to read/write usr or tag)? Recover it with DARKEN_ENTITY(data).
  *
- *     Comparing a darken_state_t value against the sentinels with `==`/`>` relies on GNU C / target-ABI
+ *     Comparing a darken_state_t value against the sentinels with `==`/`>` relies on GNU C / compiler-ABI
  *     behavior for the function-pointer sentinel representation described in requirement 2 above.
  *
  * 2) DIRECT mode — DARKEN_DIRECT defined
@@ -391,10 +391,9 @@ static inline void darken_entity_delete(darken_entity_t entity)
 //
 // The copy runs in 32-bit words with a byte tail for the remainder. The uint32_t accesses are safe without
 // any runtime alignment check: entities are laid out at storage + i * stride, where storage is aligned to
-// __alignof__(struct darken_entity_t) and stride is a multiple of it. On 68000 a move.l only requires an
-// even address, and __alignof__(struct darken_entity_t) is at least 2 on every target Darken builds for.
-// On any target with stricter uint32_t alignment, __alignof__(struct darken_entity_t) would already be >= 4
-// because struct darken_entity_t contains a uint32_t member, so the access remains aligned there too.
+// __alignof__(struct darken_entity_t) and stride is a multiple of it. A struct's alignment is at least the
+// alignment required by each of its members, so struct darken_entity_t is suitably aligned for uint32_t on
+// every target. No target-specific alignment assumption is made here.
 static inline darken_entity_t darken_entity_migrate(darken_entity_t entity, darken_t *dst)
 {
     darken_t *src = entity->owner;
