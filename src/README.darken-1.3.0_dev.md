@@ -13,11 +13,10 @@ Current version: **darken-1.3.0_dev**
   - [Spawning an entity](#spawning-an-entity)
   - [Update / lifecycle control — two modes](#update--lifecycle-control--two-modes)
     - [STATE-MACHINE mode (default)](#state-machine-mode-default)
-    - [DIRECT mode (**#define DARKEN\_DIRECT**)](#direct-mode-define-darken_direct)
+    - [DIRECT mode](#direct-mode)
   - [Delete, migrate, swap](#delete-migrate-swap)
   - [Iterating](#iterating)
   - [API reference](#api-reference)
-  - [Complexity](#complexity)
   - [Gotchas](#gotchas)
 
 ## Requirements
@@ -133,7 +132,7 @@ A freshly spawned entity may be a recycled storage slot. Initialize every field 
 ### STATE-MACHINE mode (default)
 
 ```c
-darken_state_t player_walk(struct Player *p)
+void *player_walk(struct Player *p)
 {
     p->x++;
 
@@ -157,10 +156,8 @@ darken_state_t player_walk(struct Player *p)
 
 The callback only ever receives the payload, never the entity handle — recover it with `DARKEN_ENTITY(data)` if you need to touch `usr`/`tag`.
 
-You don't have to wrap the payload pointer in `void *` and cast it yourself: `darken_state_t` is an old-style (K&R) unprototyped function pointer, so a callback declared to take your concrete payload type directly —
-
 ```c
-darken_state_t player_walk(struct Player *p) { ... }
+void *player_walk(struct Player *p) { ... }
 ```
 
 — assigns straight to `entity->update` with no cast. Only declare `void *data` for callbacks that genuinely ignore the payload.
@@ -169,9 +166,12 @@ darken_state_t player_walk(struct Player *p) { ... }
 
 `destroy` must not mutate the ctx's pool zones. Deleting, spawning, migrating, or swapping entities from inside a `destroy` callback will corrupt the swap state and iteration that the engine relies on. This applies to every path that invokes `destroy`: `darken_reset()`, `darken_entity_delete()`, and the `DARKEN_DELETE` branch inside `darken_update()`.
 
-### DIRECT mode (**#define DARKEN_DIRECT**)
+### DIRECT mode
 
 ```c
+#define DARKEN_DIRECT
+#include "darken.h"
+
 void player_stop_state(darken_entity_t entity, struct Player *p)
 {
     if (should_walk(p))
@@ -186,6 +186,9 @@ The `destroy` callback uses the same `darken_state_t` callback type and the same
 A callback that only declares the entity parameter can drop the second parameter: `void player_walk(darken_entity_t entity)`.
 
 ```c
+#define DARKEN_DIRECT
+#include "darken.h"
+
 void player_walk_state(darken_entity_t entity)
 {
     DARKEN_DATA(struct Player, p, entity);
@@ -277,17 +280,6 @@ The `ctx` argument is evaluated more than once by `DARKEN_FOREACH`, so pass a st
 | `DARKEN_FOREACH(ctx, code)`                    | Manual iteration over the active zone                                              |
 | `DARKEN_ENTITY_IS_ACTIVE/FREE(entity)`         | Zone membership tests                                                              |
 | `DARKEN_COUNT_ACTIVE/FREE(ctx)`                | Zone sizes                                                                         |
-
-## Complexity
-
-| Operation               | Cost                                                       |
-| ----------------------- | ---------------------------------------------------------- |
-| `DARKEN_SPAWN`          | O(1)                                                       |
-| `darken_entity_swap`    | O(1) — a handful of pointer/field writes                   |
-| `darken_entity_delete`  | O(1) — one swap                                            |
-| `darken_entity_migrate` | O(min(src stride, dst stride)) — a byte copy of the entity |
-| `darken_update`         | O(active entities)                                         |
-| `darken_reset`          | O(active entities)                                         |
 
 ## Gotchas
 
