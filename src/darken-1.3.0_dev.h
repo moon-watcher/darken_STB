@@ -89,7 +89,7 @@
  * Each mode has one fixed callback signature — there is no separate configuration macro for the argument
  * list.
  * The signature is chosen per mode to match how that mode is actually used: state-machine callbacks rarely
- * need the entity handle, since the return value drives the lifecycle; direct-mode callbacks almost always 
+ * need the entity handle, since the return value drives the lifecycle; direct-mode callbacks almost always
  * need it, since they call darken_entity_delete() themselves.
  *
  * 1) STATE-MACHINE mode — default
