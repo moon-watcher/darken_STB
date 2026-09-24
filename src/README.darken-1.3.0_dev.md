@@ -13,7 +13,7 @@ Current version: **darken-1.3.0_dev**
   - [Spawning an entity](#spawning-an-entity)
   - [Update / lifecycle control — two modes](#update--lifecycle-control--two-modes)
     - [STATE-MACHINE mode (default)](#state-machine-mode-default)
-  - [DIRECT mode (**#define DARKEN\_DIRECT**)](#direct-mode-define-darken_direct)
+    - [DIRECT mode (**#define DARKEN\_DIRECT**)](#direct-mode-define-darken_direct)
   - [Delete, migrate, swap](#delete-migrate-swap)
   - [Iterating](#iterating)
   - [API reference](#api-reference)
@@ -24,9 +24,9 @@ Current version: **darken-1.3.0_dev**
 
 Three things are required of whoever includes `darken.h`:
 
-1. **Fixed-width integer types visible before including the header.** Darken deliberately does **not** `#include <stdint.h>` itself — the including project must provide them, whether via a plain `#include <stdint.h>` or whatever equivalent your target already defines them through. Even on bare-metal/freestanding targets without a full C library, GCC ships its own self-contained `<stdint.h>` — so a plain `#include <stdint.h>` typically works regardless of whether your platform's own headers define these types themselves.
+1. **Fixed-width integer types visible before including the header.** Darken deliberately does **not** `#include <stdint.h>` itself — the including project must provide `uint8_t`, `uint16_t`, `uint32_t`, and `uintptr_t`, whether via a plain `#include <stdint.h>` or whatever equivalent your target already provides them through.
 
-2. **A GNU C compiler — GCC or Clang.** Darken relies on GNU extensions such as `__attribute__((aligned))` and `__alignof__` in the storage declarations, so it will not build under a strict ISO-C-only compiler. Sentinel handling in state-machine mode (`==` against `DARKEN_CONTINUE`, `>` against `DARKEN_CONTINUE` to detect a new callback) additionally relies on GNU C / target-ABI behavior for converting small integer values to function pointers and comparing function-pointer values with those sentinels.
+2. **A GNU C compiler — GCC or Clang.** Darken relies on GNU extensions such as `__attribute__((aligned))` and `__alignof__` in the storage declarations and stride calculation, so it will not build under a strict ISO-C-only compiler. Sentinel handling in state-machine mode (`==` against `DARKEN_CONTINUE`, `>` against `DARKEN_CONTINUE` to detect a new callback) additionally relies on GNU C / target-ABI behavior for converting small integer values to function pointers and comparing function-pointer values with those sentinels.
 
 3. **A non-zero capacity and a stride that fits in `uint16_t`.** `CAPACITY` must be greater than zero, and the computed entity stride must fit in `uint16_t`. A single `darken_t` therefore tops out at 65535 entities, while the payload size must also be small enough that the complete aligned entity stride remains representable in `uint16_t`.
 
@@ -44,15 +44,15 @@ The ctx keeps `pool[]` partitioned into two contiguous zones and moves entities 
 
 ```text
 [ active entities ][   free slots    ]
-0                 size               capacity
+0                  size               capacity
 ```
 
-| Zone   | Range              | Meaning                                                                                |
-| ------ | ------------------ | -------------------------------------------------------------------------------------- |
-| Active | `[0, size)`        | Updated every frame by `darken_update()`. Visited by `DARKEN_FOREACH` (reverse order). |
-| Free   | `[size, capacity)` | Unused slots. `DARKEN_SPAWN()` always takes from here.                                 |
+| Zone   | Range              | Meaning                                                                                 |
+| ------ | ------------------ | --------------------------------------------------------------------------------------- |
+| Active | `[0, size)`        | Updated every frame by `darken_update()`. Visited by `DARKEN_FOREACH` in reverse order. |
+| Free   | `[size, capacity)` | Unused slots. `DARKEN_SPAWN()` always takes from here.                                  |
 
-There is no built-in "paused" zone. If your game needs a dormant/inactive set that isn't touched by `darken_update()`, keep a second `darken_t` for it and move entities in and out with `darken_entity_migrate()` — see [Delete, migrate, swap](#delete-migrate-swap).
+There is no built-in "paused" zone. If your game needs a dormant/inactive set that isn't touched by `darken_update()`, keep a second, smaller `darken_t` for it and move entities in and out with `darken_entity_migrate()` — see [Delete, migrate, swap](#delete-migrate-swap).
 
 ## Two guarantees you can rely on
 
@@ -89,12 +89,12 @@ darken_init(&m);
 darken_reset(&m);
 DARKEN_FREE(free, &m);
 
-// Static storage, bound at runtime (reassignable, e.g. "rebind this ctx to different storage later")
+// Static storage, bound at runtime
 DARKEN_DECLARE(storage, 5, sizeof(struct MyComponent));
 darken_t m = DARKEN_BIND(storage);
 darken_init(&m);
 
-// Static storage, bound as a compile-time constant (file-scope globals)
+// Static storage, bound as a compile-time constant
 DARKEN_DECLARE(storage, 5, sizeof(struct MyComponent));
 static darken_t m = DARKEN_INIT(storage);
 ```
@@ -103,7 +103,7 @@ All three (`DARKEN_ALLOC`, `DARKEN_BIND`, `DARKEN_INIT`) expand to a `(darken_t)
 
 `DARKEN_INIT` is intended for static/file-scope storage where the storage object itself has static storage duration.
 
-`ALLOC` is any `void *(*)(size_t-like)` allocator — `malloc`.
+`DARKEN_ALLOC()` takes an allocator compatible with the size argument it receives and returning a pointer to the allocated block.
 
 `DARKEN_ALLOC()` does not handle allocation failure or partial allocation cleanup; validate `pool` and `storage` before calling `darken_init()`.
 
@@ -111,6 +111,7 @@ All three (`DARKEN_ALLOC`, `DARKEN_BIND`, `DARKEN_INIT`) expand to a `(darken_t)
 
 ```c
 darken_entity_t e = DARKEN_SPAWN(&m);
+
 if (!e) return;
 
 e->update = enemy_walk_state;
@@ -119,8 +120,11 @@ e->tag = ENEMY;
 e->usr = WHATEVER;
 
 DARKEN_DATA(struct MyComponent, data, e);
+
 data->hp = 10;
 ```
+
+A freshly spawned entity may be a recycled storage slot. Initialize every field your entity actually needs, including clearing anything you do not want inherited from the previous occupant.
 
 ## Update / lifecycle control — two modes
 
@@ -159,13 +163,13 @@ You don't have to wrap the payload pointer in `void *` and cast it yourself: `da
 darken_state_t player_walk(struct Player *p) { ... }
 ```
 
-— assigns straight to `entity->update` with no cast. This is exactly what the header comment means by *"the callee just reads however many leading arguments it declares."* Only declare `void *data` for callbacks that genuinely ignore the payload.
+— assigns straight to `entity->update` with no cast. Only declare `void *data` for callbacks that genuinely ignore the payload.
 
 `destroy` uses the same `darken_state_t` callback type and the same `(data)` argument convention as `update`. Its return value is always ignored — `darken_reset()` and `darken_entity_delete()` only ever call it for its side effects.
 
 `destroy` must not mutate the ctx's pool zones. Deleting, spawning, migrating, or swapping entities from inside a `destroy` callback will corrupt the swap state and iteration that the engine relies on. This applies to every path that invokes `destroy`: `darken_reset()`, `darken_entity_delete()`, and the `DARKEN_DELETE` branch inside `darken_update()`.
 
-## DIRECT mode (**#define DARKEN_DIRECT**)
+### DIRECT mode (**#define DARKEN_DIRECT**)
 
 ```c
 void player_stop_state(darken_entity_t entity, struct Player *p)
@@ -182,7 +186,7 @@ The `destroy` callback uses the same `darken_state_t` callback type and the same
 A callback that only declares the entity parameter can drop the second parameter: `void player_walk(darken_entity_t entity)`.
 
 ```c
-void player_walk_state(darken_entity_t entity)  // Also valid declaration
+void player_walk_state(darken_entity_t entity)
 {
     DARKEN_DATA(struct Player, p, entity);
 
@@ -209,10 +213,12 @@ There is no pause/resume in Darken. These three primitives cover deleting an ent
 
 ```c
 darken_entity_delete(e);
+
 // destroy() runs (if set, and if e was active), then e's slot returns to free
 // in its own ctx. No-op if e is already free.
 
 darken_entity_t moved = darken_entity_migrate(e, &other_pool);
+
 // Copies min(e's stride, other_pool's stride) bytes of e's whole entity
 // (header + payload) into a free slot in other_pool, WITHOUT calling
 // destroy(). If e was active, it becomes free in its original pool; if e
@@ -222,12 +228,15 @@ darken_entity_t moved = darken_entity_migrate(e, &other_pool);
 // other_pool is full or is e's own pool.
 
 darken_entity_swap(a, b);
+
 // a and b trade places: pool slot, owner, and active/free status all swap.
 // Works even when a and b belong to different darken_t's. Payload data is
 // never touched -- only the bookkeeping (slot/owner/pool entries) moves.
 ```
 
-`darken_entity_migrate()` is the tool for a "paused set": keep a second, smaller `darken_t` (it can even use a more compact payload struct than the active one — see Gotchas for what a stride mismatch does) that you simply never pass to `darken_update()`, and migrate entities into and out of it as needed. `darken_entity_swap()` is lower-level still: it never touches `size` or payload data in either ctx, so it's the right tool when you want to trade two entities' positions directly rather than copy anything.
+`darken_entity_migrate()` is the tool for a "paused set": keep a second, smaller `darken_t` (it can even use a more compact payload struct than the active one — see Gotchas for what a stride mismatch does) that you simply never pass to `darken_update()`, and migrate entities into and out of it as needed.
+
+`darken_entity_swap()` is lower-level still: it never touches `size` or payload data in either ctx, so it's the right tool when you want to trade two entities' positions directly rather than copy anything. Both entities may belong to the same ctx or to different ctx's.
 
 ## Iterating
 
@@ -239,31 +248,35 @@ DARKEN_FOREACH(&m,
 });
 ```
 
-Visits active entities in **reverse** slot order (`size-1` down to `0`), which makes deleting the **currently visited** entity safe. One subtlety: if deleting entity A swaps a *different*, not-yet-visited entity B into A's old (already-passed) slot, B is skipped for *this* pass and picked up again next frame — not a bug, just a one-frame ordering quirk of swap-and-pop under reverse iteration.
+Visits active entities in **reverse** slot order (`size-1` down to `0`), which makes deleting the **currently visited** entity safe.
+
+One subtlety: if deleting entity A swaps a *different*, not-yet-visited entity B into A's old (already-passed) slot, B is skipped for *this* pass and picked up again next frame — not a bug, just a one-frame ordering quirk of swap-and-pop under reverse iteration.
 
 More generally, deleting, migrating, or swapping other entities from inside the iteration body can affect which entities are visited during that pass.
 
+The `ctx` argument is evaluated more than once by `DARKEN_FOREACH`, so pass a stable expression such as `&m`, not an expression with side effects.
+
 ## API reference
 
-| Symbol                                         | What it does                                                            |
-| ---------------------------------------------- | ----------------------------------------------------------------------- |
-| `DARKEN_ALLOC(alloc, capacity, payload_size)`  | Heap-backed `darken_t`                                                  |
-| `DARKEN_FREE(free, ctx)`                       | Frees what `DARKEN_ALLOC` allocated; does not call `destroy()`          |
-| `DARKEN_DECLARE(name, capacity, payload_size)` | Declares static storage (no `darken_t` yet)                             |
-| `DARKEN_BIND(name)`                            | `darken_t` view over `DARKEN_DECLARE`d storage, for runtime (re)binding |
-| `DARKEN_INIT(name)`                            | Same, as a static-storage initializer                                   |
-| `darken_init(ctx)`                             | Lays entities out over the storage block; call once per (re)bind        |
-| `DARKEN_SPAWN(ctx)`                            | Takes a slot from the free zone, or `0` if full                         |
-| `DARKEN_DATA(type, var, entity)`               | Declares `type *var` pointing at `entity`'s payload                     |
-| `DARKEN_ENTITY(data)`                          | Recovers the `darken_entity_t` from a payload pointer                   |
-| `darken_entity_delete(entity)`                 | Destroys (if active) and frees an entity                                |
-| `darken_entity_migrate(entity, dst)`           | Copies an entity into another `darken_t`; see above                     |
-| `darken_entity_swap(e1, e2)`                   | Trades two entities' positions, even across two different ctx's         |
-| `darken_update(ctx)`                           | Runs one frame over the active zone                                     |
-| `darken_reset(ctx)`                            | Destroys all active entities, empties the pool                          |
-| `DARKEN_FOREACH(ctx, code)`                    | Manual iteration over the active zone                                   |
-| `DARKEN_ENTITY_IS_ACTIVE/IS_FREE(entity)`      | Zone membership tests                                                   |
-| `DARKEN_COUNT_ACTIVE/FREE(ctx)`                | Zone sizes                                                              |
+| Symbol                                         | What it does                                                                       |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `DARKEN_ALLOC(alloc, capacity, payload_size)`  | Heap-backed `darken_t`                                                             |
+| `DARKEN_FREE(free, ctx)`                       | Frees what `DARKEN_ALLOC` allocated; does not call `destroy()`                     |
+| `DARKEN_DECLARE(name, capacity, payload_size)` | Declares static storage (no `darken_t` yet)                                        |
+| `DARKEN_BIND(name)`                            | `darken_t` view over `DARKEN_DECLARE`d storage, for runtime (re)binding            |
+| `DARKEN_INIT(name)`                            | Same, as a static-storage initializer                                              |
+| `darken_init(ctx)`                             | Lays entities out over the storage block and resets the logical population to zero |
+| `DARKEN_SPAWN(ctx)`                            | Takes a slot from the free zone, or `0` if full                                    |
+| `DARKEN_DATA(type, var, entity)`               | Declares `type *var` pointing at `entity`'s payload                                |
+| `DARKEN_ENTITY(data)`                          | Recovers the `darken_entity_t` from a payload pointer                              |
+| `darken_entity_delete(entity)`                 | Destroys (if active) and frees an entity                                           |
+| `darken_entity_migrate(entity, dst)`           | Copies an entity into another `darken_t`; see above                                |
+| `darken_entity_swap(e1, e2)`                   | Trades two entities' positions, even across two different ctx's                    |
+| `darken_update(ctx)`                           | Runs one frame over the active zone                                                |
+| `darken_reset(ctx)`                            | Destroys all active entities, then empties the pool                                |
+| `DARKEN_FOREACH(ctx, code)`                    | Manual iteration over the active zone                                              |
+| `DARKEN_ENTITY_IS_ACTIVE/FREE(entity)`         | Zone membership tests                                                              |
+| `DARKEN_COUNT_ACTIVE/FREE(ctx)`                | Zone sizes                                                                         |
 
 ## Complexity
 
@@ -280,17 +293,17 @@ More generally, deleting, migrating, or swapping other entities from inside the 
 
 - `capacity`/`size`/`stride` are `uint16_t`, so a single `darken_t` tops out at 65535 entities, and the computed entity stride must also fit in `uint16_t`.
 
-- **`DARKEN_SPAWN`/`DARKEN_FOREACH` evaluate their `ctx` argument more than once.** `DARKEN_SPAWN(managers[idx++])` or `DARKEN_FOREACH(managers[idx++], ...)` will advance `idx` more than once per call, with no sequence point between the advances — undefined behavior in C, not just "surprising." Only ever pass a plain pointer (`&m`, a variable, a stored expression), never an expression with a side effect, as the `ctx` argument to either of these two macros.
+- **`DARKEN_SPAWN`/`DARKEN_FOREACH` evaluate their `ctx` argument more than once.** `DARKEN_SPAWN(managers[idx++])` contains multiple unsequenced evaluations of `idx++` in one expression and is undefined behavior in C. `DARKEN_FOREACH(managers[idx++], ...)` evaluates its `ctx` argument twice in separate statements, so it is not the same undefined-behavior case, but `idx` still advances twice. Only ever pass a stable expression such as `&m` or a plain pointer variable to either macro.
 
 - **`darken_entity_migrate()` is not a no-op on a free entity.** If `entity` is already free, its source ctx is left untouched, but `dst` still gains a new active entity built from `entity`'s (already-recycled, meaningless) payload bytes. Calling it by mistake on something you thought was already gone silently spends a slot in `dst`, it does not return early.
 
-- **`darken_entity_migrate()` truncates or leaves garbage on a stride mismatch.** Exactly `min(src->stride, dst->stride)` bytes are copied. Moving into a smaller-stride ctx truncates the tail of the payload; moving into a larger-stride one leaves the payload's tail as whatever was already in that recycled slot. The header fields (`slot`, `usr`, `update`, `destroy`, `tag`, `owner`) always survive intact either way, because every valid stride is at least `sizeof(struct darken_entity_t)`. If you rely on specific payload fields surviving a round trip through a smaller ctx, put those fields first in both payload structs.
+- **`darken_entity_migrate()` truncates or leaves stale data on a stride mismatch.** Exactly `min(src->stride, dst->stride)` bytes are copied. Moving into a smaller-stride ctx truncates the tail of the payload; moving into a larger-stride one leaves the payload's tail as whatever was already in that recycled slot. The header fields (`slot`, `usr`, `update`, `destroy`, `tag`, `owner`) are copied first and then `slot`/`owner` are corrected for `dst`. If you rely on specific payload fields surviving a round trip through a smaller ctx, put those fields first in both payload structs.
 
 - **No staleness detection.** Darken hands you raw pointers, not generation-checked handles. If you keep a `darken_entity_t` around after deleting it, and a later spawn reuses that exact slot, your old pointer now silently refers to the *new* occupant — same address, different entity. If you need to detect this, roll your own generation counter in `tag` or `usr` and check it yourself; Darken has no built-in way to ask "is this still the entity I think it is?".
 
-- Fields aren't auto-initialized on spawn (see above) — an entity with a garbage `update` pointer will crash the moment `darken_update()` reaches it.
+- Fields aren't auto-initialized on spawn (see above) — an entity with a stale or invalid `update` pointer will crash the moment `darken_update()` reaches it.
 
-- **Payload alignment is a precondition.** The payload type used with `DARKEN_DATA()` must not require stricter alignment than `struct darken_entity_t`. The storage helper knows the payload size, not its C type or alignment requirement. `darken_entity_migrate()`'s internal copy leans on this same guarantee to move data in 32-bit words: it's safe without a runtime check because every entity address is a multiple of `__alignof__(struct darken_entity_t)`, and that value already accounts for `uint32_t` alignment on whatever target you're building for.
+- **Payload alignment is a precondition.** The payload type used with `DARKEN_DATA()` must not require stricter alignment than `struct darken_entity_t`. The storage helper knows the payload size, not its C type or alignment. `darken_entity_migrate()`'s internal copy leans on this same guarantee to move data in 32-bit words: it's safe without a runtime check because every entity address is a multiple of `__alignof__(struct darken_entity_t)`, and that value already accounts for `uint32_t` alignment on whatever target you're building for.
 
 - `darken_init()` resets the logical pool without calling `destroy()`. Do not call it on a live population unless that population is intentionally being discarded.
 
