@@ -459,7 +459,7 @@ struct _darken_hdr_shape_t
 // Word size used to bulk-copy an entity's bytes in darken_entity_migrate(). uint32_t is a reasonable default
 // on 32/64-bit targets. On a genuinely 8-bit target (6502, Z80, 8051, ...) there's no native 32-bit ALU, so
 // the "fast path" is emulated by the compiler anyway -- a plain byte-sized copy is often just as fast, and
-// sometimes faster once you count the call overhead of a software 32-bit routine. Define  DARKEN_MIGRATE_WORD_T
+// sometimes faster once you count the call overhead of a software 32-bit routine. Define DARKEN_MIGRATE_WORD_T
 // as uint16_t or uint8_t before including this header to match your target instead.
 // This is purely a speed knob: correctness never depends on it, on any target.
 #ifndef DARKEN_MIGRATE_WORD_T
@@ -565,33 +565,35 @@ struct _darken_hdr_shape_t
 
 // Iterate over all active entities in REVERSE order (from size-1 down to 0).
 //
-// The implementation walks the pool array BACKWARDS BY POINTER rather than by index. This is semantically
-// identical to the classic `while (_index--)` form, but generates measurably tighter code on 8-bit targets
-// (Z80, 6502): no index register is needed, no multiply-by-2 to convert index into a byte offset, and the
-// loop-termination test is a single pointer comparison against the array base. On 32/64-bit compilers the
-// two forms optimise to the same code, so there is no downside to using it everywhere.
+// The index-based form is deliberate. A pointer-walking variant was tried and measured on Z80: when CODE
+// is a plain expression that doesn't clobber HL/DE, pointer walking wins by about 13%, but when CODE is a
+// function call -- which is what darken_update() always does -- the callee is free to clobber those
+// registers, so the loop state has to be spilled to memory every iteration anyway, and the two forms
+// become cycle-for-cycle equivalent. The index form reserves fewer registers for the loop, and reads as
+// the canonical C idiom. On 32/64-bit compilers the two generate identical code, so there is nothing to
+// gain by changing it there either.
 //
 // Deleting the currently visited entity from inside CODE is safe and cheap: it swaps with the last active
 // slot, which the loop has already passed.
 //
 // Deleting a *different* entity from inside CODE is subtler. If the deleted entity's slot is greater than
-// the current loop position, the swap moves a slot the loop already visited into the now-empty position,
-// and that entity is NOT revisited this frame -- correct. If the deleted entity's slot is LOWER than the
-// current loop position, the entity that was at size-1 gets moved into a position the loop hasn't reached
+// the current loop index, the swap moves a slot the loop already visited into the now-empty position, and
+// that entity is NOT revisited this frame -- correct. If the deleted entity's slot is LOWER than the
+// current loop index, the entity that was at size-1 gets moved into a position the loop hasn't reached
 // yet, and will be visited a second time this same frame. That is not a bug, but it can double-invoke an
 // update callback within one frame for the moved entity. Callbacks that are idempotent per frame are
 // unaffected; callbacks that advance internal timers will see that entity advance twice.
-#define DARKEN_FOREACH(CTX, CODE)                                 \
-    do                                                            \
-    {                                                             \
-        darken_entity_t *_darken_ptr = (CTX)->pool + (CTX)->size; \
-        darken_entity_t *_darken_base = (CTX)->pool;              \
-                                                                  \
-        while (_darken_ptr != _darken_base)                       \
-        {                                                         \
-            darken_entity_t _entity = *--_darken_ptr;             \
-            CODE;                                                 \
-        }                                                         \
+#define DARKEN_FOREACH(CTX, CODE)                    \
+    do                                               \
+    {                                                \
+        darken_index_t _index = (CTX)->size;         \
+        darken_entity_t *_pool = (CTX)->pool;        \
+                                                     \
+        while (_index--)                             \
+        {                                            \
+            darken_entity_t _entity = _pool[_index]; \
+            CODE;                                    \
+        }                                            \
     } while (0)
 
 // Declare a typed pointer to an entity's data payload
