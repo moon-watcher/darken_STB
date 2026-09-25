@@ -1,5 +1,7 @@
 #include <genesis.h>
 
+// #define DARKEN_DIRECT
+
 int main(void)
 {
     // bench_dsmap0_compare();
@@ -28,14 +30,17 @@ int main(void)
 
     // darken_sgdk_tests_c();
     // darken2_storage_smoke_test_main();
-    darken_120_dev_test_darken_main();
-    darken_130_dev_test_darken_main();
-    bench_darken_1_1();
-    bench_darken_1_2();
-    bench_darken_1_3();
-    bench_migrate_variants();
-    bench_migrate();
+    // darken_120_dev_test_darken_main();
+    // darken_130_dev_test_darken_main();
+    // bench_darken_1_1();
+    // bench_darken_1_2();
+    // bench_darken_1_3();
+    // bench_migrate_variants();
+    // bench_migrate();
     // darken2_user_demo_main();
+
+    darken_sgdk_tests_main();
+    // darken_sgdk_tests_direct();
 
     return 0;
 }

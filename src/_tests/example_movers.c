@@ -4,7 +4,7 @@
 #define CAPACITY 8
 #define PARAMS 4
 
-DARKSYS_DECLARE(storage, CAPACITY, PARAMS);
+static DARKSYS_DECLARE(storage, CAPACITY, PARAMS);
 static darksys_t system;
 
 #define assert(x) \
