@@ -53,9 +53,10 @@
  *    `darken_t m = {0};` followed by assigning `m.pool`, `m.storage`, `m.capacity`, `m.stride` by hand, using
  *    the same expressions the macro bodies use below.
  *
- * 4. CAPACITY must satisfy 1 <= CAPACITY <= UINT16_MAX, and the computed entity stride must fit in uint16_t.
- *    These are API requirements; DARKEN_DECLARE() only rejects CAPACITY == 0 with a compile-time
- *    negative-size array. The caller is responsible for keeping CAPACITY and stride within uint16_t limits.
+ * 4. CAPACITY must satisfy 1 <= CAPACITY <= DARKEN_INDEX_MAX (the max value representable by darken_index_t;
+ *    UINT16_MAX with the default), and the computed entity stride must fit in darken_index_t. These are API
+ *    requirements; DARKEN_DECLARE() only rejects CAPACITY == 0 with a compile-time negative-size array. The
+ *    caller is responsible for keeping CAPACITY and stride within darken_index_t limits.
  *
  * Beyond that, Darken makes no assumptions about the target: pointer width, struct alignment, and endianness
  * are all whatever the compiler says they are for the platform it's building for (see _DARKEN_ENTITY_ALIGN
@@ -70,6 +71,31 @@
  * data live in separate address spaces with differently-shaped pointers (classic AVR, some PIC cores, and
  * similar). If that's your target, define DARKEN_DIRECT instead: direct mode never converts an integer to a
  * function pointer, so this whole concern disappears.
+ *
+ *
+ * ----------------------------------------------------------------------------
+ * INDEX TYPE (DARKEN_INDEX_T) -- a speed/size knob, opt-in
+ * ----------------------------------------------------------------------------
+ *
+ * Every internal index, capacity, size and stride field is declared as `darken_index_t`, a typedef the
+ * caller can override by defining DARKEN_INDEX_T before including this header:
+ *
+ *     #define DARKEN_INDEX_T uint8_t    // pool capped at 255 entities, 2 bytes cheaper per entity
+ *     #include "darken.h"
+ *
+ * The default is uint16_t (up to 65535 entities, no realistic cap on any 8/16-bit target). On a Z80 or
+ * 6502, a uint8_t index can shave a handful of cycles off the per-iteration overhead of DARKEN_FOREACH,
+ * but the bulk of the loop cost -- indexing a 16-bit pointer array -- stays 16-bit work regardless. The
+ * real reason to switch is memory: 2 bytes less per entity header (slot + one padding byte it removes in
+ * the default layout on some ABIs) and 2-3 bytes off the darken_t itself. On a 48K Spectrum that's noise
+ * for a few dozen entities, meaningful for a few hundred.
+ *
+ * DARKEN_INDEX_T must name a single unsigned integer type (uint8_t, uint16_t, uint32_t, ...). Darken
+ * requires it to be at least 1 byte wide and capable of holding CAPACITY and the entity stride; if your
+ * target has no uint8_t, uint16_t still works. Darken does NOT #include <stdint.h> -- you provide it.
+ *
+ * This is purely an optimisation: correctness does not depend on the choice. Every place that mixes
+ * darken_index_t with a byte count widens as needed.
  *
  *
  * Entity: Base entity managed by the entity ctx
@@ -211,6 +237,17 @@
 // Everything else Darken needs (offsets, alignment) is built from bare `unsigned long` and the null-pointer
 // member-address idiom, both of which are core language, not library, features.
 
+// ---------------------------------------------------------------------------
+// darken_index_t -- configurable index/capacity/size/stride type. Default uint16_t.
+// Override by defining DARKEN_INDEX_T before including this header (e.g. -DDARKEN_INDEX_T=uint8_t to halve
+// per-entity slot cost and cap the pool at 255). Must name a single unsigned integer type.
+// ---------------------------------------------------------------------------
+#ifndef DARKEN_INDEX_T
+#define DARKEN_INDEX_T uint16_t
+#endif
+
+typedef DARKEN_INDEX_T darken_index_t;
+
 #ifdef DARKEN_DIRECT
 typedef void (*darken_state_t)();
 #else
@@ -223,14 +260,14 @@ typedef struct darken_t
 {
     darken_entity_t *pool; // Pointer array to entities in the ctx's storage block
     uint8_t *storage;      // Pointer to the contiguous memory block where entities are allocated
-    uint16_t capacity;
-    uint16_t size;
-    uint16_t stride;
+    darken_index_t capacity;
+    darken_index_t size;
+    darken_index_t stride;
 } darken_t;
 
 struct darken_entity_t
 {
-    uint16_t slot;          // Private: Index in the ctx's pool array
+    darken_index_t slot;    // Private: Index in the ctx's pool array
     uint16_t usr;           // User-defined field for custom data
     darken_state_t update;  // User-defined update callback
     darken_state_t destroy; // User-defined destroy callback
@@ -253,7 +290,7 @@ struct darken_entity_t
 // here too (or, at minimum, add something with at least as strict an alignment requirement).
 struct _darken_hdr_shape_t
 {
-    uint16_t slot;
+    darken_index_t slot;
     uint16_t usr;
     darken_state_t update;
     darken_state_t destroy;
@@ -330,7 +367,7 @@ struct _darken_hdr_shape_t
 //     DARKEN_FREE(free, &m);
 //
 // DARKEN_ALLOC() does not handle allocation failure or partial allocation cleanup.
-// CAPACITY must satisfy 1 <= CAPACITY <= UINT16_MAX, and the computed stride must fit in uint16_t.
+// CAPACITY must satisfy 1 <= CAPACITY <= DARKEN_INDEX_MAX, and the computed stride must fit in darken_index_t.
 // DARKEN_ALLOC() does not perform explicit validation of these requirements, so the caller is
 // responsible for providing valid values.
 //
@@ -343,8 +380,8 @@ struct _darken_hdr_shape_t
     {                                                                    \
         .pool = (ALLOC)((CAPACITY) * sizeof(darken_entity_t)),           \
         .storage = (ALLOC)((CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)), \
-        .capacity = (CAPACITY),                                          \
-        .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                        \
+        .capacity = (darken_index_t)(CAPACITY),                          \
+        .stride = (darken_index_t)_DARKEN_ENTITY_STRIDE(PAYLOAD),        \
     }
 
 // Frees the pool and storage blocks previously allocated by DARKEN_ALLOC().
@@ -361,10 +398,10 @@ struct _darken_hdr_shape_t
 //     darken_t m = DARKEN_BIND(storage);
 //     darken_init(&m);
 //
-// CAPACITY must satisfy 1 <= CAPACITY <= UINT16_MAX. The payload type used with DARKEN_DATA() must not
+// CAPACITY must satisfy 1 <= CAPACITY <= DARKEN_INDEX_MAX. The payload type used with DARKEN_DATA() must not
 // require stricter alignment than struct darken_entity_t. DARKEN_DECLARE() rejects CAPACITY == 0 with a
 // compile-time negative-size array. The caller is responsible for keeping CAPACITY and the computed
-// entity stride within their uint16_t limits.
+// entity stride within their darken_index_t limits.
 //
 // The byte block sits inside a union alongside a (never-instantiated) _darken_hdr_shape_t member, purely so
 // the compiler is forced to give the block itself at least _DARKEN_ENTITY_ALIGN alignment -- ordinary,
@@ -378,8 +415,8 @@ struct _darken_hdr_shape_t
 #define DARKEN_DECLARE(NAME, CAPACITY, PAYLOAD)                         \
     struct                                                              \
     {                                                                   \
-        uint16_t capacity;                                              \
-        uint16_t stride;                                                \
+        darken_index_t capacity;                                        \
+        darken_index_t stride;                                          \
         darken_entity_t pool[(CAPACITY) ? (CAPACITY) : -1];             \
         union                                                           \
         {                                                               \
@@ -387,8 +424,8 @@ struct _darken_hdr_shape_t
             uint8_t bytes[(CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)]; \
         } block;                                                        \
     } NAME = {                                                          \
-        .capacity = (CAPACITY),                                         \
-        .stride = _DARKEN_ENTITY_STRIDE(PAYLOAD),                       \
+        .capacity = (darken_index_t)(CAPACITY),                         \
+        .stride = (darken_index_t)_DARKEN_ENTITY_STRIDE(PAYLOAD),       \
     }
 
 // Static/global initialization: compile-time constants.
@@ -396,13 +433,13 @@ struct _darken_hdr_shape_t
 // NOTE: DARKEN_INIT expands to a compound literal, which is not a constant expression in strict C99 -- it
 // requires C11 (or the GNU C extension) to initialize an object with static storage duration. See item 3 of
 // the PORTABILITY note at the top of this file for the plain-assignment fallback on C89-only compilers.
-#define DARKEN_INIT(STORAGE)                                                                          \
-    (darken_t)                                                                                        \
-    {                                                                                                 \
-        .pool = (STORAGE).pool,                                                                       \
-        .storage = (STORAGE).block.bytes,                                                             \
-        .capacity = sizeof((STORAGE).pool) / sizeof(darken_entity_t),                                 \
-        .stride = sizeof((STORAGE).block.bytes) / (sizeof((STORAGE).pool) / sizeof(darken_entity_t)), \
+#define DARKEN_INIT(STORAGE)                                                                                            \
+    (darken_t)                                                                                                          \
+    {                                                                                                                   \
+        .pool = (STORAGE).pool,                                                                                         \
+        .storage = (STORAGE).block.bytes,                                                                               \
+        .capacity = (darken_index_t)(sizeof((STORAGE).pool) / sizeof(darken_entity_t)),                                 \
+        .stride = (darken_index_t)(sizeof((STORAGE).block.bytes) / (sizeof((STORAGE).pool) / sizeof(darken_entity_t))), \
     }
 
 // Runtime binding: locals, reassignment, any context
@@ -427,7 +464,7 @@ struct _darken_hdr_shape_t
 #define DARKEN_FOREACH(CTX, CODE)                    \
     do                                               \
     {                                                \
-        uint16_t _index = (CTX)->size;               \
+        darken_index_t _index = (CTX)->size;         \
         darken_entity_t *_pool = (CTX)->pool;        \
                                                      \
         while (_index--)                             \
@@ -455,7 +492,7 @@ struct _darken_hdr_shape_t
 
 // Zone sizes, so callers don't have to do the size/capacity math by hand.
 #define DARKEN_COUNT_ACTIVE(CTX) ((CTX)->size)
-#define DARKEN_COUNT_FREE(CTX) ((uint16_t)((CTX)->capacity - (CTX)->size))
+#define DARKEN_COUNT_FREE(CTX) ((darken_index_t)((CTX)->capacity - (CTX)->size))
 
 /* ============================================================================
  * FUNCTIONS
@@ -475,8 +512,8 @@ static inline void darken_entity_swap(darken_entity_t e1, darken_entity_t e2)
 
     darken_t *ctx1 = e1->owner;
     darken_t *ctx2 = e2->owner;
-    uint16_t i = e1->slot;
-    uint16_t j = e2->slot;
+    darken_index_t i = e1->slot;
+    darken_index_t j = e2->slot;
 
     ctx1->pool[i] = e2;
     ctx2->pool[j] = e1;
@@ -529,9 +566,9 @@ static inline darken_entity_t darken_entity_migrate(darken_entity_t entity, dark
     if (src == dst || dst->size >= dst->capacity)
         return 0;
 
-    uint16_t count = src->stride < dst->stride ? src->stride : dst->stride;
-    uint16_t words = count / sizeof(DARKEN_MIGRATE_WORD_T);
-    uint16_t dst_slot = dst->size++;
+    darken_index_t count = src->stride < dst->stride ? src->stride : dst->stride;
+    darken_index_t words = (darken_index_t)(count / sizeof(DARKEN_MIGRATE_WORD_T));
+    darken_index_t dst_slot = dst->size++;
     darken_entity_t moved = dst->pool[dst_slot];
     DARKEN_MIGRATE_WORD_T *d = (DARKEN_MIGRATE_WORD_T *)moved;
     DARKEN_MIGRATE_WORD_T *s = (DARKEN_MIGRATE_WORD_T *)entity;
@@ -542,7 +579,7 @@ static inline darken_entity_t darken_entity_migrate(darken_entity_t entity, dark
     uint8_t *sb = (uint8_t *)s;
     uint8_t *db = (uint8_t *)d;
 
-    count %= sizeof(DARKEN_MIGRATE_WORD_T);
+    count = (darken_index_t)(count % sizeof(DARKEN_MIGRATE_WORD_T));
     while (count--)
         *db++ = *sb++;
 
@@ -593,7 +630,7 @@ static inline darken_entity_t darken_entity_migrate(darken_entity_t entity, dark
 static inline void darken_init(darken_t *ctx)
 {
     ctx->size = 0;
-    uint16_t i = ctx->capacity;
+    darken_index_t i = ctx->capacity;
     uint8_t *storage = ctx->storage;
 
     while (i--)
