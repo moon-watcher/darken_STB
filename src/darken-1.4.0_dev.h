@@ -53,10 +53,10 @@
  *    `darken_t m = {0};` followed by assigning `m.pool`, `m.storage`, `m.capacity`, `m.stride` by hand, using
  *    the same expressions the macro bodies use below.
  *
- * 4. CAPACITY must satisfy 1 <= CAPACITY <= DARKEN_INDEX_MAX (the max value representable by darken_index_t;
- *    UINT16_MAX with the default), and the computed entity stride must fit in darken_index_t. These are API
- *    requirements; DARKEN_DECLARE() only rejects CAPACITY == 0 with a compile-time negative-size array. The
- *    caller is responsible for keeping CAPACITY and stride within darken_index_t limits.
+ * 4. CAPACITY must satisfy 1 <= CAPACITY <= max(darken_index_t), and the computed entity stride must fit in
+ *    darken_index_t. These are API requirements; DARKEN_DECLARE() only rejects CAPACITY == 0 with a
+ *    compile-time negative-size array. The caller is responsible for keeping CAPACITY and stride within
+ *    darken_index_t limits.
  *
  * Beyond that, Darken makes no assumptions about the target: pointer width, struct alignment, and endianness
  * are all whatever the compiler says they are for the platform it's building for (see _DARKEN_ENTITY_ALIGN
@@ -74,28 +74,55 @@
  *
  *
  * ----------------------------------------------------------------------------
- * INDEX TYPE (DARKEN_INDEX_T) -- a speed/size knob, opt-in
+ * CONFIGURATION MACROS -- all opt-in, all optional, all defaulted
  * ----------------------------------------------------------------------------
  *
- * Every internal index, capacity, size and stride field is declared as `darken_index_t`, a typedef the
- * caller can override by defining DARKEN_INDEX_T before including this header:
+ * Darken is tuned for a wide range of targets without requiring any of these to be defined. Each one trades
+ * portability / features / range for memory or speed on a specific class of machine. Define them before
+ * including this header, or via -D on the command line. Order of definition does not matter.
  *
- *     #define DARKEN_INDEX_T uint8_t    // pool capped at 255 entities, 2 bytes cheaper per entity
- *     #include "darken.h"
+ *   DARKEN_INDEX_T       default uint16_t
+ *       Type of every internal index, capacity, size and stride.
+ *       Override to uint8_t on 8-bit targets to cap the pool at 255 and save 1-2 bytes per entity. Must name
+ *       a single unsigned integer type. The real reason to switch is memory, not speed: the pool-indexing
+ *       arithmetic is 16-bit regardless (the pointer array's element stride is 2 bytes on 8-bit targets), and
+ *       on Z80 a uint8_t index can be a couple of cycles *slower* per iteration due to the extra zero-extension
+ *       before the multiply-by-2.
+ *       The per-iteration savings, when they exist, are in the loop counter's decrement/test.
  *
- * The default is uint16_t (up to 65535 entities, no realistic cap on any 8/16-bit target). On a Z80 or
- * 6502, a uint8_t index can shave a handful of cycles off the per-iteration overhead of DARKEN_FOREACH,
- * but the bulk of the loop cost -- indexing a 16-bit pointer array -- stays 16-bit work regardless. The
- * real reason to switch is memory: 2 bytes less per entity header (slot + one padding byte it removes in
- * the default layout on some ABIs) and 2-3 bytes off the darken_t itself. On a 48K Spectrum that's noise
- * for a few dozen entities, meaningful for a few hundred.
+ *   DARKEN_USR_T         default uint16_t
+ *       Type of the user-defined `usr` field on each entity.
+ *       Drop to uint8_t on memory-constrained targets that never need more than 255 distinct values.
  *
- * DARKEN_INDEX_T must name a single unsigned integer type (uint8_t, uint16_t, uint32_t, ...). Darken
- * requires it to be at least 1 byte wide and capable of holding CAPACITY and the entity stride; if your
- * target has no uint8_t, uint16_t still works. Darken does NOT #include <stdint.h> -- you provide it.
+ *   DARKEN_TAG_T         default uint32_t
+ *       Type of the user-defined `tag` field.
+ *       Drop to uint16_t or uint8_t on8-bit targets; `tag` is the single fattest member of the header on those
+ *       machines.
  *
- * This is purely an optimisation: correctness does not depend on the choice. Every place that mixes
- * darken_index_t with a byte count widens as needed.
+ *   DARKEN_NO_TAG
+ *       Removes the `tag` field from the entity header entirely.
+ *       Any code that then touches entity->tag fails to compile, which is the intended feedback.
+ *       Saves DARKEN_TAG_T's full size per entity.
+ *
+ *   DARKEN_NO_DESTROY
+ *       Removes the `destroy` callback field from the entity header, and the destroy-invocation paths from
+ *       darken_entity_delete(), darken_update() and darken_reset().
+ *       Saves one function pointer per entity (2 bytes on 8-bit, 4 on 32-bit, 8 on 64-bit) at the cost of
+ *       losing automatic cleanup. Any code that assigns entity->destroy fails to compile.
+ *
+ *   DARKEN_MIGRATE_WORD_T   default uint32_t
+ *       Word size used to bulk-copy entity bytes in darken_entity_migrate().
+ *       Set to uint8_t or uint16_t on 8-bit targets where a native 32-bit copy is emulated anyway and the
+ *       "fast path" is no faster than a byte loop. Purely a speed knob: correctness never depends on it.
+ *
+ *   DARKEN_DIRECT
+ *       Switches the engine from state-machine mode (default) to direct-callback mode.
+ *       See "Update / lifecycle control" below. Also the mode to prefer on Harvard-architecture micros,
+ *       where the default mode's function-pointer sentinels are unsafe.
+ *
+ * On a Z80 with all the size knobs enabled, the per-entity header shrinks from 14 bytes to 7 (slot 1, usr 1,
+ * update 2, owner 2 = 7 with tag and destroy both removed). With 30 entities that's roughly 200 bytes saved
+ * on a 48K Spectrum; meaningful but not transformative.
  *
  *
  * Entity: Base entity managed by the entity ctx
@@ -181,7 +208,7 @@
  *
  *     `destroy` uses the same callback type and the same (data)-only argument convention as `update`.
  *     Its return value is always ignored — darken_reset() and darken_entity_delete() only ever call it
- *     for its side effects.
+ *     for its side effects. (Omitted entirely when DARKEN_NO_DESTROY is defined.)
  *
  *     `destroy` must not mutate the ctx's pool zones. Deleting, spawning, or otherwise reordering entities
  *     from inside a destroy callback will corrupt the swap state and iteration that the engine relies on.
@@ -223,8 +250,8 @@
  *         }
  *
  *     A callback that only declares the entity parameter (e.g. `void f(darken_entity_t entity)`) still works:
- *     darken_state_t has no prototype, so the callee just reads however many leading arguments it declares and
- *     the rest are pushed and ignored. This is a common-and-widely-supported (but not ISO-C-guaranteed)
+ *     darken_state_t has no prototype, so the callee just reads however many leading arguments it declares
+ *     and the rest are pushed and ignored. This is a common-and-widely-supported (but not ISO-C-guaranteed)
  *     calling-convention convenience; if your target's ABI doesn't tolerate mismatched argument counts on an
  *     unprototyped function pointer, always declare both parameters.
  */
@@ -237,17 +264,49 @@
 // Everything else Darken needs (offsets, alignment) is built from bare `unsigned long` and the null-pointer
 // member-address idiom, both of which are core language, not library, features.
 
-// ---------------------------------------------------------------------------
-// darken_index_t -- configurable index/capacity/size/stride type. Default uint16_t.
-// Override by defining DARKEN_INDEX_T before including this header (e.g. -DDARKEN_INDEX_T=uint8_t to halve
-// per-entity slot cost and cap the pool at 255). Must name a single unsigned integer type.
-// ---------------------------------------------------------------------------
+/* ============================================================================
+ * CONFIGURATION DEFAULTS
+ * ============================================================================ */
+
+// darken_index_t -- internal index/capacity/size/stride type. Default uint16_t.
+// Override by defining DARKEN_INDEX_T before including this header.
 #ifndef DARKEN_INDEX_T
 #define DARKEN_INDEX_T uint16_t
 #endif
-
 typedef DARKEN_INDEX_T darken_index_t;
 
+// usr -- user-defined field type. Default uint16_t.
+// Override via DARKEN_USR_T. Define DARKEN_NO_USR to remove the field entirely.
+#ifdef DARKEN_NO_USR
+#define _DARKEN_USR_DECL
+#else
+#ifndef DARKEN_USR_T
+#define DARKEN_USR_T uint16_t
+#endif
+#define _DARKEN_USR_DECL DARKEN_USR_T usr;
+#endif
+
+// tag -- user-defined identification/categorization field. Default uint32_t.
+// Override via DARKEN_TAG_T. Define DARKEN_NO_TAG to remove the field entirely.
+#ifdef DARKEN_NO_TAG
+#define _DARKEN_TAG_DECL
+#else
+#ifndef DARKEN_TAG_T
+#define DARKEN_TAG_T uint32_t
+#endif
+#define _DARKEN_TAG_DECL DARKEN_TAG_T tag;
+#endif
+
+// destroy -- optional cleanup callback. Present by default.
+// Define DARKEN_NO_DESTROY to remove it from the header and from every
+// destroy-invocation path in the engine.
+#ifdef DARKEN_NO_DESTROY
+#define _DARKEN_DESTROY_DECL
+#else
+#define _DARKEN_DESTROY_DECL darken_state_t destroy;
+#endif
+
+// Callback type. Return type differs per mode.
 #ifdef DARKEN_DIRECT
 typedef void (*darken_state_t)();
 #else
@@ -267,13 +326,13 @@ typedef struct darken_t
 
 struct darken_entity_t
 {
-    darken_index_t slot;    // Private: Index in the ctx's pool array
-    uint16_t usr;           // User-defined field for custom data
-    darken_state_t update;  // User-defined update callback
-    darken_state_t destroy; // User-defined destroy callback
-    uint32_t tag;           // User-defined tag for identification or categorization
-    darken_t *owner;        // Private: Pointer to the owning ctx
-    uint8_t data[];         // Payload
+    darken_index_t slot;   // Private: Index in the ctx's pool array
+    _DARKEN_USR_DECL;      // User-defined field for custom data
+    darken_state_t update; // User-defined update callback
+    _DARKEN_DESTROY_DECL;  // User-defined destroy callback
+    _DARKEN_TAG_DECL;      // User-defined tag for identification or categorization
+    darken_t *owner;       // Private: Pointer to the owning ctx
+    uint8_t data[];        // Payload
 };
 
 /* ============================================================================
@@ -285,16 +344,17 @@ struct darken_entity_t
 // union or another struct: ISO C forbids embedding a struct that (recursively) contains a flexible array
 // member inside another struct, union, or array (C11 6.7.2.1p3) -- struct darken_entity_t itself is off
 // limits for that. Nothing is ever stored through this type; only its size and alignment are used. Keeping
-// the member list here identical to darken_entity_t's fixed members is the simplest way to guarantee it can
-// never be *under*-aligned relative to the real struct -- if you add a member to darken_entity_t, mirror it
-// here too (or, at minimum, add something with at least as strict an alignment requirement).
+// the member list here identical to darken_entity_t's fixed members (including which are present/absent
+// under the DARKEN_NO_* macros) is the simplest way to guarantee it can never be *under*-aligned relative
+// to the real struct -- if you add a member to darken_entity_t, mirror it here too (or, at minimum, add
+// something with at least as strict an alignment requirement).
 struct _darken_hdr_shape_t
 {
     darken_index_t slot;
-    uint16_t usr;
+    _DARKEN_USR_DECL;
     darken_state_t update;
-    darken_state_t destroy;
-    uint32_t tag;
+    _DARKEN_DESTROY_DECL;
+    _DARKEN_TAG_DECL;
     darken_t *owner;
 };
 
@@ -367,9 +427,9 @@ struct _darken_hdr_shape_t
 //     DARKEN_FREE(free, &m);
 //
 // DARKEN_ALLOC() does not handle allocation failure or partial allocation cleanup.
-// CAPACITY must satisfy 1 <= CAPACITY <= DARKEN_INDEX_MAX, and the computed stride must fit in darken_index_t.
-// DARKEN_ALLOC() does not perform explicit validation of these requirements, so the caller is
-// responsible for providing valid values.
+// CAPACITY must satisfy 1 <= CAPACITY <= max(darken_index_t), and the computed stride must fit in
+// darken_index_t. DARKEN_ALLOC() does not perform explicit validation of these requirements, so the caller
+// is responsible for providing valid values.
 //
 // ALLOC is trusted to hand back memory aligned suitably for any object type -- guaranteed for malloc()/
 // calloc() on a hosted implementation, but NOT guaranteed for a hand-rolled pool allocator on a freestanding
@@ -398,8 +458,8 @@ struct _darken_hdr_shape_t
 //     darken_t m = DARKEN_BIND(storage);
 //     darken_init(&m);
 //
-// CAPACITY must satisfy 1 <= CAPACITY <= DARKEN_INDEX_MAX. The payload type used with DARKEN_DATA() must not
-// require stricter alignment than struct darken_entity_t. DARKEN_DECLARE() rejects CAPACITY == 0 with a
+// CAPACITY must satisfy 1 <= CAPACITY <= max(darken_index_t). The payload type used with DARKEN_DATA() must
+// not require stricter alignment than struct darken_entity_t. DARKEN_DECLARE() rejects CAPACITY == 0 with a
 // compile-time negative-size array. The caller is responsible for keeping CAPACITY and the computed
 // entity stride within their darken_index_t limits.
 //
@@ -455,12 +515,22 @@ struct _darken_hdr_shape_t
 
 // Spawn a new entity from the free zone. Returns the entity or 0 if no free slots.
 // The returned entity may contain garbage from a previous occupant — always initialize all fields you care
-// about (update, destroy, tag, usr, and data).
+// about (update, destroy, tag, usr, and data) — and always set entity->update before the next darken_update()
+// call, or the engine will call through a NULL function pointer.
 #define DARKEN_SPAWN(CTX) ((CTX)->size < (CTX)->capacity ? (CTX)->pool[(CTX)->size++] : 0)
 
 // Iterate over all active entities in REVERSE order (from size-1 down to 0).
-// Reverse iteration makes deleting the currently visited entity safe.
-// Deleting or reordering other entities from inside CODE can affect which entities are visited in this pass.
+//
+// Deleting the currently visited entity from inside CODE is safe and cheap: it swaps with the last active
+// slot, which the loop has already passed.
+//
+// Deleting a *different* entity from inside CODE is subtler. If the deleted entity's slot is greater than
+// the current loop index, the swap moves a slot the loop already visited into the now-empty position, and
+// that entity is NOT revisited this frame -- correct. If the deleted entity's slot is LOWER than the
+// current loop index, the entity that was at size-1 gets moved into a position the loop hasn't reached
+// yet, and will be visited a second time this same frame. That is not a bug, but it can double-invoke an
+// update callback within one frame for the moved entity. Callbacks that are idempotent per frame are
+// unaffected; callbacks that advance internal timers will see that entity advance twice.
 #define DARKEN_FOREACH(CTX, CODE)                    \
     do                                               \
     {                                                \
@@ -523,7 +593,7 @@ static inline void darken_entity_swap(darken_entity_t e1, darken_entity_t e2)
     e2->owner = ctx1;
 }
 
-// Note: darken_entity_delete() only calls destroy() if the entity is active.
+// Note: darken_entity_delete() only calls destroy() if the entity is active and destroy is present.
 // destroy() must not mutate the ctx's pool zones (delete/spawn) while it runs -- see the big header comment
 // above.
 static inline void darken_entity_delete(darken_entity_t entity)
@@ -531,8 +601,10 @@ static inline void darken_entity_delete(darken_entity_t entity)
     if (DARKEN_ENTITY_IS_FREE(entity))
         return;
 
+#ifndef DARKEN_NO_DESTROY
     if (entity->destroy)
         entity->destroy(_DARKEN_ARGS(entity));
+#endif
 
     darken_entity_swap(entity, entity->owner->pool[--entity->owner->size]);
 }
@@ -660,8 +732,10 @@ static inline void darken_update(darken_t *ctx)
             continue;
         }
 
+#ifndef DARKEN_NO_DESTROY
         if (_entity->destroy)
             _entity->destroy(_DARKEN_ARGS(_entity));
+#endif
 
         darken_entity_swap(_entity, ctx->pool[--ctx->size]);
     });
@@ -671,15 +745,24 @@ static inline void darken_update(darken_t *ctx)
 // Calls destroy() on every currently active entity, then drops the whole pool back to the free zone
 // (size = 0).
 //
+// This does NOT re-run darken_init(), so ->slot, ->owner, and the pool's mapping to storage are left as
+// they were. Entities created after the reset start from the same free-zone position as before and are
+// spawned with whatever garbage their slot's previous occupant left behind -- reassign every field you
+// care about on each spawn, exactly as at cold boot.
+//
 // destroy() callbacks used by darken_reset() must not mutate the ctx's pool zones by deleting, spawning,
 // or otherwise reordering entities during the reset iteration. (This is a specific case of the general
 // restriction documented in the big header comment above.)
+//
+// With DARKEN_NO_DESTROY defined, this reduces to a single `size = 0` assignment.
 static inline void darken_reset(darken_t *ctx)
 {
+#ifndef DARKEN_NO_DESTROY
     DARKEN_FOREACH(ctx, {
         if (_entity->destroy)
             _entity->destroy(_DARKEN_ARGS(_entity));
     });
+#endif
 
     ctx->size = 0;
 }
