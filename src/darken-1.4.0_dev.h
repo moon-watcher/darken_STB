@@ -402,13 +402,19 @@ typedef struct darken_t
     darken_index_t stride;
 } darken_t;
 
+// _DARKEN_USR_DECL / _DARKEN_DESTROY_DECL / _DARKEN_TAG_DECL each already include their own trailing `;`
+// when the field they guard is present, and expand to *nothing at all* -- not even a stray `;` -- when it
+// isn't (via the corresponding DARKEN_NO_* macro). That's why none of the three is followed by a `;` at
+// either use site below (here and in struct _darken_hdr_shape_t): adding one would either double up into
+// `;;` when the field is present, or stand alone as an empty declaration when it's absent -- both are
+// extensions some compilers only tolerate with a warning, and neither is guaranteed by the standard.
 struct darken_entity_t
 {
     darken_index_t slot;   // Private: Index in the ctx's pool array
-    _DARKEN_USR_DECL;      // User-defined field for custom data
+    _DARKEN_USR_DECL       // User-defined field for custom data
     darken_state_t update; // User-defined update callback
-    _DARKEN_DESTROY_DECL;  // User-defined destroy callback
-    _DARKEN_TAG_DECL;      // User-defined tag for identification or categorization
+    _DARKEN_DESTROY_DECL   // User-defined destroy callback
+    _DARKEN_TAG_DECL       // User-defined tag for identification or categorization
     darken_t *owner;       // Private: Pointer to the owning ctx
     uint8_t data[];        // Payload
 };
@@ -428,10 +434,10 @@ struct darken_entity_t
 struct _darken_hdr_shape_t
 {
     darken_index_t slot;
-    _DARKEN_USR_DECL;
+    _DARKEN_USR_DECL
     darken_state_t update;
-    _DARKEN_DESTROY_DECL;
-    _DARKEN_TAG_DECL;
+    _DARKEN_DESTROY_DECL
+    _DARKEN_TAG_DECL
     darken_t *owner;
 };
 
@@ -465,6 +471,24 @@ struct _darken_hdr_shape_t
 #define _DARKEN_ARGS(ENTITY) (ENTITY), (ENTITY)->data
 #else
 #define _DARKEN_ARGS(ENTITY) (ENTITY)->data
+#endif
+
+// Conditionally invokes destroy(), or compiles away to nothing when DARKEN_NO_DESTROY is defined. Defined
+// once, here, at file scope, rather than wrapping each call site in #ifndef DARKEN_NO_DESTROY / #endif --
+// darken_update() and darken_reset() need to make that call from *inside* the block of code they hand to
+// DARKEN_FOREACH(), and a raw preprocessor directive inside a macro's argument list is explicitly undefined
+// behavior (C99/C11 6.10.3p11). GCC happens to expand it as expected anyway (with a warning), but a
+// simpler or stricter preprocessor -- exactly the kind more likely on an 8-bit toolchain -- is not obliged
+// to. Routing every call through this one macro means no #ifndef/#endif pair ever needs to sit inside a
+// macro argument again. The `(void)(ENTITY)` in the disabled branch isn't a no-op for its own sake -- it
+// keeps ENTITY "used" so callers don't get an unused-variable warning when DARKEN_NO_DESTROY removes the
+// only thing that would otherwise reference it (see darken_reset()).
+#ifdef DARKEN_NO_DESTROY
+#define _DARKEN_MAYBE_DESTROY(ENTITY) ((void)(ENTITY))
+#else
+#define _DARKEN_MAYBE_DESTROY(ENTITY) \
+    if ((ENTITY)->destroy)            \
+        (ENTITY)->destroy(_DARKEN_ARGS(ENTITY));
 #endif
 
 // Rounds (header + payload) up to the next multiple of the entity's required alignment. Pure `unsigned long`
@@ -689,11 +713,7 @@ DARKEN_INLINE void darken_entity_delete(darken_entity_t entity)
     if (DARKEN_ENTITY_IS_FREE(entity))
         return;
 
-#ifndef DARKEN_NO_DESTROY
-    if (entity->destroy)
-        entity->destroy(_DARKEN_ARGS(entity));
-#endif
-
+    _DARKEN_MAYBE_DESTROY(entity);
     darken_entity_swap(entity, entity->owner->pool[--entity->owner->size]);
 }
 
@@ -834,11 +854,7 @@ DARKEN_INLINE void darken_update(darken_t *ctx)
             continue;
         }
 
-#ifndef DARKEN_NO_DESTROY
-        if (_entity->destroy)
-            _entity->destroy(_DARKEN_ARGS(_entity));
-#endif
-
+        _DARKEN_MAYBE_DESTROY(_entity);
         darken_entity_swap(_entity, ctx->pool[--ctx->size]);
     });
 #endif
@@ -859,13 +875,7 @@ DARKEN_INLINE void darken_update(darken_t *ctx)
 // With DARKEN_NO_DESTROY defined, this reduces to a single `size = 0` assignment.
 DARKEN_INLINE void darken_reset(darken_t *ctx)
 {
-
-    DARKEN_FOREACH(ctx, {
-#ifndef DARKEN_NO_DESTROY
-        if (_entity->destroy)
-            _entity->destroy(_DARKEN_ARGS(_entity));
-#endif
-    });
+    DARKEN_FOREACH(ctx, _DARKEN_MAYBE_DESTROY(_entity););
 
     ctx->size = 0;
 }
