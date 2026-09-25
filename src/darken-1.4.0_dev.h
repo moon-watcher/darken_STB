@@ -876,7 +876,6 @@ DARKEN_INLINE void darken_update(darken_t *ctx)
 DARKEN_INLINE void darken_reset(darken_t *ctx)
 {
     DARKEN_FOREACH(ctx, _DARKEN_MAYBE_DESTROY(_entity););
-
     ctx->size = 0;
 }
 
