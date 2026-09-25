@@ -73,59 +73,85 @@
  * function pointer, so this whole concern disappears.
  *
  *
- * ----------------------------------------------------------------------------
- * CONFIGURATION MACROS -- all opt-in, all optional, all defaulted
- * ----------------------------------------------------------------------------
+ * ============================================================================
+ * CONFIGURATION -- all opt-in, all optional, all defaulted
+ * ============================================================================
  *
- * Darken is tuned for a wide range of targets without requiring any of these to be defined. Each one trades
- * portability / features / range for memory or speed on a specific class of machine. Define them before
- * including this header, or via -D on the command line. Order of definition does not matter.
+ * The defaults below are tuned for 32-bit and 64-bit targets: no artificial limits, all features present,
+ * code reads clean. On 8-bit and 16-bit machines the size and speed knobs below exist to trade flexibility
+ * for bytes and cycles, and no single knob is required -- each one stands on its own, and any combination
+ * is legal.
+ *
+ *   DARKEN_SMALL
+ *       Convenience preset for 8-bit targets. Expands, ONLY for the macros that aren't already defined, to:
+ *           DARKEN_INDEX_T        = uint8_t   (pool capped at 255 entities)
+ *           DARKEN_USR_T          = uint8_t   (usr field is 1 byte)
+ *           DARKEN_NO_TAG         = defined   (tag field removed entirely)
+ *           DARKEN_MIGRATE_WORD_T = uint8_t   (byte-sized migrate copy)
+ *       It does NOT touch DARKEN_DIRECT (keeps the default state-machine mode) or DARKEN_NO_DESTROY (keeps
+ *       the destroy callback) -- those two are semantic changes, not size knobs, and are left as explicit
+ *       opt-ins. Any individual macro you define yourself wins over the preset.
  *
  *   DARKEN_INDEX_T       default uint16_t
- *       Type of every internal index, capacity, size and stride.
- *       Override to uint8_t on 8-bit targets to cap the pool at 255 and save 1-2 bytes per entity. Must name
- *       a single unsigned integer type. The real reason to switch is memory, not speed: the pool-indexing
- *       arithmetic is 16-bit regardless (the pointer array's element stride is 2 bytes on 8-bit targets), and
- *       on Z80 a uint8_t index can be a couple of cycles *slower* per iteration due to the extra zero-extension
- *       before the multiply-by-2.
- *       The per-iteration savings, when they exist, are in the loop counter's decrement/test.
+ *       Type of every internal index, capacity, size and stride. On 8-bit targets, switch to uint8_t to cap
+ *       the pool at 255 and save 1-2 bytes per entity header. The reason to switch is memory, not speed:
+ *       on Z80 a uint8_t index can be a couple of cycles *slower* per foreach iteration than uint16_t, due
+ *       to the extra zero-extension the compiler inserts before the multiply-by-2 that indexes the pointer
+ *       array (which is a 2-byte element on 8-bit targets, so the arithmetic is 16-bit either way). The
+ *       real per-iteration savings live in the loop counter's decrement/test, and they are small.
  *
  *   DARKEN_USR_T         default uint16_t
- *       Type of the user-defined `usr` field on each entity.
- *       Drop to uint8_t on memory-constrained targets that never need more than 255 distinct values.
+ *       Type of the user-defined `usr` field. Drop to uint8_t on targets that never need more than 255
+ *       distinct values.
  *
  *   DARKEN_TAG_T         default uint32_t
- *       Type of the user-defined `tag` field.
- *       Drop to uint16_t or uint8_t on8-bit targets; `tag` is the single fattest member of the header on those
- *       machines.
+ *       Type of the user-defined `tag` field. `tag` is the single fattest member of the header on 8-bit
+ *       targets; dropping it to uint16_t or uint8_t, or removing it entirely via DARKEN_NO_TAG, is the
+ *       best single memory win available on those machines.
  *
  *   DARKEN_NO_TAG
- *       Removes the `tag` field from the entity header entirely.
- *       Any code that then touches entity->tag fails to compile, which is the intended feedback.
- *       Saves DARKEN_TAG_T's full size per entity.
+ *       Removes `tag` from the entity header entirely. Any code that then touches entity->tag fails to
+ *       compile, which is the intended feedback.
+ *
+ *   DARKEN_NO_USR
+ *       Removes `usr` from the entity header entirely. Same compile-time-feedback rule as DARKEN_NO_TAG.
  *
  *   DARKEN_NO_DESTROY
  *       Removes the `destroy` callback field from the entity header, and the destroy-invocation paths from
- *       darken_entity_delete(), darken_update() and darken_reset().
- *       Saves one function pointer per entity (2 bytes on 8-bit, 4 on 32-bit, 8 on 64-bit) at the cost of
- *       losing automatic cleanup. Any code that assigns entity->destroy fails to compile.
+ *       darken_entity_delete(), darken_update() and darken_reset(). Saves one function pointer per entity
+ *       (2 bytes on 8-bit, 4 on 32-bit, 8 on 64-bit). This is a semantic change: without it, an entity has
+ *       no automatic cleanup hook, and DARKEN_DELETE (or a manual darken_entity_delete) simply removes the
+ *       entity. Any code that assigns entity->destroy fails to compile.
  *
  *   DARKEN_MIGRATE_WORD_T   default uint32_t
- *       Word size used to bulk-copy entity bytes in darken_entity_migrate().
- *       Set to uint8_t or uint16_t on 8-bit targets where a native 32-bit copy is emulated anyway and the
- *       "fast path" is no faster than a byte loop. Purely a speed knob: correctness never depends on it.
+ *       Word size used to bulk-copy entity bytes in darken_entity_migrate(). On 8-bit targets there is no
+ *       native 32-bit ALU, so a uint32_t copy is emulated and often no faster than a byte loop; uint8_t or
+ *       uint16_t usually wins there. Purely a speed knob: correctness never depends on it.
  *
  *   DARKEN_DIRECT
- *       Switches the engine from state-machine mode (default) to direct-callback mode.
- *       See "Update / lifecycle control" below. Also the mode to prefer on Harvard-architecture micros,
- *       where the default mode's function-pointer sentinels are unsafe.
+ *       Switches the engine from state-machine mode (default) to direct-callback mode. See "Update /
+ *       lifecycle control" below. Also the mode to prefer on Harvard-architecture micros, where the
+ *       default mode's function-pointer sentinels are unsafe.
  *
- * On a Z80 with all the size knobs enabled, the per-entity header shrinks from 14 bytes to 7 (slot 1, usr 1,
- * update 2, owner 2 = 7 with tag and destroy both removed). With 30 entities that's roughly 200 bytes saved
- * on a 48K Spectrum; meaningful but not transformative.
+ * ----------------------------------------------------------------------------
+ * ALIGNMENT CAVEAT for DARKEN_INDEX_T / DARKEN_USR_T / DARKEN_TAG_T
+ * ----------------------------------------------------------------------------
+ *
+ * Each of these fields is placed in the entity header BEFORE the flexible array member `data[]`, and the
+ * whole design relies on `data[]` landing at an offset that is a multiple of the struct's own alignment.
+ * That is guaranteed by the C layout rules as long as no field in the header requires STRICTER alignment
+ * than a pointer. On every mainstream ABI (8-bit, 16-bit, 68K, 32-bit x86/ARM/MIPS, 64-bit) this holds for
+ * any integer type up to the pointer's width.
+ *
+ * ONE real-world ABI breaks it: ARM32 with the EABI, where uint64_t is 8-aligned but void* is 4-aligned.
+ * Using uint64_t (or any 8-aligned type) for DARKEN_INDEX_T, DARKEN_USR_T or DARKEN_TAG_T there will
+ * misalign `data[]` for 8-aligned payloads, and a misaligned LDRD/STRD on ARM can fault or corrupt data.
+ * Don't do it. uint32_t and below are always safe. All preset and default combinations respect this.
  *
  *
+ * ============================================================================
  * Entity: Base entity managed by the entity ctx
+ * ============================================================================
  *
  * The entity structure serves as a container for user data with lifecycle management. The flexible array
  * member 'data[]' allows entities to have variable-sized payloads while maintaining contiguous memory layout.
@@ -146,7 +172,11 @@
  * dangling into a stack frame that no longer exists. Build it in place, or pass a `darken_t *` in.
  *
  *
- * Ctx: Entity container and lifecycle ctx. Maintains the pointer array in two logical zones:
+ * ============================================================================
+ * Ctx: Entity container and lifecycle ctx.
+ * ============================================================================
+ *
+ * Maintains the pointer array in two logical zones:
  *
  * Array Layout:
  *    [ active entities ][   free slots    ]
@@ -170,8 +200,9 @@
  * any you don't want carried over) is the caller's responsibility on every spawn.
  *
  *
+ * ============================================================================
  * Update / lifecycle control — two selectable modes
- * ==================================================
+ * ============================================================================
  *
  * STATE-MACHINE mode is the default. Define DARKEN_DIRECT before including this header to opt into direct
  * mode instead (also the mode to prefer if you're targeting a Harvard-architecture micro -- see the
@@ -265,8 +296,27 @@
 // member-address idiom, both of which are core language, not library, features.
 
 /* ============================================================================
- * CONFIGURATION DEFAULTS
+ * CONFIGURATION
  * ============================================================================ */
+
+// DARKEN_SMALL: single-switch preset for 8-bit targets. Expands only into macros that aren't already
+// defined, so any individual override you set yourself wins. It does NOT touch DARKEN_DIRECT (keeps
+// state-machine mode) or DARKEN_NO_DESTROY (keeps the destroy callback) -- those are semantic changes,
+// not size knobs, and stay explicit opt-ins.
+#ifdef DARKEN_SMALL
+#ifndef DARKEN_INDEX_T
+#define DARKEN_INDEX_T uint8_t
+#endif
+#ifndef DARKEN_USR_T
+#define DARKEN_USR_T uint8_t
+#endif
+#ifndef DARKEN_NO_TAG
+#define DARKEN_NO_TAG
+#endif
+#ifndef DARKEN_MIGRATE_WORD_T
+#define DARKEN_MIGRATE_WORD_T uint8_t
+#endif
+#endif
 
 // darken_index_t -- internal index/capacity/size/stride type. Default uint16_t.
 // Override by defining DARKEN_INDEX_T before including this header.
@@ -345,9 +395,8 @@ struct darken_entity_t
 // member inside another struct, union, or array (C11 6.7.2.1p3) -- struct darken_entity_t itself is off
 // limits for that. Nothing is ever stored through this type; only its size and alignment are used. Keeping
 // the member list here identical to darken_entity_t's fixed members (including which are present/absent
-// under the DARKEN_NO_* macros) is the simplest way to guarantee it can never be *under*-aligned relative
-// to the real struct -- if you add a member to darken_entity_t, mirror it here too (or, at minimum, add
-// something with at least as strict an alignment requirement).
+// under the DARKEN_NO_* macros) is what guarantees the alignment calculation stays correct for any
+// configuration: if you add a member to darken_entity_t, mirror it here too.
 struct _darken_hdr_shape_t
 {
     darken_index_t slot;
@@ -360,12 +409,11 @@ struct _darken_hdr_shape_t
 
 // The classic "address of a member through a null pointer" idiom, used instead of the standard library's
 // offsetof() so this header can avoid #including <stddef.h>. Formally undefined behavior by a strict reading
-// of the standard (see the PORTABILITY note at the top of this file for why it's used anyway); no object at
-// address 0 is ever read or written, only its address is computed, which is why every real-world C compiler
-// treats this as well-defined in practice, GNU or not. Only used at runtime (DARKEN_ENTITY() below) -- a
-// pointer-to-integer cast like this one is NOT guaranteed to be a compile-time integer constant expression,
-// so it's no good for sizing an array, which is exactly why alignment (needed for that) is computed a
-// different way, just below.
+// of the standard; no object at address 0 is ever read or written, only its address is computed, which is
+// why every real-world C compiler treats this as well-defined in practice. Only used at runtime
+// (DARKEN_ENTITY() below) -- a pointer-to-integer cast like this one is NOT guaranteed to be a compile-time
+// integer constant expression, so it's no good for sizing an array, which is exactly why alignment (needed
+// for that) is computed a different way, just below.
 #define _DARKEN_OFFSETOF(TYPE, MEMBER) ((unsigned long)&((TYPE *)0)->MEMBER)
 
 // Portable, compile-time-constant alignment computation using nothing but sizeof(). For any complete object
@@ -411,10 +459,9 @@ struct _darken_hdr_shape_t
 // Word size used to bulk-copy an entity's bytes in darken_entity_migrate(). uint32_t is a reasonable default
 // on 32/64-bit targets. On a genuinely 8-bit target (6502, Z80, 8051, ...) there's no native 32-bit ALU, so
 // the "fast path" is emulated by the compiler anyway -- a plain byte-sized copy is often just as fast, and
-// sometimes faster once you count the call overhead of a software 32-bit routine. Define
-// DARKEN_MIGRATE_WORD_T as uint16_t or uint8_t before including this header to match your target instead.
-// This is purely a speed knob: correctness never depends on it, on any target (see darken_entity_migrate()'s
-// comment below for why).
+// sometimes faster once you count the call overhead of a software 32-bit routine. Define  DARKEN_MIGRATE_WORD_T
+// as uint16_t or uint8_t before including this header to match your target instead.
+// This is purely a speed knob: correctness never depends on it, on any target.
 #ifndef DARKEN_MIGRATE_WORD_T
 #define DARKEN_MIGRATE_WORD_T uint32_t
 #endif
@@ -460,8 +507,7 @@ struct _darken_hdr_shape_t
 //
 // CAPACITY must satisfy 1 <= CAPACITY <= max(darken_index_t). The payload type used with DARKEN_DATA() must
 // not require stricter alignment than struct darken_entity_t. DARKEN_DECLARE() rejects CAPACITY == 0 with a
-// compile-time negative-size array. The caller is responsible for keeping CAPACITY and the computed
-// entity stride within their darken_index_t limits.
+// compile-time negative-size array.
 //
 // The byte block sits inside a union alongside a (never-instantiated) _darken_hdr_shape_t member, purely so
 // the compiler is forced to give the block itself at least _DARKEN_ENTITY_ALIGN alignment -- ordinary,
@@ -489,10 +535,9 @@ struct _darken_hdr_shape_t
     }
 
 // Static/global initialization: compile-time constants.
-// Use when the storage is defined at file scope and you want static initialization.
 // NOTE: DARKEN_INIT expands to a compound literal, which is not a constant expression in strict C99 -- it
-// requires C11 (or the GNU C extension) to initialize an object with static storage duration. See item 3 of
-// the PORTABILITY note at the top of this file for the plain-assignment fallback on C89-only compilers.
+// requires C11 (or the GNU C extension) to initialize an object with static storage duration. See item 3
+// of the PORTABILITY note at the top of this file for the plain-assignment fallback on C89-only compilers.
 #define DARKEN_INIT(STORAGE)                                                                                            \
     (darken_t)                                                                                                          \
     {                                                                                                                   \
@@ -502,8 +547,7 @@ struct _darken_hdr_shape_t
         .stride = (darken_index_t)(sizeof((STORAGE).block.bytes) / (sizeof((STORAGE).pool) / sizeof(darken_entity_t))), \
     }
 
-// Runtime binding: locals, reassignment, any context
-// Use when you need to (re)bind a darken_t context to storage at runtime
+// Runtime binding: locals, reassignment, any context.
 #define DARKEN_BIND(NAME)              \
     (darken_t)                         \
     {                                  \
@@ -515,33 +559,39 @@ struct _darken_hdr_shape_t
 
 // Spawn a new entity from the free zone. Returns the entity or 0 if no free slots.
 // The returned entity may contain garbage from a previous occupant — always initialize all fields you care
-// about (update, destroy, tag, usr, and data) — and always set entity->update before the next darken_update()
+// about (update, destroy, tag, usr, and data). Always set entity->update before the next darken_update()
 // call, or the engine will call through a NULL function pointer.
 #define DARKEN_SPAWN(CTX) ((CTX)->size < (CTX)->capacity ? (CTX)->pool[(CTX)->size++] : 0)
 
 // Iterate over all active entities in REVERSE order (from size-1 down to 0).
 //
+// The implementation walks the pool array BACKWARDS BY POINTER rather than by index. This is semantically
+// identical to the classic `while (_index--)` form, but generates measurably tighter code on 8-bit targets
+// (Z80, 6502): no index register is needed, no multiply-by-2 to convert index into a byte offset, and the
+// loop-termination test is a single pointer comparison against the array base. On 32/64-bit compilers the
+// two forms optimise to the same code, so there is no downside to using it everywhere.
+//
 // Deleting the currently visited entity from inside CODE is safe and cheap: it swaps with the last active
 // slot, which the loop has already passed.
 //
 // Deleting a *different* entity from inside CODE is subtler. If the deleted entity's slot is greater than
-// the current loop index, the swap moves a slot the loop already visited into the now-empty position, and
-// that entity is NOT revisited this frame -- correct. If the deleted entity's slot is LOWER than the
-// current loop index, the entity that was at size-1 gets moved into a position the loop hasn't reached
+// the current loop position, the swap moves a slot the loop already visited into the now-empty position,
+// and that entity is NOT revisited this frame -- correct. If the deleted entity's slot is LOWER than the
+// current loop position, the entity that was at size-1 gets moved into a position the loop hasn't reached
 // yet, and will be visited a second time this same frame. That is not a bug, but it can double-invoke an
 // update callback within one frame for the moved entity. Callbacks that are idempotent per frame are
 // unaffected; callbacks that advance internal timers will see that entity advance twice.
-#define DARKEN_FOREACH(CTX, CODE)                    \
-    do                                               \
-    {                                                \
-        darken_index_t _index = (CTX)->size;         \
-        darken_entity_t *_pool = (CTX)->pool;        \
-                                                     \
-        while (_index--)                             \
-        {                                            \
-            darken_entity_t _entity = _pool[_index]; \
-            CODE;                                    \
-        }                                            \
+#define DARKEN_FOREACH(CTX, CODE)                                 \
+    do                                                            \
+    {                                                             \
+        darken_entity_t *_darken_ptr = (CTX)->pool + (CTX)->size; \
+        darken_entity_t *_darken_base = (CTX)->pool;              \
+                                                                  \
+        while (_darken_ptr != _darken_base)                       \
+        {                                                         \
+            darken_entity_t _entity = *--_darken_ptr;             \
+            CODE;                                                 \
+        }                                                         \
     } while (0)
 
 // Declare a typed pointer to an entity's data payload
@@ -555,8 +605,7 @@ struct _darken_hdr_shape_t
 #define DARKEN_ENTITY(DATA) ((darken_entity_t)((uint8_t *)(DATA) - _DARKEN_OFFSETOF(struct darken_entity_t, data)))
 
 // Zone membership tests.
-// Note: ENTITY is evaluated multiple times per test (up to two times for DARKEN_ENTITY_IS_FREE). Do not
-// pass expressions with side effects.
+// Note: ENTITY is evaluated multiple times per test. Do not pass expressions with side effects.
 #define DARKEN_ENTITY_IS_ACTIVE(ENTITY) ((ENTITY)->slot < (ENTITY)->owner->size)
 #define DARKEN_ENTITY_IS_FREE(ENTITY) (!DARKEN_ENTITY_IS_ACTIVE(ENTITY))
 
@@ -593,9 +642,8 @@ static inline void darken_entity_swap(darken_entity_t e1, darken_entity_t e2)
     e2->owner = ctx1;
 }
 
-// Note: darken_entity_delete() only calls destroy() if the entity is active and destroy is present.
-// destroy() must not mutate the ctx's pool zones (delete/spawn) while it runs -- see the big header comment
-// above.
+// Delete an active entity, calling destroy() first if one is set and DARKEN_NO_DESTROY is not defined.
+// destroy() must not mutate the ctx's pool zones (delete/spawn) while it runs -- see the big header comment.
 static inline void darken_entity_delete(darken_entity_t entity)
 {
     if (DARKEN_ENTITY_IS_FREE(entity))
@@ -676,13 +724,11 @@ static inline darken_entity_t darken_entity_migrate(darken_entity_t entity, dark
 //     DARKEN_FREE(free, &m);
 //
 // STATIC (Runtime binding):
-// Runtime: locals, reassignment, any context
 //     DARKEN_DECLARE(storage, 5, sizeof(struct MyComponent));
 //     darken_t m = DARKEN_BIND(storage);
 //     darken_init(&m);
 //
 // STATIC (Compile-time initialization):
-// Static/global initialization: compile-time constants
 //     DARKEN_DECLARE(storage, 5, sizeof(struct MyComponent));
 //     static darken_t m = DARKEN_INIT(storage);
 //
@@ -690,6 +736,18 @@ static inline darken_entity_t darken_entity_migrate(darken_entity_t entity, dark
 //         darken_init(&m);
 //         ...
 //     }
+//
+// 8-BIT TARGET (Z80/6502) with all size knobs on:
+//     #define DARKEN_SMALL
+//     #define DARKEN_NO_DESTROY     // if you don't need the cleanup hook
+//     #define DARKEN_DIRECT         // only if you prefer direct-callback mode
+//     #include "darken.h"
+//     DARKEN_DECLARE(storage, 32, sizeof(struct bullet));
+//     static darken_t world = DARKEN_INIT(storage);
+//
+//     Per-entity header with DARKEN_SMALL + DARKEN_NO_DESTROY on a byte-addressed target:
+//       slot (1) + usr (1) + update (2) + owner (2) + data[]
+//       = 6 bytes, versus ~14 with the portable defaults.
 //
 // darken_init() must only be called on unused/uninitialized storage, or after darken_reset() when the
 // current population is intentionally being discarded. It does not call destroy() for the entities already
