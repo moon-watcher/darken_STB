@@ -113,11 +113,11 @@ typedef struct
 
 typedef struct
 {
-    vsmap_item_t *pool;     // pool[0, count) — live elements, no gaps
-    vsmap_handle_t *lookup; // see the big comment above: dense position, or free-list link
-    vsmap_handle_t capacity;
+    vsmap_item_t *pool;       // pool[0, count) — live elements, no gaps
+    vsmap_handle_t *lookup;   // see the big comment above: dense position, or free-list link
+    vsmap_handle_t capacity;  //
     vsmap_handle_t free_head; // head of the free list, or VSMAP_INVALID_HANDLE if empty
-    vsmap_handle_t count;
+    vsmap_handle_t count;     //
 } vsmap_t;
 
 /* ============================================================================
