@@ -48,9 +48,14 @@
  *        happens, only an address computation, and every C compiler in real-world use treats it exactly that
  *        way.
  *
- *    Both results are plain `unsigned long`, not size_t/uintptr_t: `unsigned long` is a core-language type,
- *    not something a header hands you, and the C standard already guarantees it's at least 32 bits wide,
- *    which is more than enough for an entity's header+payload size on any target this library makes sense on.
+ *    Both results are plain `unsigned long`, not size_t/uintptr_t -- or, for the alignment idiom, become one
+ *    at the point they're used: `unsigned long` is a core-language type, not something a header hands you,
+ *    and the C standard already guarantees it's at least 32 bits wide, which is more than enough for an
+ *    entity's header+payload size on any target this library makes sense on. Concretely, _DARKEN_OFFSETOF's
+ *    result is cast to `unsigned long` right in its own definition; _DARKEN_ALIGNOF's sizeof()-subtraction is
+ *    left as whatever unsigned type sizeof() itself produces (never named anywhere), and picks up its
+ *    `unsigned long` cast where the two are combined, in _DARKEN_ENTITY_STRIDE. Either way, nothing is ever
+ *    declared as size_t or uintptr_t.
  *
  * 3. DARKEN_ALLOC(), DARKEN_BIND() and DARKEN_INIT() are written as C99 compound literals with designated
  *    initializers, purely for convenience. If your compiler only implements C89 and lacks those, nothing
@@ -59,10 +64,16 @@
  *    the same expressions the macro bodies use below.
  *
  * 4. CAPACITY must satisfy 1 <= CAPACITY <= max(darken_index_t), and the computed entity stride must fit in
- *    darken_index_t. These are API requirements. DARKEN_DECLARE() cannot enforce them without expanding
- *    into more than one declaration (which would break `static DARKEN_DECLARE(...)`), and DARKEN_ALLOC()
- *    takes its CAPACITY as a runtime argument. The caller is responsible for keeping both values in range;
- *    exceeding either limit produces a truncated capacity or stride at runtime, not a compile error.
+ *    darken_index_t. These are API requirements, and DARKEN_DECLARE() enforces the easy half of them for
+ *    free: CAPACITY == 0 is already a compile error (the pool array's size expression collapses to -1), simply
+ *    as a side effect of how that array is declared, not a dedicated check. What DARKEN_DECLARE() can't check
+ *    is the upper bound -- CAPACITY overflowing darken_index_t, or a PAYLOAD large enough that the resulting
+ *    stride overflows it -- because a real range check would need a separate compile-time assertion, and
+ *    that's a second declaration, which would break `static DARKEN_DECLARE(...)` (a storage-class specifier
+ *    can only prefix one declaration). DARKEN_ALLOC() checks none of this, upper or lower bound, since its
+ *    CAPACITY is an ordinary runtime expression, not something the preprocessor ever sees. Whichever bound
+ *    goes unchecked, exceeding it silently truncates the stored capacity or stride at runtime rather than
+ *    failing to compile.
  *
  * Beyond that, Darken makes no assumptions about the target: pointer width, struct alignment, and endianness
  * are all whatever the compiler says they are for the platform it's building for (see _DARKEN_ENTITY_ALIGN
@@ -127,12 +138,15 @@
  *       no automatic cleanup hook, and DARKEN_DELETE (or a manual darken_entity_delete) simply removes the
  *       entity. Any code that assigns entity->destroy fails to compile.
  *
- *   DARKEN_MIGRATE_WORD_T   default uint8_t
- *       Word size used to bulk-copy entity bytes in darken_entity_migrate(). Defaults to uint8_t, which is
- *       both correct on every target and a "character type" for the purposes of the strict-aliasing rule
- *       (C99 6.5p7), so the byte-copy loop it generates is never undefined behavior. Modern compilers
- *       (GCC, Clang, MSVC) recognise the byte-copy loop and vectorise it into a wide memcpy when it pays
- *       off, so leaving the default costs nothing on 32/64-bit. If you override this to a wider type for
+ *   DARKEN_MIGRATE_WORD_T   default unsigned char
+ *       Word size used to bulk-copy entity bytes in darken_entity_migrate(). Defaults to unsigned char,
+ *       which is both correct on every target and one of the three character types the strict-aliasing
+ *       rule (C99 6.5p7) exempts by name -- unlike uint8_t, which almost always *is* unsigned char under
+ *       the hood but isn't required to be by the standard's text, so it isn't what 6.5p7 actually names.
+ *       Because the default is a genuine character type, the byte-copy loop it generates is never
+ *       undefined behavior. Modern compilers (GCC, Clang, MSVC) recognise the byte-copy loop and vectorise
+ *       it into a wide memcpy when it pays off, so leaving the default costs nothing on 32/64-bit. If you
+ *       override this to a wider type for
  *       a specific reason -- typically on an 8-bit toolchain where the byte loop really is the fastest
  *       thing -- be aware that the copy then goes through a pointer that is NOT a character type, and is
  *       therefore technically undefined behavior under the C strict-aliasing rule. It works in practice on
@@ -395,8 +409,8 @@ typedef struct darken_entity_t *darken_entity_t;
 
 typedef struct darken_t
 {
-    darken_entity_t *pool; // Pointer array to entities in the ctx's storage block
-    uint8_t *storage;      // Pointer to the contiguous memory block where entities are allocated
+    darken_entity_t *pool;  // Pointer array to entities in the ctx's storage block
+    unsigned char *storage; // Pointer to the contiguous memory block where entities are allocated
     darken_index_t capacity;
     darken_index_t size;
     darken_index_t stride;
@@ -416,7 +430,7 @@ struct darken_entity_t
     _DARKEN_DESTROY_DECL   // User-defined destroy callback
     _DARKEN_TAG_DECL       // User-defined tag for identification or categorization
     darken_t *owner;       // Private: Pointer to the owning ctx
-    uint8_t data[];        // Payload
+    unsigned char data[];  // Payload
 };
 
 /* ============================================================================
@@ -508,13 +522,15 @@ struct _darken_hdr_shape_t
 #define DARKEN_DELETE ((darken_state_t)0)
 #endif
 
-// Word size used to bulk-copy an entity's bytes in darken_entity_migrate(). The default is uint8_t, which
-// is a character type for the purposes of the strict-aliasing rule and therefore always safe. Widening it
+// Word size used to bulk-copy an entity's bytes in darken_entity_migrate(). The default is unsigned char --
+// not uint8_t, even though the two are the same type on every real compiler -- because unsigned char is one
+// of the three types the strict-aliasing rule (C99 6.5p7) names explicitly, while uint8_t is only guaranteed
+// to be *some* unsigned 8-bit type, not necessarily unsigned char by the standard's text. Widening it
 // (to uint16_t/uint32_t/uint64_t) produces code that goes through a non-character pointer and is formally
 // UB under strict aliasing; see the CONFIGURATION section at the top of this file for the full story.
 // Where the widening is safe, it's a speed knob only -- correctness never depends on it.
 #ifndef DARKEN_MIGRATE_WORD_T
-#define DARKEN_MIGRATE_WORD_T uint8_t
+#define DARKEN_MIGRATE_WORD_T unsigned char
 #endif
 
 // Dynamic allocation: use with malloc/calloc or custom allocator
@@ -578,20 +594,20 @@ struct _darken_hdr_shape_t
 // NOTE for anyone who was reaching into a DARKEN_DECLARE()'d object's fields directly instead of going
 // through DARKEN_BIND()/DARKEN_INIT(): the raw byte block used to be the top-level field `.data`; it is now
 // `.block.bytes`, for the reason above.
-#define DARKEN_DECLARE(NAME, CAPACITY, PAYLOAD)                         \
-    struct                                                              \
-    {                                                                   \
-        darken_index_t capacity;                                        \
-        darken_index_t stride;                                          \
-        darken_entity_t pool[(CAPACITY) ? (CAPACITY) : -1];             \
-        union                                                           \
-        {                                                               \
-            struct _darken_hdr_shape_t _darken_align;                   \
-            uint8_t bytes[(CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)]; \
-        } block;                                                        \
-    } NAME = {                                                          \
-        .capacity = (darken_index_t)(CAPACITY),                         \
-        .stride = (darken_index_t)_DARKEN_ENTITY_STRIDE(PAYLOAD),       \
+#define DARKEN_DECLARE(NAME, CAPACITY, PAYLOAD)                               \
+    struct                                                                    \
+    {                                                                         \
+        darken_index_t capacity;                                              \
+        darken_index_t stride;                                                \
+        darken_entity_t pool[(CAPACITY) ? (CAPACITY) : -1];                   \
+        union                                                                 \
+        {                                                                     \
+            struct _darken_hdr_shape_t _darken_align;                         \
+            unsigned char bytes[(CAPACITY) * _DARKEN_ENTITY_STRIDE(PAYLOAD)]; \
+        } block;                                                              \
+    } NAME = {                                                                \
+        .capacity = (darken_index_t)(CAPACITY),                               \
+        .stride = (darken_index_t)_DARKEN_ENTITY_STRIDE(PAYLOAD),             \
     }
 
 // Static/global initialization: compile-time constants.
@@ -666,7 +682,7 @@ struct _darken_hdr_shape_t
 // DATA must point to the beginning of an entity's data[] payload.
 // Uses the null-pointer member-address idiom described at the top of this file (_DARKEN_OFFSETOF), rather
 // than the standard library's offsetof(), so this header stays dependency-free.
-#define DARKEN_ENTITY(DATA) ((darken_entity_t)((uint8_t *)(DATA) - _DARKEN_OFFSETOF(struct darken_entity_t, data)))
+#define DARKEN_ENTITY(DATA) ((darken_entity_t)((unsigned char *)(DATA) - _DARKEN_OFFSETOF(struct darken_entity_t, data)))
 
 // Zone membership tests.
 // Note: ENTITY is evaluated multiple times per test. Do not pass expressions with side effects.
@@ -731,9 +747,9 @@ DARKEN_INLINE void darken_entity_delete(darken_entity_t entity)
 //
 // The copy runs in DARKEN_MIGRATE_WORD_T-sized chunks with a byte tail for the remainder, using division and
 // modulo against sizeof(DARKEN_MIGRATE_WORD_T) rather than a hardcoded shift/mask, so it stays correct for
-// any word size you configure it to (1, 2, 4, 8, ...). The default word type is uint8_t, which is a
-// character type and therefore always safe under the strict-aliasing rule; see the CONFIGURATION section
-// at the top of this file for the caveat that applies if you widen it.
+// any word size you configure it to (1, 2, 4, 8, ...). The default word type is unsigned char, a genuine
+// character type per the standard's own definition and therefore always safe under the strict-aliasing
+// rule; see the CONFIGURATION section at the top of this file for the caveat that applies if you widen it.
 //
 // The wide accesses (when you widen the word type) are safe from an alignment standpoint without any runtime
 // check on any target: entities are laid out at storage + i * stride, where storage is aligned to
@@ -759,8 +775,8 @@ DARKEN_INLINE darken_entity_t darken_entity_migrate(darken_entity_t entity, dark
     while (words--)
         *d++ = *s++;
 
-    uint8_t *sb = (uint8_t *)s;
-    uint8_t *db = (uint8_t *)d;
+    unsigned char *sb = (unsigned char *)s;
+    unsigned char *db = (unsigned char *)d;
 
     count = (darken_index_t)(count % sizeof(DARKEN_MIGRATE_WORD_T));
     while (count--)
@@ -825,7 +841,7 @@ DARKEN_INLINE void darken_init(darken_t *ctx)
 {
     ctx->size = 0;
     darken_index_t i = ctx->capacity;
-    uint8_t *storage = ctx->storage;
+    unsigned char *storage = ctx->storage;
 
     while (i--)
     {
@@ -872,10 +888,15 @@ DARKEN_INLINE void darken_update(darken_t *ctx)
 // or otherwise reordering entities during the reset iteration. (This is a specific case of the general
 // restriction documented in the big header comment above.)
 //
-// With DARKEN_NO_DESTROY defined, this reduces to a single `size = 0` assignment.
+// With DARKEN_NO_DESTROY defined, the per-entity loop body becomes a no-op ((void)-cast, no side effects),
+// so an optimizing compiler is free to delete the whole traversal and leave just the `size = 0` assignment
+// -- confirmed with objdump: GCC does exactly that at -O2, but at -O0 the full loop (compare, branch,
+// pointer load) is still there in the generated code, doing nothing. This is an optimization a compiler MAY
+// perform, not a guarantee of the language, so don't rely on it for cycle counts on a target whose compiler
+// doesn't do this kind of dead-code elimination.
 DARKEN_INLINE void darken_reset(darken_t *ctx)
 {
-    DARKEN_FOREACH(ctx, _DARKEN_MAYBE_DESTROY(_entity););
+    DARKEN_FOREACH(ctx, { _DARKEN_MAYBE_DESTROY(_entity); });
     ctx->size = 0;
 }
 
