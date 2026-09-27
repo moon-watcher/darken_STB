@@ -146,6 +146,11 @@ typedef struct
         .count = 0,                                                               \
     }
 
+// Frees every block VSMAP_ALLOC() allocated.
+#define VSMAP_FREE(FREE, MAP) \
+    (FREE)((MAP)->pool);      \
+    (FREE)((MAP)->lookup);
+
 // Static allocation with automatic or static storage duration (stack or global).
 //
 //     VSMAP_DECLARE(storage, 100);
@@ -172,6 +177,8 @@ typedef struct
         .count = 0,                                                                     \
     }
 
+#define VSMAP_DATA(MAP, HANDLE) ((MAP)->pool[(MAP)->lookup[(HANDLE)]])
+
 // Visits every live value, from last to first (safe to vsmap_remove() the current ITEM's
 // handle from inside CODE — same swap-with-last compaction trick as darken.h's
 // DARKEN_FOREACH, and safe for the exact same reason: whatever gets swapped into the slot
@@ -190,8 +197,6 @@ typedef struct
             CODE;                                \
         }                                        \
     } while (0)
-
-#define VSMAP_DATA(MAP, HANDLE) ((MAP)->pool[(MAP)->lookup[(HANDLE)]])
 
 // Must be called once after ALLOC/BIND, before the first vsmap_add(). Also doubles as a full reset: call
 // it again any time to drop every element and start over (every handle issued before that call is no

@@ -125,8 +125,8 @@ typedef struct
     dsmap_handle_t *lookup;  // handle -> current dense position
     dsmap_handle_t *handles; // dense position -> handle, and (beyond count) the free-handle order
     dsmap_handle_t capacity; //
+    dsmap_handle_t count;    //
     uint16_t size;           // bytes per element -- always uint16_t; see item 4 of the PORTABILITY note above
-    dsmap_handle_t count;
 } dsmap_t;
 
 /* ============================================================================
@@ -158,15 +158,12 @@ typedef struct
     }
 
 // Frees every block DSMAP_ALLOC() allocated.
-#define DSMAP_FREE(FREE, MAP)   \
-    do                          \
-    {                           \
-        (FREE)((MAP)->pool);    \
-        (FREE)((MAP)->addrs);   \
-        (FREE)((MAP)->ptrs);    \
-        (FREE)((MAP)->lookup);  \
-        (FREE)((MAP)->handles); \
-    } while (0)
+#define DSMAP_FREE(FREE, MAP) \
+    (FREE)((MAP)->pool);      \
+    (FREE)((MAP)->addrs);     \
+    (FREE)((MAP)->ptrs);      \
+    (FREE)((MAP)->lookup);    \
+    (FREE)((MAP)->handles);
 
 // Static allocation with automatic or static storage duration (stack or global).
 //
