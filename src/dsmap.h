@@ -228,10 +228,7 @@ DSMAP_INLINE int dsmap_valid(dsmap_t *map, dsmap_handle_t handle)
 
     dsmap_handle_t slot = map->lookup[handle];
 
-    if (slot >= map->count)
-        return 0;
-
-    return map->handles[slot] == handle;
+    return slot < map->count && map->handles[slot] == handle;
 }
 
 // Frees `handle`. Its DSMAP_DATA() address is NOT reused by any *other* still-live handle -- only by

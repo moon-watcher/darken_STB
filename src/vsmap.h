@@ -166,6 +166,8 @@ typedef struct
         .count = 0,                                                                     \
     }
 
+#define VSMAP_DATA(MAP, HANDLE) ((MAP)->pool[(MAP)->lookup[(HANDLE)]])
+
 // Visits every live value, from last to first (safe to vsmap_remove() the current ITEM's handle from
 // inside CODE: whatever gets swapped into the slot you just vacated was already visited, or is about to
 // be). Bound to `item` (a `vsmap_item_t *`) inside CODE; `item->value` is your pointer. Do not hold onto
@@ -182,8 +184,6 @@ typedef struct
             CODE;                                \
         }                                        \
     } while (0)
-
-#define VSMAP_DATA(MAP, HANDLE) ((MAP)->pool[(MAP)->lookup[(HANDLE)]])
 
 // Must be called once after ALLOC/BIND, before the first vsmap_add(). Also doubles as a full reset: call
 // it again any time to drop every element and start over (every handle issued before that call is no
