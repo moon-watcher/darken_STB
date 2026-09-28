@@ -187,17 +187,22 @@ typedef struct
 // above. Does not itself check validity; call dsmap_valid() first if unsure.
 #define DSMAP_DATA(MAP, HANDLE) ((void *)((MAP)->addrs[(HANDLE)]))
 
-// Visits every live element's data pointer, in internal (not insertion) order. Bound to `data` (a
-// `void *`) inside CODE. Safe to dsmap_remove() the element CODE is currently looking at; removing a
-// *different* element reorders the internal cache and can cause that element to be visited twice or (if
-// it was swapped into an already-visited position) not at all in this same pass.
+// Visits every live element's data pointer, in reverse internal (not insertion) order, from the last live
+// slot down to slot 0. Bound to `data` (a `void *`) inside CODE. Safe to dsmap_remove() the element CODE
+// is currently looking at: dsmap_remove() moves the last live element into the vacated slot, and that
+// last live element has already been visited by the reverse traversal. Adding elements during CODE does
+// not visit them in the current pass. Removing a *different* element whose slot lies below the current
+// index causes the last live element to land in a not-yet-visited slot and be visited a second time in
+// the same pass; the reverse traversal, however, can never skip an element entirely.
 #define DSMAP_FOREACH(MAP, CODE)              \
     do                                        \
     {                                         \
-        dsmap_handle_t _i;                    \
-        for (_i = 0; _i < (MAP)->count; _i++) \
+        dsmap_handle_t _index = (MAP)->count; \
+        char **_ptrs = (MAP)->ptrs;           \
+                                              \
+        while (_index--)                      \
         {                                     \
-            void *data = (MAP)->ptrs[_i];     \
+            void *data = _ptrs[_index];       \
             CODE;                             \
         }                                     \
     } while (0)
