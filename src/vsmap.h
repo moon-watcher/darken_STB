@@ -16,15 +16,15 @@
  *    `uint16_t` and `uint32_t` (whichever one VSMAP_HANDLE_T ends up being), whether via a plain
  *    `#include <stdint.h>` or whatever equivalent your target already provides them through.
  *
- * 2. Standard C89 for the engine itself. There is no flexible array member here, since `pool[]` and
- *    `lookup[]` are ordinary, uniformly-typed arrays and the compiler already handles their alignment on
- *    its own; every function body keeps its declarations at the top of the block, and there is no
- *    `for (TYPE i = 0; ...)` C99-style loop declaration anywhere. Two things are still worth being precise
- *    about: this file is commented with `//`, a near-universally-supported convention rather than
- *    something ISO C89 itself defines -- a strict `-std=c89` build rejects `//` outright, while
- *    `-std=gnu89` (and effectively every real-world compiler) accepts it; and `inline` isn't in strict C89
- *    either, so every function is declared through VSMAP_INLINE, which resolves to `static inline` on a
- *    C99-or-later compiler and plain `static` otherwise -- predefine VSMAP_INLINE yourself to override.
+ * 2. The engine functions themselves use only C89-compatible constructs. There is no flexible array
+ *    member here, since `pool[]` and `lookup[]` are ordinary, uniformly-typed arrays and the compiler
+ *    already handles their alignment on its own; every function body keeps its declarations at the top
+ *    of the block. Two things are still worth being precise about: this file is commented with `//`, a
+ *    near-universally-supported convention rather than something ISO C89 itself defines -- a strict
+ *    `-std=c89` build rejects `//` outright, while `-std=gnu89` (and effectively every real-world compiler)
+ *    accepts it; and `inline` isn't in strict C89 either, so every function is declared through VSMAP_INLINE,
+ *    which resolves to `static inline` on a C99-or-later compiler and plain `static` otherwise -- predefine
+ *    VSMAP_INLINE yourself to override.
  *
  * 3. VSMAP_ALLOC() and VSMAP_BIND() are written as C99 compound literals for convenience -- they expand to
  *    `(vsmap_t){ ... }`, so they work anywhere a vsmap_t expression is legal (a declaration initializer, a
@@ -136,9 +136,12 @@ typedef struct
     }
 
 // Frees the pool and lookup blocks previously allocated by VSMAP_ALLOC().
-#define VSMAP_FREE(FREE, MAP) \
-    (FREE)((MAP)->pool);      \
-    (FREE)((MAP)->lookup);
+#define VSMAP_FREE(FREE, MAP)  \
+    do                         \
+    {                          \
+        (FREE)((MAP)->pool);   \
+        (FREE)((MAP)->lookup); \
+    } while (0)
 
 // Static allocation with automatic or static storage duration (stack or global).
 //
@@ -169,9 +172,10 @@ typedef struct
 #define VSMAP_DATA(MAP, HANDLE) ((MAP)->pool[(MAP)->lookup[(HANDLE)]])
 
 // Visits every live value, from last to first (safe to vsmap_remove() the current ITEM's handle from
-// inside CODE: whatever gets swapped into the slot you just vacated was already visited, or is about to
-// be). Bound to `item` (a `vsmap_item_t *`) inside CODE; `item->value` is your pointer. Do not hold onto
-// `item` past a CODE that removes or adds a *different* entry -- see "Guarantees" above.
+// inside CODE: when an item is removed, the last live item is copied into the vacated slot, and that
+// last item has already been visited by the reverse traversal). Bound to `item` (a `vsmap_item_t *`)
+// inside CODE; `item->value` is your pointer. Do not hold onto `item` past a CODE that removes or adds
+// a *different* entry -- see "Guarantees" above.
 #define VSMAP_FOREACH(MAP, CODE)                 \
     do                                           \
     {                                            \
@@ -186,14 +190,21 @@ typedef struct
     } while (0)
 
 // Must be called once after ALLOC/BIND, before the first vsmap_add(). Also doubles as a full reset: call
-// it again any time to drop every element and start over (every handle issued before that call is no
-// longer valid).
+// it again any time to drop every element and start over (every handle issued before that call is
+// no longer valid). A zero-capacity map remains empty and has no free handles.
 VSMAP_INLINE void vsmap_init(vsmap_t *map)
 {
+    vsmap_handle_t i;
+
     map->count = 0;
+    map->free_head = VSMAP_INVALID_HANDLE;
+
+    if (!map->capacity)
+        return;
+
     map->free_head = 0;
 
-    for (vsmap_handle_t i = 0; i < map->capacity; i++)
+    for (i = 0; i < map->capacity; i++)
         map->lookup[i] = (vsmap_handle_t)(i + 1);
 
     map->lookup[map->capacity - 1] = VSMAP_INVALID_HANDLE;
@@ -226,6 +237,8 @@ VSMAP_INLINE int vsmap_valid(vsmap_t *map, vsmap_handle_t handle)
     return slot < map->count && map->pool[slot].index == handle;
 }
 
+// Removes a currently valid handle in O(1). The handle must refer to a live element; unlike
+// vsmap_valid(), this function does not validate the handle before using it.
 VSMAP_INLINE void vsmap_remove(vsmap_t *map, vsmap_handle_t handle)
 {
     vsmap_handle_t slot = map->lookup[handle];
