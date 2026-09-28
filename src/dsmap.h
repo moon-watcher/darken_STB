@@ -108,8 +108,8 @@ typedef struct
     char **addrs;            // addrs[h] = the permanent address of handle h's element, set once at init
     dsmap_handle_t *lookup;  // handle -> current dense position
     dsmap_handle_t *handles; // dense position -> handle, and (beyond count) the free-handle order
-    dsmap_handle_t capacity; //
-    dsmap_handle_t count;    //
+    dsmap_handle_t capacity; // total number of slots
+    dsmap_handle_t count;    // number of live elements
     uint16_t size;           // bytes per element -- always uint16_t; see item 4 of the PORTABILITY note above
 } dsmap_t;
 
@@ -141,12 +141,15 @@ typedef struct
     }
 
 // Frees every block DSMAP_ALLOC() allocated.
-#define DSMAP_FREE(FREE, MAP) \
-    (FREE)((MAP)->pool);      \
-    (FREE)((MAP)->addrs);     \
-    (FREE)((MAP)->ptrs);      \
-    (FREE)((MAP)->lookup);    \
-    (FREE)((MAP)->handles);
+#define DSMAP_FREE(FREE, MAP)   \
+    do                          \
+    {                           \
+        (FREE)((MAP)->pool);    \
+        (FREE)((MAP)->addrs);   \
+        (FREE)((MAP)->ptrs);    \
+        (FREE)((MAP)->lookup);  \
+        (FREE)((MAP)->handles); \
+    } while (0)
 
 // Static allocation with automatic or static storage duration (stack or global).
 //
@@ -188,21 +191,27 @@ typedef struct
 // `void *`) inside CODE. Safe to dsmap_remove() the element CODE is currently looking at; removing a
 // *different* element reorders the internal cache and can cause that element to be visited twice or (if
 // it was swapped into an already-visited position) not at all in this same pass.
-#define DSMAP_FOREACH(MAP, CODE)                         \
-    for (dsmap_handle_t _i = 0; _i < (MAP)->count; _i++) \
-    {                                                    \
-        void *data = (MAP)->ptrs[_i];                    \
-        CODE;                                            \
-    }
+#define DSMAP_FOREACH(MAP, CODE)              \
+    do                                        \
+    {                                         \
+        dsmap_handle_t _i;                    \
+        for (_i = 0; _i < (MAP)->count; _i++) \
+        {                                     \
+            void *data = (MAP)->ptrs[_i];     \
+            CODE;                             \
+        }                                     \
+    } while (0)
 
 // Must be called once after ALLOC/BIND, before the first dsmap_alloc(). Also doubles as a full reset:
 // call it again any time to drop every element and start over (every handle issued before that call is
 // no longer valid).
 DSMAP_INLINE void dsmap_init(dsmap_t *map)
 {
+    dsmap_handle_t i;
+
     map->count = 0;
 
-    for (dsmap_handle_t i = 0; i < map->capacity; i++)
+    for (i = 0; i < map->capacity; i++)
     {
         map->ptrs[i] = map->addrs[i] = map->pool + (uint16_t)(i * map->size);
         map->handles[i] = i;
