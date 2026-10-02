@@ -45,7 +45,9 @@
  * corrupt the tables. Bind once, keep one darksys_t, and use darksys_clear() (or a single re-BIND)
  * when you want to start over.
  */
-#pragma once
+
+#ifndef DARKSYS_H
+#define DARKSYS_H
 
 #include <stdint.h>
 
@@ -106,10 +108,10 @@ typedef struct
 #define _DARKSYS_FOREACH_RUN(SYSTEM, CODE) \
     do                                     \
     {                                      \
-        darksys_t *s = (SYSTEM);           \
-        darksys_data_t _pool = s->pool;    \
-        uint16_t _count = s->count;        \
-        uint16_t _params = s->params;      \
+        darksys_t *_s = (SYSTEM);          \
+        darksys_data_t _pool = _s->pool;   \
+        uint16_t _count = _s->count;       \
+        uint16_t _params = _s->params;     \
                                            \
         while (_count--)                   \
         {                                  \
@@ -296,3 +298,5 @@ static inline void darksys_clear(darksys_t *s)
     s->next = 0;
     s->free_head = DARKSYS_INVALID_HANDLE;
 }
+
+#endif // DARKSYS_H
