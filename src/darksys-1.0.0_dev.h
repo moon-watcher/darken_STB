@@ -3,10 +3,10 @@
  *
  * darksys-1.0.0_dev
  *
- * GNU C note:
- * - This header uses GNU C and statement expressions.
- * - Darksys targets GCC and the Motorola 68000.
- * - 16-bit members preference for optimal 68K performance.
+ * Language requirements:
+ * - The convenience macros use variadic macros and statement expressions.
+ * - Fixed-width integer types are used for handles and pool bookkeeping.
+ * - The required integer types must be available before this header is used.
  *
  *
  * Stores up to `capacity` records of `params` void* fields each, packed contiguously in `pool` so
@@ -78,10 +78,10 @@ typedef struct
 #define _DARKSYS_WRITE_N_I(N, SYSTEM, ...) _DARKSYS_WRITE_##N(SYSTEM, __VA_ARGS__)
 
 // Writes the fields of the record just placed at slot (count - 1).
-// (count - 1) * params is computed inline rather than stashed in a named uint16_t first -- naming
-// it wouldn't change C's integer promotion rules either way, but it does invite a later edit that
-// quietly widens the type, so the intent (keep this a 16-bit multiply on m68k) is spelled out here
-// instead of assumed.
+// Each field is written directly into its corresponding position in the packed record.
+// The field position is calculated from the record slot and the configured number of fields.
+// The macros are expanded according to the number of values supplied by the caller.
+//
 #define _DARKSYS_WRITE_1(SYSTEM, A) ((SYSTEM)->pool[((SYSTEM)->count - 1) * (SYSTEM)->params] = (A))
 #define _DARKSYS_WRITE_2(SYSTEM, A, B) (_DARKSYS_WRITE_1(SYSTEM, A), (SYSTEM)->pool[((SYSTEM)->count - 1) * (SYSTEM)->params + 1] = (B))
 #define _DARKSYS_WRITE_3(SYSTEM, A, B, C) (_DARKSYS_WRITE_2(SYSTEM, A, B), (SYSTEM)->pool[((SYSTEM)->count - 1) * (SYSTEM)->params + 2] = (C))
@@ -122,8 +122,7 @@ typedef struct
  * PUBLIC API
  * ============================================================================ */
 
-// Allocates pool/lookup/handles with ALLOC (e.g. malloc, or SGDK's MEM_alloc) and yields a
-// (darksys_t){...} compound literal ready to use.
+// Allocates pool/lookup/handles with ALLOC and yields a (darksys_t){...} value ready to use.
 // Pair with DARKSYS_FREE.
 //
 // Usable anywhere a darksys_t expression is expected (assignment, function argument, ternary, return),
@@ -271,9 +270,9 @@ static inline void darksys_remove(darksys_t *s, darksys_handle_t handle)
 
     if (slot != last)
     {
-        // Move the last record into the freed slot. `params` doubles as the loop counter, counting
-        // down to 0: on m68k this compiles to DBRA, and the post-incremented pool pointers compile
-        // to (An)+ addressing -- the cheapest way to walk memory on this CPU.
+        // Move the last record into the freed slot. `params` is used as the loop counter, and the
+        // destination and source pointers advance through the record fields until the copy is complete.
+        // The moved record keeps its handle through the corresponding table updates below.
         uint16_t params = s->params;
         darksys_data_t dst = s->pool + slot * params;
         darksys_data_t src = s->pool + last * params;
